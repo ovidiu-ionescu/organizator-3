@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 use futures::StreamExt;
 use crate::typedef::GenericError;
+use crate::check_security::{OrganizatorAuthorization, UserId};
 
 async fn unihandler(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
     println!("Creds: 「{:#?}」, uri:「{}」", &request.headers().get("Authorization"), &request.uri().path());
@@ -28,7 +29,7 @@ async fn unihandler(mut request: Request<Body>) -> Result<Response<Body>, Generi
                 .unwrap();
         
 
-    let tmp = Some("Hello, I have no telephone");
+    let tmp = Some("Hello, I have no telephone\n");
     let response = match tmp {
         Some(res) => { println!("Hit"); make_body(res) },
         None =>
@@ -80,7 +81,7 @@ pub async fn start_servers() -> Result<(), Error> {
         // If the response has a known size set the `Content-Length` header
         // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
         // Authorize requests using a token
-        // .layer(RequireAuthorizationLayer::bearer("passwordlol"))
+        .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
         // Wrap a `Service` in our middleware stack
         .service_fn(unihandler);
 
