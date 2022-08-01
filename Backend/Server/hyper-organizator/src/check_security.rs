@@ -29,12 +29,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
 
 fn check_authorization<B>(request: &Request<B>) -> Option<UserId> {
     match request.headers().get(SSL_HEADER).map(|s| s.to_str()) {
-        Some(Ok(dn)) => if dn.len() > 3 {
-            Some(UserId(dn[3..].to_string()))
-        } else {
-            // complain that username length is too short
-            None
-        },
+        Some(Ok(dn)) if dn.len() > 3 => Some(UserId(dn[3..].to_string())),
         _ => None,
     }
 }
