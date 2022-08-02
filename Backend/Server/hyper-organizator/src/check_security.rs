@@ -1,7 +1,6 @@
-use tower_http::auth::{RequireAuthorizationLayer, AuthorizeRequest};
-use hyper::{Request, Response, Body, Error};
-use http::{StatusCode, header::AUTHORIZATION};
-use tower::{Service, ServiceExt, ServiceBuilder, service_fn};
+use tower_http::auth::AuthorizeRequest;
+use hyper::{Request, Response, Body};
+use http::StatusCode;
 
 const SSL_HEADER :&str ="X-SSL-Client-S-DN";
 
@@ -37,11 +36,35 @@ fn check_authorization<B>(request: &Request<B>) -> Option<UserId> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tower::{Service, ServiceExt, ServiceBuilder};
+    use http::header::AUTHORIZATION;
+    use tower_http::auth::RequireAuthorizationLayer;
+    use hyper::Error;
 
     #[test]
     fn test_check_authorization() {
         let mut request = Request::new(Body::empty());
         request.headers_mut().insert(SSL_HEADER, "CN=admin".parse().unwrap());
         assert_eq!(check_authorization(&mut request), Some(UserId("admin".to_string())));
+    }
+
+    #[tokio::test]
+    async fn integration_test() -> Result<(), Error> {
+
+        let mut service = ServiceBuilder::new()
+            .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
+            .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
+
+        let mut request = Request::new(Body::empty());
+        request.headers_mut().insert(SSL_HEADER, "CN=admin".parse().unwrap());
+        let response = service.ready().await?.call(request).await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = Request::new(Body::empty());
+        let response = service.ready().await?.call(request).await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+
+        Ok(())
     }
 }
