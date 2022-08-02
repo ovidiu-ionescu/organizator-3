@@ -8,7 +8,7 @@ const SSL_HEADER :&str ="X-SSL-Client-S-DN";
 #[derive(Clone, Copy)]
 pub struct OrganizatorAuthorization;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct UserId(String);
 
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
@@ -34,4 +34,14 @@ fn check_authorization<B>(request: &Request<B>) -> Option<UserId> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[test]
+    fn test_check_authorization() {
+        let mut request = Request::new(Body::empty());
+        request.headers_mut().insert(SSL_HEADER, "CN=admin".parse().unwrap());
+        assert_eq!(check_authorization(&mut request), Some(UserId("admin".to_string())));
+    }
+}
