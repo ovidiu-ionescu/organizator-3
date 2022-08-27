@@ -2,6 +2,7 @@ mod server;
 mod config;
 mod typedef;
 mod check_security;
+mod authorize_header;
 
 use mimalloc::MiMalloc;
 

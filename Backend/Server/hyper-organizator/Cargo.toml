@@ -32,6 +32,9 @@ tower = { version = "0.4", features = ["full"] }
 tracing-subscriber = "0.3.11"
 anyhow = "1.0"
 
+ring = { version = "0.16.20", features = ["std"] }
+jsonwebtoken = "8.1.1"
+
 [profile.release]
 lto = true
 

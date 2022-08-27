@@ -86,8 +86,9 @@ pub async fn start_servers() -> Result<(), Error> {
         .service_fn(unihandler);
 
     // And run our service using `hyper`
-    println!("start server on 127.0.0.1:3000");
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr_str = "127.0.0.1:3000";
+    println!("start server on {}", &addr_str);
+    let addr = addr_str.parse::<SocketAddr>().unwrap();
     Server::bind(&addr)
         .serve(Shared::new(service))
         .await
