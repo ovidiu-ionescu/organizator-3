@@ -1,56 +1,69 @@
+use http::{
+    header::{HeaderName, AUTHORIZATION, CONTENT_TYPE},
+    Request, Response,
+};
+use hyper::{server::Server, service::make_service_fn, Body, Error, Method, StatusCode};
+use std::collections::HashMap;
+use std::{
+    convert::Infallible,
+    iter::once,
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
+use tower::{make::Shared, service_fn, ServiceBuilder};
 use tower_http::{
-    add_extension::AddExtensionLayer,
-    compression::CompressionLayer,
-    propagate_header::PropagateHeaderLayer,
-    auth::RequireAuthorizationLayer,
-    sensitive_headers::SetSensitiveRequestHeadersLayer,
-    set_header::SetResponseHeaderLayer,
+    add_extension::AddExtensionLayer, auth::RequireAuthorizationLayer,
+    compression::CompressionLayer, propagate_header::PropagateHeaderLayer,
+    sensitive_headers::SetSensitiveRequestHeadersLayer, set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
-use tower::{ServiceBuilder, service_fn, make::Shared};
-use http::{Request, Response, header::{HeaderName, CONTENT_TYPE, AUTHORIZATION}};
-use hyper::{Body, Error, server::Server, service::make_service_fn, StatusCode, Method };
-use std::{sync::{Arc, RwLock}, net::SocketAddr, convert::Infallible, iter::once};
-use std::collections::HashMap;
 
-use futures::StreamExt;
-use crate::typedef::GenericError;
 use crate::check_security::{OrganizatorAuthorization, UserId};
+use crate::typedef::GenericError;
+use futures::StreamExt;
 
 async fn unihandler(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    println!("Creds: 「{:#?}」, uri:「{}」", &request.headers().get("Authorization"), &request.uri().path());
+    println!(
+        "Creds: 「{:#?}」, uri:「{}」",
+        &request.headers().get("Authorization"),
+        &request.uri().path()
+    );
 
-    
-    let make_body = |s: &str| Response::builder()
-                .status(StatusCode::OK)
-                .header("content-type", "application/json")
-                .header("server", "hyper")
-                .body(Body::from(s.to_string()))
-                .unwrap();
-        
+    let make_body = |s: &str| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "application/json")
+            .header("server", "hyper")
+            .body(Body::from(s.to_string()))
+            .unwrap()
+    };
 
     let tmp = Some("Hello, I have no telephone\n");
     let response = match tmp {
-        Some(res) => { println!("Hit"); make_body(res) },
-        None =>
-                Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::from(r#"{ "error_code": 404, "message": "HTTP 404 Not Found" }"#))
-                .unwrap()
+        Some(res) => {
+            println!("Hit");
+            make_body(res)
+        }
+        None => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from(
+                r#"{ "error_code": 404, "message": "HTTP 404 Not Found" }"#,
+            ))
+            .unwrap(),
     };
     Ok(response)
 }
 
 async fn read_full_body(req: &mut Request<Body>) -> Result<Vec<u8>, Error> {
-    let mut body = match req.headers().get("Content-Length")
+    let mut body = match req
+        .headers()
+        .get("Content-Length")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<usize>().ok()) {
-            Some(len) => {
-                Vec::with_capacity(len)
-            },
-            None => {
-                Vec::new()},
-        };
+        .and_then(|v| v.parse::<usize>().ok())
+    {
+        Some(len) => Vec::with_capacity(len),
+        None => Vec::new(),
+    };
     while let Some(chunk) = req.body_mut().next().await {
         body.extend_from_slice(&chunk?);
     }
@@ -64,8 +77,10 @@ struct State {
 pub async fn start_servers() -> Result<(), Error> {
     // Setup tracing
     tracing_subscriber::fmt::init();
-    
-    let state = State { content: "Hello, world!".to_string() };
+
+    let state = State {
+        content: "Hello, world!".to_string(),
+    };
 
     let service = ServiceBuilder::new()
         // Mark the `Authorization` request header as sensitive so it doesn't show in logs
@@ -77,7 +92,9 @@ pub async fn start_servers() -> Result<(), Error> {
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
-        .layer(PropagateHeaderLayer::new(HeaderName::from_static("x-request-id")))
+        .layer(PropagateHeaderLayer::new(HeaderName::from_static(
+            "x-request-id",
+        )))
         // If the response has a known size set the `Content-Length` header
         // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
         // Authorize requests using a token
@@ -94,5 +111,4 @@ pub async fn start_servers() -> Result<(), Error> {
         .await
         .expect("server error");
     Ok(())
-}  
-
+}

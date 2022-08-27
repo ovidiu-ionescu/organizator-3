@@ -1,7 +1,7 @@
-use std::error::Error;
-use serde::{Deserialize, Serialize};
-use jsonwebtoken::{encode, decode, Header, Algorithm, EncodingKey, DecodingKey};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header};
 use ring::rand::{SecureRandom, SystemRandom};
+use serde::{Deserialize, Serialize};
+use std::error::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -17,9 +17,9 @@ fn encode_token(user_id: &str, secret: &[u8; 32]) -> String {
 }
 
 pub fn generate_key(key: &mut [u8; 32]) -> Result<(), Box<dyn Error>> {
-  let rng = SystemRandom::new();
-  rng.fill(key)?;
-  Ok(())
+    let rng = SystemRandom::new();
+    rng.fill(key)?;
+    Ok(())
 }
 
 #[cfg(test)]
