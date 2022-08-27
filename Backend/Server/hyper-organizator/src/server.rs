@@ -18,7 +18,8 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::check_security::{OrganizatorAuthorization, UserId};
+use crate::authentication::authorize_header::Jot;
+use crate::authentication::check_security::{OrganizatorAuthorization, UserId};
 use crate::typedef::GenericError;
 use futures::StreamExt;
 
@@ -70,17 +71,9 @@ async fn read_full_body(req: &mut Request<Body>) -> Result<Vec<u8>, Error> {
     Ok(body.to_vec())
 }
 
-struct State {
-    content: String,
-}
-
 pub async fn start_servers() -> Result<(), Error> {
     // Setup tracing
     tracing_subscriber::fmt::init();
-
-    let state = State {
-        content: "Hello, world!".to_string(),
-    };
 
     let service = ServiceBuilder::new()
         // Mark the `Authorization` request header as sensitive so it doesn't show in logs
@@ -88,7 +81,7 @@ pub async fn start_servers() -> Result<(), Error> {
         // High level logging of requests and responses
         .layer(TraceLayer::new_for_http())
         // Share an `Arc<State>` with all requests
-        .layer(AddExtensionLayer::new(Arc::new(RwLock::new(state))))
+        .layer(AddExtensionLayer::new(Arc::new(Jot::new().unwrap())))
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
