@@ -6,10 +6,11 @@ use http::header::AUTHORIZATION;
 ///
 use http::StatusCode;
 use hyper::{Body, Request, Response};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
+const BEARER: &str = "Bearer ";
 
 #[derive(Clone, Copy)]
 pub struct OrganizatorAuthorization;
@@ -45,7 +46,8 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
 
 fn check_jwt_header<B>(request: &Request<B>) -> Option<UserId> {
     match request.headers().get(AUTHORIZATION).map(|s| s.to_str()) {
-        Some(Ok(jwt)) => {
+        Some(Ok(bearer)) if bearer.len() > BEARER.len() => {
+            let jwt = &bearer[BEARER.len()..];
             let jot = request.extensions().get::<Arc<Jot>>()?;
             if let Ok(username) = jot.validate_token(jwt) {
                 Some(UserId(username))
@@ -82,10 +84,11 @@ mod tests {
         let mut request = Request::new(Body::empty());
         let jot = Jot::new().unwrap();
         let token = jot.generate_token("admin", 3600).unwrap();
+        let header = String::from(BEARER) + &token;
 
         request
             .headers_mut()
-            .insert(AUTHORIZATION, token.parse().unwrap());
+            .insert(AUTHORIZATION, header.parse().unwrap());
         request.extensions_mut().insert(Arc::new(jot));
         assert_eq!(
             check_jwt_header(&mut request),
@@ -117,6 +120,7 @@ mod tests {
     async fn integration_test_jwt() -> Result<(), Error> {
         let jot = Jot::new().unwrap();
         let token = jot.generate_token("admin", 3600).unwrap();
+        let header = String::from(BEARER) + &token;
         let mut service = ServiceBuilder::new()
             .layer(AddExtensionLayer::new(Arc::new(jot)))
             .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
@@ -125,7 +129,7 @@ mod tests {
 
         request
             .headers_mut()
-            .insert(AUTHORIZATION, token.parse().unwrap());
+            .insert(AUTHORIZATION, header.parse().unwrap());
         let response = service.ready().await?.call(request).await?;
         assert_eq!(response.status(), StatusCode::OK);
         Ok(())
