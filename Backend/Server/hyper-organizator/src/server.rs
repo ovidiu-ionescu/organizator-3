@@ -22,12 +22,13 @@ use crate::authentication::authorize_header::Jot;
 use crate::authentication::check_security::{OrganizatorAuthorization, UserId};
 use crate::typedef::GenericError;
 use futures::StreamExt;
+use tracing::{debug, info};
 
 // use crate::myservice::print_service::PrintLayer;
 
 /// All requests to the server are handled by this function.
 async fn unihandler(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    println!(
+    debug!(
         "Creds: 「{:#?}」, uri:「{}」",
         &request.headers().get("Authorization"),
         &request.uri().path()
@@ -45,7 +46,7 @@ async fn unihandler(request: Request<Body>) -> Result<Response<Body>, GenericErr
     let tmp = Some("Hello, I have no telephone\n");
     let response = match tmp {
         Some(res) => {
-            println!("Hit");
+            info!("Hit");
             make_body(res)
         }
         None => Response::builder()
@@ -91,6 +92,9 @@ pub async fn start_servers() -> Result<(), Error> {
         .layer(PropagateHeaderLayer::new(HeaderName::from_static(
             "x-request-id",
         )))
+        // Propagate the JWT token from the request to the response; if it's close
+        // to expiring, a new one will be generated and returned in the response
+        .layer(PropagateHeaderLayer::new(AUTHORIZATION))
         // If the response has a known size set the `Content-Length` header
         // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
         // Authorize requests using a token
@@ -101,7 +105,7 @@ pub async fn start_servers() -> Result<(), Error> {
 
     // And run our service using `hyper`
     let addr_str = "127.0.0.1:3000";
-    println!("start server on {}", &addr_str);
+    info!("start server on {}", &addr_str);
     let addr = addr_str.parse::<SocketAddr>().unwrap();
     Server::bind(&addr)
         .serve(Shared::new(service))

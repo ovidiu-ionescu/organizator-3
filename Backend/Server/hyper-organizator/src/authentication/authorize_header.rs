@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
 use std::time::SystemTime;
+use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -62,7 +63,7 @@ impl Jot {
         } else if claims.exp + self.session_expiry_grace_period > now {
             ExpiredToken::GracePeriod
         } else {
-            println!("claims.exp: {}, now: {}", claims.exp, now);
+            debug!("claims.exp: {}, now: {}", claims.exp, now);
             ExpiredToken::Expired
         }
     }
@@ -80,17 +81,6 @@ impl Jot {
         let validation = Validation::new(Algorithm::HS256);
         let token_data = decode::<Claims>(token, &self.decoding_key, &validation)?;
         Ok(token_data.claims)
-    }
-
-    pub fn refresh_token(self: &Self, token: &str) -> Result<String, Box<dyn Error>> {
-        let validation = Validation::new(Algorithm::HS256);
-        let token_data = decode::<Claims>(token, &self.decoding_key, &validation)?;
-        let exp = Self::now() + self.session_expiry;
-        let claims = Claims {
-            sub: token_data.claims.sub,
-            exp,
-        };
-        Ok(encode(&Header::default(), &claims, &self.encoding_key)?)
     }
 }
 

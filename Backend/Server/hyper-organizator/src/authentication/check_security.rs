@@ -6,8 +6,9 @@ use http::header::AUTHORIZATION;
 ///
 use http::StatusCode;
 use hyper::{Body, Request, Response};
-use std::{sync::Arc, time::SystemTime};
+use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
+use tracing::info;
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
 
@@ -24,6 +25,11 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
 
     fn authorize(&mut self, req: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+        // check if the url is in the list of allowed urls (e.g. /login)
+        match req.uri().path() {
+            "/login" => return Ok(()),
+            _ => (),
+        }
         if let Some(user_id) = check_ssl_header(req) {
             req.extensions_mut().insert(user_id);
             Ok(())
@@ -57,10 +63,18 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
                     ExpiredToken::Valid => Some(UserId(claims.sub)),
                     ExpiredToken::GracePeriod => {
                         // refresh the token
-                        Some(UserId(claims.sub))
+                        if let Ok(new_token) = jot.generate_token(&claims.sub) {
+                            let header = String::from(BEARER) + &new_token;
+                            request
+                                .headers_mut()
+                                .insert(AUTHORIZATION, header.parse().unwrap());
+                            Some(UserId(claims.sub))
+                        } else {
+                            None
+                        }
                     }
                     ExpiredToken::Expired => {
-                        println!("Token expired");
+                        info!("Token expired");
                         None
                     }
                 }
@@ -74,7 +88,6 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
 
     use super::*;
     use hyper::Error;
