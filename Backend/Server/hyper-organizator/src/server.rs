@@ -23,7 +23,10 @@ use crate::authentication::check_security::{OrganizatorAuthorization, UserId};
 use crate::typedef::GenericError;
 use futures::StreamExt;
 
-async fn unihandler(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
+// use crate::myservice::print_service::PrintLayer;
+
+/// All requests to the server are handled by this function.
+async fn unihandler(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     println!(
         "Creds: 「{:#?}」, uri:「{}」",
         &request.headers().get("Authorization"),
@@ -92,6 +95,7 @@ pub async fn start_servers() -> Result<(), Error> {
         // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
         // Authorize requests using a token
         .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
+        // .layer(PrintLayer)
         // Wrap a `Service` in our middleware stack
         .service_fn(unihandler);
 

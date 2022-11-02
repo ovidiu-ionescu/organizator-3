@@ -1,5 +1,6 @@
 mod authentication;
 mod config;
+mod myservice;
 mod server;
 mod typedef;
 

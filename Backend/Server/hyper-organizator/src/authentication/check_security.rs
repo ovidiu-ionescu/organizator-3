@@ -1,4 +1,4 @@
-use crate::authentication::authorize_header::Jot;
+use crate::authentication::authorize_header::{ExpiredToken, Jot};
 use http::header::AUTHORIZATION;
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
@@ -6,7 +6,7 @@ use http::header::AUTHORIZATION;
 ///
 use http::StatusCode;
 use hyper::{Body, Request, Response};
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 use tower_http::auth::AuthorizeRequest;
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
@@ -46,13 +46,24 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
     }
 }
 
-fn check_jwt_header<B>(request: &Request<B>) -> Option<UserId> {
+fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
     match request.headers().get(AUTHORIZATION).map(|s| s.to_str()) {
         Some(Ok(bearer)) if bearer.len() > BEARER.len() => {
             let jwt = &bearer[BEARER.len()..];
             let jot = request.extensions().get::<Arc<Jot>>()?;
-            if let Ok(username) = jot.validate_token(jwt) {
-                Some(UserId(username))
+            if let Ok(claims) = jot.validate_token(jwt) {
+                // verify the token has not expired
+                match jot.check_expiration(&claims) {
+                    ExpiredToken::Valid => Some(UserId(claims.sub)),
+                    ExpiredToken::GracePeriod => {
+                        // refresh the token
+                        Some(UserId(claims.sub))
+                    }
+                    ExpiredToken::Expired => {
+                        println!("Token expired");
+                        None
+                    }
+                }
             } else {
                 None
             }
@@ -63,6 +74,8 @@ fn check_jwt_header<B>(request: &Request<B>) -> Option<UserId> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use super::*;
     use hyper::Error;
     use tower::{Service, ServiceBuilder, ServiceExt};
@@ -85,7 +98,7 @@ mod tests {
     fn test_check_jwt_header() {
         let mut request = Request::new(Body::empty());
         let jot = Jot::new().unwrap();
-        let token = jot.generate_token("admin", 3600).unwrap();
+        let token = jot.generate_token("admin").unwrap();
         let header = String::from(BEARER) + &token;
 
         request
@@ -98,6 +111,7 @@ mod tests {
         );
     }
 
+    // Test using the header set by Nginx from a client certificate
     #[tokio::test]
     async fn integration_test() -> Result<(), Error> {
         let mut service = ServiceBuilder::new()
@@ -105,12 +119,14 @@ mod tests {
             .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
 
         let mut request = Request::new(Body::empty());
+        // request with the header should be authorized
         request
             .headers_mut()
             .insert(SSL_HEADER, "CN=admin".parse().unwrap());
         let response = service.ready().await?.call(request).await?;
         assert_eq!(response.status(), StatusCode::OK);
 
+        // request without the header should be unauthorized
         let request = Request::new(Body::empty());
         let response = service.ready().await?.call(request).await?;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -118,22 +134,43 @@ mod tests {
         Ok(())
     }
 
+    macro_rules! test_with_env {
+        ($expiry: expr, $grace: expr, $response: ident) => {
+            let mut jot = Jot::new().unwrap();
+            jot.session_expiry = $expiry;
+            jot.session_expiry_grace_period = $grace;
+            let token = jot.generate_token("admin").unwrap();
+            let mut service = ServiceBuilder::new()
+                .layer(AddExtensionLayer::new(Arc::new(jot)))
+                .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
+                .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
+            let header = String::from(BEARER) + &token;
+            let mut request = Request::new(Body::empty());
+
+            // request with a valid JWT token should be authorized
+            request
+                .headers_mut()
+                .insert(AUTHORIZATION, header.parse().unwrap());
+            let $response = service.ready().await?.call(request).await?;
+        };
+    }
+
+    // Test using the Authorization header with a JWT token
     #[tokio::test]
     async fn integration_test_jwt() -> Result<(), Error> {
-        let jot = Jot::new().unwrap();
-        let token = jot.generate_token("admin", 3600).unwrap();
-        let header = String::from(BEARER) + &token;
-        let mut service = ServiceBuilder::new()
-            .layer(AddExtensionLayer::new(Arc::new(jot)))
-            .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
-            .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
-        let mut request = Request::new(Body::empty());
-
-        request
-            .headers_mut()
-            .insert(AUTHORIZATION, header.parse().unwrap());
-        let response = service.ready().await?.call(request).await?;
+        test_with_env!(3600, 300, response);
         assert_eq!(response.status(), StatusCode::OK);
+
+        // request with a header in the grace period should be authorized
+        test_with_env!(0, 300, response);
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // check we got a new token
+
+        // request with an expired JWT token should be unauthorized
+        test_with_env!(0, 0, response);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
         Ok(())
     }
 }
