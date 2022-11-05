@@ -4,7 +4,7 @@ use http::header::AUTHORIZATION;
 ///  - check a header filled in by Nginx from a client certificate
 ///  - check the JWT token in the Authorization header
 ///
-use http::StatusCode;
+use http::{Method, StatusCode};
 use hyper::{Body, Request, Response};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
@@ -13,7 +13,7 @@ use tracing::info;
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
 
 /// Bearer token is described here: https://www.rfc-editor.org/rfc/rfc6750
-const BEARER: &str = "Bearer ";
+pub const BEARER: &str = "Bearer ";
 
 #[derive(Clone, Copy)]
 pub struct OrganizatorAuthorization;
@@ -26,8 +26,8 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
 
     fn authorize(&mut self, req: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
         // check if the url is in the list of allowed urls (e.g. /login)
-        match req.uri().path() {
-            "/login" => return Ok(()),
+        match (req.method(), req.uri().path()) {
+            (&Method::POST, "/login") => return Ok(()),
             _ => (),
         }
         if let Some(user_id) = check_ssl_header(req) {

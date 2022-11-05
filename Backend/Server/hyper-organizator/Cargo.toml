@@ -25,6 +25,7 @@ indoc = "1.0"
 rand = "0.8.4"
 flate2 = "1.0"
 mimalloc = { version = "*", default-features = false }
+url = "2"
 
 tower-http = { version = "0.3.4", features = ["full"] }
 http = "0.2"

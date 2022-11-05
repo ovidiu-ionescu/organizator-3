@@ -12,86 +12,63 @@ use std::{
 };
 use tower::{make::Shared, service_fn, ServiceBuilder};
 use tower_http::{
-    add_extension::AddExtensionLayer, auth::RequireAuthorizationLayer,
-    compression::CompressionLayer, propagate_header::PropagateHeaderLayer,
-    sensitive_headers::SetSensitiveRequestHeadersLayer, set_header::SetResponseHeaderLayer,
-    trace::TraceLayer,
+    add_extension::AddExtensionLayer,
+    auth::RequireAuthorizationLayer,
+    compression::CompressionLayer,
+    propagate_header::PropagateHeaderLayer,
+    sensitive_headers::SetSensitiveRequestHeadersLayer,
+    set_header::SetResponseHeaderLayer,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 
 use crate::authentication::authorize_header::Jot;
 use crate::authentication::check_security::{OrganizatorAuthorization, UserId};
+use crate::authentication::login::login;
+use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::typedef::GenericError;
+use crate::under_construction::default_reply;
 use futures::StreamExt;
+use tower_http::request_id::{
+    MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
+};
 use tracing::{debug, info};
 
 // use crate::myservice::print_service::PrintLayer;
 
 /// All requests to the server are handled by this function.
-async fn unihandler(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    debug!(
-        "Creds: 「{:#?}」, uri:「{}」",
-        &request.headers().get("Authorization"),
-        &request.uri().path()
-    );
-
-    let make_body = |s: &str| {
-        Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "application/json")
-            .header("server", "hyper")
-            .body(Body::from(s.to_string()))
-            .unwrap()
-    };
-
-    let tmp = Some("Hello, I have no telephone\n");
-    let response = match tmp {
-        Some(res) => {
-            info!("Hit");
-            make_body(res)
-        }
-        None => Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::from(
-                r#"{ "error_code": 404, "message": "HTTP 404 Not Found" }"#,
-            ))
-            .unwrap(),
-    };
-    Ok(response)
-}
-
-async fn read_full_body(req: &mut Request<Body>) -> Result<Vec<u8>, Error> {
-    let mut body = match req
-        .headers()
-        .get("Content-Length")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<usize>().ok())
-    {
-        Some(len) => Vec::with_capacity(len),
-        None => Vec::new(),
-    };
-    while let Some(chunk) = req.body_mut().next().await {
-        body.extend_from_slice(&chunk?);
+async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    match (request.method(), request.uri().path()) {
+        (&Method::POST, "/login") => login(request).await,
+        _ => default_reply(request).await,
     }
-    Ok(body.to_vec())
 }
 
 pub async fn start_servers() -> Result<(), Error> {
     // Setup tracing
     tracing_subscriber::fmt::init();
 
+    let x_request_id = HeaderName::from_static("x-request-id");
+
     let service = ServiceBuilder::new()
+        // set `x-request-id` header on all requests
+        .layer(SetRequestIdLayer::new(
+            x_request_id.clone(),
+            NumericMakeRequestId::default(),
+        ))
         // Mark the `Authorization` request header as sensitive so it doesn't show in logs
-        // .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
+        .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
         // High level logging of requests and responses
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                .on_response(DefaultOnResponse::new().include_headers(true)),
+        )
         // Share an `Arc<State>` with all requests
         .layer(AddExtensionLayer::new(Arc::new(Jot::new().unwrap())))
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
-        .layer(PropagateHeaderLayer::new(HeaderName::from_static(
-            "x-request-id",
-        )))
+        .layer(PropagateHeaderLayer::new(x_request_id))
         // Propagate the JWT token from the request to the response; if it's close
         // to expiring, a new one will be generated and returned in the response
         .layer(PropagateHeaderLayer::new(AUTHORIZATION))
@@ -101,7 +78,7 @@ pub async fn start_servers() -> Result<(), Error> {
         .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
         // .layer(PrintLayer)
         // Wrap a `Service` in our middleware stack
-        .service_fn(unihandler);
+        .service_fn(router);
 
     // And run our service using `hyper`
     let addr_str = "127.0.0.1:3000";

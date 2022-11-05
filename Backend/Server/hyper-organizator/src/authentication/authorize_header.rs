@@ -1,3 +1,4 @@
+use crate::typedef::GenericError;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
@@ -68,7 +69,7 @@ impl Jot {
         }
     }
 
-    pub fn generate_token(self: &Self, user_id: &str) -> Result<String, Box<dyn Error>> {
+    pub fn generate_token(self: &Self, user_id: &str) -> Result<String, GenericError> {
         let exp = Self::now() + self.session_expiry;
         let claims = Claims {
             sub: user_id.to_string(),
