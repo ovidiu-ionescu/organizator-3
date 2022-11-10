@@ -10,3 +10,5 @@ Cargo.lock
 **/*.rs.bk
 Old/
 tmp/
+**/Docker/hyper-organizator
+
