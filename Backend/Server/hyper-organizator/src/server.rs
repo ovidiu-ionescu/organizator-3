@@ -84,9 +84,8 @@ pub async fn start_servers() -> Result<(), Error> {
     let addr_str = "127.0.0.1:3000";
     info!("start server on {}", &addr_str);
     let addr = addr_str.parse::<SocketAddr>().unwrap();
-    Server::bind(&addr)
-        .serve(Shared::new(service))
-        .await
-        .expect("server error");
+    let main_server = Server::bind(&addr).serve(Shared::new(service));
+    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server();
+    futures::try_join!(main_server, metrics_server).expect("server error");
     Ok(())
 }
