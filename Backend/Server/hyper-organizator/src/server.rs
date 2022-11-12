@@ -21,12 +21,15 @@ use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 
-use crate::authentication::authorize_header::Jot;
-use crate::authentication::check_security::{OrganizatorAuthorization, UserId};
 use crate::authentication::login::login;
 use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::typedef::GenericError;
 use crate::under_construction::default_reply;
+use crate::{
+    authentication::check_security::{OrganizatorAuthorization, UserId},
+    metrics::prometheus_metrics::PrometheusMetrics,
+};
+use crate::{authentication::jot::Jot, metrics::metrics_layer::MetricsLayer};
 use futures::StreamExt;
 use tower_http::request_id::{
     MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
@@ -49,12 +52,15 @@ pub async fn start_servers() -> Result<(), Error> {
 
     let x_request_id = HeaderName::from_static("x-request-id");
 
+    let metrics = Arc::new(PrometheusMetrics::new());
     let service = ServiceBuilder::new()
         // set `x-request-id` header on all requests
         .layer(SetRequestIdLayer::new(
             x_request_id.clone(),
             NumericMakeRequestId::default(),
         ))
+        .layer(AddExtensionLayer::new(metrics.clone()))
+        .layer(MetricsLayer)
         // Mark the `Authorization` request header as sensitive so it doesn't show in logs
         .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
         // High level logging of requests and responses
@@ -85,7 +91,7 @@ pub async fn start_servers() -> Result<(), Error> {
     info!("start server on {}", &addr_str);
     let addr = addr_str.parse::<SocketAddr>().unwrap();
     let main_server = Server::bind(&addr).serve(Shared::new(service));
-    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server();
+    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server(metrics);
     futures::try_join!(main_server, metrics_server).expect("server error");
     Ok(())
 }

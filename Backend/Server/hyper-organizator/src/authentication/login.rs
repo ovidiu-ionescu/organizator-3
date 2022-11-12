@@ -1,4 +1,4 @@
-use crate::authentication::authorize_header::Jot;
+use crate::authentication::jot::Jot;
 use crate::response_utils::{read_full_body, GenericMessage};
 use crate::typedef::GenericError;
 use http::{Request, Response};

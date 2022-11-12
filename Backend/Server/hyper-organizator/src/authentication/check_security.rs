@@ -1,4 +1,4 @@
-use crate::authentication::authorize_header::{ExpiredToken, Jot};
+use crate::authentication::jot::{ExpiredToken, Jot};
 use http::header::AUTHORIZATION;
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
