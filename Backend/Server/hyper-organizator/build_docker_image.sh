@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 set -e
+export RUSTFLAGS='--cfg procmacro2_semver_exempt'
 
 cargo build --release
 
@@ -11,6 +12,6 @@ cd Docker
 # change env to release the image to minikube
 eval $(minikube docker-env)
 
-docker build -t hyper-organizator .
+docker build -t hyper-organizator:v0.0.1 .
 
 

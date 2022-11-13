@@ -1,4 +1,4 @@
-FROM bitnami/minideb:stretch
+FROM bitnami/minideb:bullseye
 
 COPY . .
 CMD ["./hyper-organizator"]
@@ -8,5 +8,6 @@ LABEL maintainer="Ovidiu Ionescu <ovidiu@ionescu.net>" \
   version="0.2" \
   description="Web service implemented with Hyper" \
   repository="https://github.com/ovidiu-ionescu/organizator-3" \
-  name="hyper-organizator"
+  name="hyper-organizator" \
+  app="hyper-organizator"
 
