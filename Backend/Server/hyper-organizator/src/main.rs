@@ -1,8 +1,8 @@
 mod authentication;
-mod config;
 mod metrics;
 mod response_utils;
 mod server;
+mod settings;
 mod typedef;
 mod under_construction;
 

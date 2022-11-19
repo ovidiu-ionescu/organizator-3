@@ -1,3 +1,4 @@
+use crate::settings::Settings;
 use http::{
     header::{HeaderName, AUTHORIZATION, CONTENT_TYPE},
     Request, Response,
@@ -47,6 +48,8 @@ async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> 
 }
 
 pub async fn start_servers() -> Result<(), Error> {
+    let settings = Settings::new();
+
     // Setup tracing
     tracing_subscriber::fmt::init();
 
@@ -87,11 +90,10 @@ pub async fn start_servers() -> Result<(), Error> {
         .service_fn(router);
 
     // And run our service using `hyper`
-    let addr_str = "127.0.0.1:3000";
-    info!("start server on {}", &addr_str);
-    let addr = addr_str.parse::<SocketAddr>().unwrap();
-    let main_server = Server::bind(&addr).serve(Shared::new(service));
-    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server(metrics);
+    let api_ip = settings.api_ip();
+    info!("start server on {}", &api_ip);
+    let main_server = Server::bind(&api_ip).serve(Shared::new(service));
+    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server(metrics, &settings);
     futures::try_join!(main_server, metrics_server).expect("server error");
     Ok(())
 }

@@ -8,7 +8,7 @@ use tower::{make::Shared, ServiceBuilder};
 use tower_http::add_extension::AddExtensionLayer;
 use tracing::info;
 
-use crate::{typedef::GenericError, under_construction::default_reply};
+use crate::{settings::Settings, typedef::GenericError, under_construction::default_reply};
 
 use super::prometheus_metrics::PrometheusMetrics;
 use prometheus::{Encoder, TextEncoder};
@@ -41,12 +41,12 @@ async fn metrics_handler(request: Request<Body>) -> Result<Response<Body>, Gener
 
 pub fn start_metrics_server(
     metrics: Arc<PrometheusMetrics>,
+    settings: &Settings,
 ) -> impl Future<Output = Result<(), hyper::Error>> {
     let service = ServiceBuilder::new()
         .layer(AddExtensionLayer::new(metrics.clone()))
         .service_fn(metrics_handler);
-    let addr_str = "127.0.0.1:3001";
-    info!("start server on {}", &addr_str);
-    let addr = addr_str.parse::<SocketAddr>().unwrap();
-    Server::bind(&addr).serve(Shared::new(service))
+    let metrics_ip = settings.metrics_ip();
+    info!("start server on {}", &metrics_ip);
+    Server::bind(&metrics_ip).serve(Shared::new(service))
 }

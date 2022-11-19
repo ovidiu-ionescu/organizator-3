@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 
 use http::Request;
 use tower::Layer;
@@ -42,7 +42,7 @@ where
             .get::<Arc<PrometheusMetrics>>()
             .unwrap();
         metrics.http_counter.add(&metrics.context, 1, &[]);
-
+        let request_start = SystemTime::now();
         self.inner.call(request)
     }
 }

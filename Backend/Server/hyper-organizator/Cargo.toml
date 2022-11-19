@@ -41,6 +41,7 @@ opentelemetry = "0.18"
 opentelemetry-prometheus = "0.11"
 prometheus = "0.13"
 
+toml = "0.5"
 
 [profile.release]
 lto = true
