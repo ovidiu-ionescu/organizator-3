@@ -1,0 +1,6 @@
+# delete the deployment
+kubectl delete deployment nginx-deployment
+
+# apply the deployment
+kubectl apply -f nginx-deployment.yaml
+

@@ -1,7 +1,15 @@
-use std::{sync::Arc, time::SystemTime};
-
-use http::Request;
+use futures::Future;
+use futures_util::ready;
+use http::{Request, Response};
+use pin_project_lite::pin_project;
+use std::pin::Pin;
+use std::{
+    sync::Arc,
+    task::{Context, Poll},
+    time::SystemTime,
+};
 use tower::Layer;
+use tower_service::Service;
 
 use super::prometheus_metrics::PrometheusMetrics;
 
@@ -20,14 +28,13 @@ pub struct MetricsService<S> {
     inner: S,
 }
 
-impl<S, ReqBody> tower::Service<Request<ReqBody>> for MetricsService<S>
+impl<ReqBody, ResBody, S> tower::Service<Request<ReqBody>> for MetricsService<S>
 where
-    S: tower::Service<Request<ReqBody>>,
-    ReqBody: std::fmt::Debug,
+    S: Service<Request<ReqBody>, Response = Response<ResBody>>,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = S::Future;
+    type Future = ResponseFuture<S::Future>;
 
     fn poll_ready(
         &mut self,
@@ -42,7 +49,39 @@ where
             .get::<Arc<PrometheusMetrics>>()
             .unwrap();
         metrics.http_counter.add(&metrics.context, 1, &[]);
+        let metrics = metrics.clone();
         let request_start = SystemTime::now();
-        self.inner.call(request)
+        ResponseFuture {
+            inner: self.inner.call(request),
+            metrics,
+            request_start,
+        }
+    }
+}
+pin_project! {
+pub struct ResponseFuture<F> {
+    #[pin]
+    inner:         F,
+    metrics:       Arc<PrometheusMetrics>,
+    request_start: SystemTime,
+}
+}
+impl<F, ResBody, E> Future for ResponseFuture<F>
+where
+    F: Future<Output = Result<Response<ResBody>, E>>,
+{
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        let response = ready!(this.inner.poll(cx)?);
+        let request_duration = this
+            .request_start
+            .elapsed()
+            .map_or(0.0, |d| d.as_secs_f64());
+        this.metrics
+            .http_req_histogram
+            .record(&this.metrics.context, request_duration, &[]);
+        Poll::Ready(Ok(response))
     }
 }

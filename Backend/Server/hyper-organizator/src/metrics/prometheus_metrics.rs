@@ -36,7 +36,7 @@ impl PrometheusMetrics {
 
             exporter,
             http_counter: meter
-                .u64_counter("example.http_requests_total")
+                .u64_counter("service.http_requests_total")
                 .with_description("Total number of HTTP requests made.")
                 .init(),
             http_body_gauge: meter

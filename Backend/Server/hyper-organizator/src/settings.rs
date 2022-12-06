@@ -1,7 +1,7 @@
 use std::{fs::File, io::Read, net::SocketAddr};
 
 use serde::Deserialize;
-use tracing::warn;
+use tracing::{info, warn};
 
 /// Read the settings file and return a Settings struct.
 ///
@@ -12,14 +12,18 @@ pub struct Settings {
     metrics_ip: String,
 }
 
+#[must_use]
 fn read_config() -> Settings {
-    let Ok(mut config_file) = File::open("settings.toml") else {
+    let config_file_name = "settings.toml";
+    let Ok(mut config_file) = File::open(&config_file_name) else {
         warn!("Could not open config file, using defaults");
         return Settings::default();
     };
+    info!("Reading config file {}", config_file_name);
     let mut config_str = String::new();
     config_file.read_to_string(&mut config_str).unwrap();
     let config: Settings = toml::from_str(&config_str).unwrap();
+    info!("Config file read {:?}", config);
     config
 }
 

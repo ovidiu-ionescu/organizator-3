@@ -50,12 +50,10 @@ async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> 
 pub async fn start_servers() -> Result<(), Error> {
     let settings = Settings::new();
 
-    // Setup tracing
-    tracing_subscriber::fmt::init();
-
     let x_request_id = HeaderName::from_static("x-request-id");
 
     let metrics = Arc::new(PrometheusMetrics::new());
+
     let service = ServiceBuilder::new()
         // set `x-request-id` header on all requests
         .layer(SetRequestIdLayer::new(

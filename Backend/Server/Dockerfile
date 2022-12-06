@@ -1,5 +1,6 @@
 FROM rust:slim AS builder
 WORKDIR /usr/src/myapp
+# maybe use --link
 COPY . .
 WORKDIR /usr/src/myapp/hyper-organizator
 RUN cargo install --path .

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hyper-organizator
+  labels: 
+    app: hyper-organizator
+  namespace: organizator-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hyper-organizator
+  template:
+    metadata:
+      labels:
+        app: hyper-organizator
+    spec:
+      containers:
+        - image: hyper-organizator:v0.0.1
+          name: hyper-organizator
+          # This is only informative, the executable decides the ports
+          ports:
+            - containerPort: 8080
+              name: "http"
+            - containerPort: 8081
+              name: "metrics"
+          volumeMounts:
+            - name: config
+              mountPath: /settings.toml
+              subPath: settings.toml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: hyper-organizator-config
+
