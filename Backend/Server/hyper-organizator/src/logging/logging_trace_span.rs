@@ -11,10 +11,6 @@ impl TraceRequestMakeSpan {
     pub fn new(level: Level) -> Self {
         Self { level }
     }
-    pub fn level(mut self, level: Level) -> Self {
-        self.level = level;
-        self
-    }
 }
 
 impl Default for TraceRequestMakeSpan {

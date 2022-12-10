@@ -1,25 +1,15 @@
 use crate::{logging::logging_trace_span::TraceRequestMakeSpan, settings::Settings};
 use http::{
-    header::{HeaderName, AUTHORIZATION, CONTENT_TYPE},
+    header::{HeaderName, AUTHORIZATION},
     Request, Response,
 };
-use hyper::{server::Server, service::make_service_fn, Body, Error, Method, StatusCode};
-use std::collections::HashMap;
-use std::{
-    convert::Infallible,
-    iter::once,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
-use tower::{make::Shared, service_fn, ServiceBuilder};
+use hyper::{server::Server, Body, Error, Method};
+use std::{iter::once, sync::Arc};
+use tower::{make::Shared, ServiceBuilder};
 use tower_http::{
-    add_extension::AddExtensionLayer,
-    auth::RequireAuthorizationLayer,
-    compression::CompressionLayer,
-    propagate_header::PropagateHeaderLayer,
-    sensitive_headers::SetSensitiveRequestHeadersLayer,
-    set_header::SetResponseHeaderLayer,
-    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    add_extension::AddExtensionLayer, auth::RequireAuthorizationLayer,
+    compression::CompressionLayer, propagate_header::PropagateHeaderLayer,
+    sensitive_headers::SetSensitiveRequestHeadersLayer, trace::TraceLayer,
 };
 
 use crate::authentication::login::login;
@@ -27,15 +17,12 @@ use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::typedef::GenericError;
 use crate::under_construction::default_reply;
 use crate::{
-    authentication::check_security::{OrganizatorAuthorization, UserId},
+    authentication::check_security::OrganizatorAuthorization,
     metrics::prometheus_metrics::PrometheusMetrics,
 };
 use crate::{authentication::jot::Jot, metrics::metrics_layer::MetricsLayer};
-use futures::StreamExt;
-use tower_http::request_id::{
-    MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
-};
-use tracing::{debug, info};
+use tower_http::request_id::SetRequestIdLayer;
+use tracing::info;
 
 // use crate::myservice::print_service::PrintLayer;
 
