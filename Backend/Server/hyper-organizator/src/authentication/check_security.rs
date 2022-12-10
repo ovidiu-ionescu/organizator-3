@@ -8,7 +8,7 @@ use http::{Method, StatusCode};
 use hyper::{Body, Request, Response};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
-use tracing::info;
+use tracing::{info, warn};
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
 
@@ -37,6 +37,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             req.extensions_mut().insert(user_id);
             Ok(())
         } else {
+            warn!("Unauthorized request");
             Err(Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
                 .body(Body::empty())

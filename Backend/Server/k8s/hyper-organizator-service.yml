@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hyper-organizator
+spec:
+  selector:
+    app: hyper-organizator
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

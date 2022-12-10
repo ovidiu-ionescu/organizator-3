@@ -19,7 +19,7 @@ use tower_http::{
     propagate_header::PropagateHeaderLayer,
     sensitive_headers::SetSensitiveRequestHeadersLayer,
     set_header::SetResponseHeaderLayer,
-    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 
 use crate::authentication::login::login;
@@ -66,9 +66,22 @@ pub async fn start_servers() -> Result<(), Error> {
         .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
         // High level logging of requests and responses
         .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::new().include_headers(true))
-                .on_response(DefaultOnResponse::new().include_headers(true)),
+            TraceLayer::new_for_http().make_span_with(
+                DefaultMakeSpan::new()
+                    .include_headers(true)
+                    .level(tracing::Level::INFO),
+            ), /*
+               .on_request(
+                   DefaultOnRequest::new()
+                       //.include_headers(true)
+                       .level(tracing::Level::INFO),
+               )
+               .on_response(
+                   DefaultOnResponse::new()
+                       .include_headers(true)
+                       .level(tracing::Level::INFO),
+               ),
+               */
         )
         // Share an `Arc<State>` with all requests
         .layer(AddExtensionLayer::new(Arc::new(Jot::new().unwrap())))

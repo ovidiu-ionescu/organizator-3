@@ -24,6 +24,12 @@ spec:
               name: "http"
             - containerPort: 8081
               name: "metrics"
+          env:
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: hyper-organizator-config
+                  key: rust_log_level
           volumeMounts:
             - name: config
               mountPath: /settings.toml

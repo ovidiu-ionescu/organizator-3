@@ -9,4 +9,5 @@ data:
   settings.toml: |-
     api_ip = "0.0.0.0:8080"
     metrics_ip = "0.0.0.0:8081"
+  rust_log_level: INFO
 
