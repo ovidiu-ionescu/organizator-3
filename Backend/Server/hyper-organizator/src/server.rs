@@ -1,4 +1,4 @@
-use crate::settings::Settings;
+use crate::{logging::logging_trace_span::TraceRequestMakeSpan, settings::Settings};
 use http::{
     header::{HeaderName, AUTHORIZATION, CONTENT_TYPE},
     Request, Response,
@@ -67,9 +67,11 @@ pub async fn start_servers() -> Result<(), Error> {
         // High level logging of requests and responses
         .layer(
             TraceLayer::new_for_http().make_span_with(
-                DefaultMakeSpan::new()
-                    .include_headers(true)
-                    .level(tracing::Level::INFO),
+                TraceRequestMakeSpan::new(tracing::Level::INFO), /*
+                                                                 DefaultMakeSpan::new()
+                                                                     .include_headers(true)
+                                                                     .level(tracing::Level::INFO),
+                                                                 */
             ), /*
                .on_request(
                    DefaultOnRequest::new()

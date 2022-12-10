@@ -1,4 +1,5 @@
 mod authentication;
+mod logging;
 mod metrics;
 mod response_utils;
 mod server;
