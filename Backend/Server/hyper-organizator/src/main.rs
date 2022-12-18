@@ -15,8 +15,8 @@ static GLOBAL: MiMalloc = MiMalloc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Setup tracing
-    //tracing_subscriber::fmt::init();
-    console_subscriber::init();
+    tracing_subscriber::fmt::init();
+    //console_subscriber::init();
 
     server::start_servers().await?;
     Ok(())

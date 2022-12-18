@@ -35,6 +35,14 @@ async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> 
 }
 
 pub async fn start_servers() -> Result<(), Error> {
+    start_servers_x(router).await
+}
+
+pub async fn start_servers_x<H, R>(f: H) -> Result<(), Error>
+where
+    H: FnMut(Request<Body>) -> R + Clone + Send + 'static,
+    R: futures_util::Future<Output = Result<Response<Body>, GenericError>> + Send + 'static,
+{
     let settings = Settings::new();
 
     let x_request_id = HeaderName::from_static("x-request-id");
@@ -87,7 +95,7 @@ pub async fn start_servers() -> Result<(), Error> {
         .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
         // .layer(PrintLayer)
         // Wrap a `Service` in our middleware stack
-        .service_fn(router);
+        .service_fn(f);
 
     // And run our service using `hyper`
     let api_ip = settings.api_ip();

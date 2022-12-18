@@ -2,4 +2,50 @@
 
 members = [
   "hyper-organizator",
+  "lib-hyper-organizator",
 ]
+
+[workspace.dependencies]
+hyper= { version="0.14.16", features = ["full", "http1", "http2"] }
+futures = "0.3"
+futures-util = "0.3"
+pin-project-lite = "0.2"
+tokio = { version="1", features = ["full", "tracing"] }
+pretty_env_logger = "0.4.0"
+log = "0.4"
+config = "0.11"
+lazy_static = "1.4"
+itertools = "0.10"
+serde_json = "1.0"
+serde_yaml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+bytes = "1.0"
+regex = "1.4"
+thiserror = "1.0"
+time = { version = "0.3", features = ["std", "formatting", "local-offset", "parsing"]}
+indoc = "1.0"
+rand = "0.8"
+flate2 = "1.0"
+mimalloc = { version = "*", default-features = false }
+url = "2"
+
+tower-http = { version = "0.3", features = ["full"] }
+http = "0.2"
+tower = { version = "0.4", features = ["full"] }
+tower-service = "0.3"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+console-subscriber = "0.1"
+
+ring = { version = "0.16", features = ["std"] }
+jsonwebtoken = "8.1"
+
+opentelemetry = "0.18"
+opentelemetry-prometheus = "0.11"
+prometheus = "0.13"
+
+toml = "0.5"
+
+lib-hyper-organizator = { path = "lib-hyper-organizator" }
+

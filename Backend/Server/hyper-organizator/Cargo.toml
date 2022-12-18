@@ -6,47 +6,48 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyper= { version="0.14.16", features = ["full", "http1", "http2"] }
-futures = "0.3"
-futures-util = "0.3"
-pin-project-lite = "0.2"
-tokio = { version="1", features = ["full", "tracing"] }
-pretty_env_logger = "0.4.0"
-log = "0.4"
-config = "0.11"
-lazy_static = "1.4"
-itertools = "0.10"
-serde_json = "1.0"
-serde_yaml = "0.8"
-serde = { version = "1.0", features = ["derive"] }
-bytes = "1.0"
-regex = "1.4"
-thiserror = "1.0"
-time = { version = "0.3", features = ["std", "formatting", "local-offset", "parsing"]}
-indoc = "1.0"
-rand = "0.8"
-flate2 = "1.0"
-mimalloc = { version = "*", default-features = false }
-url = "2"
+hyper = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
+pin-project-lite = { workspace = true }
+tokio = { workspace = true }
+pretty_env_logger = { workspace = true }
+log = { workspace = true }
+config = { workspace = true }
+lazy_static = { workspace = true }
+itertools = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+serde = { workspace = true }
+bytes = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+indoc = { workspace = true }
+rand = { workspace = true }
+flate2 = { workspace = true }
+mimalloc = { workspace = true }
+url = { workspace = true }
 
-tower-http = { version = "0.3", features = ["full"] }
-http = "0.2"
-tower = { version = "0.4", features = ["full"] }
-tower-service = "0.3"
-anyhow = "1.0"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-console-subscriber = "0.1"
+tower-http = { workspace = true }
+http = { workspace = true }
+tower = { workspace = true }
+tower-service = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+#console-subscriber = { workspace = true }
 
-ring = { version = "0.16", features = ["std"] }
-jsonwebtoken = "8.1"
+ring = { workspace = true }
+jsonwebtoken = { workspace = true }
 
-opentelemetry = "0.18"
-opentelemetry-prometheus = "0.11"
-prometheus = "0.13"
+opentelemetry = { workspace = true }
+opentelemetry-prometheus = { workspace = true }
+prometheus = { workspace = true }
 
-toml = "0.5"
+toml = { workspace = true }
 
+lib-hyper-organizator = { workspace = true }
 [profile.release]
 lto = true
 
