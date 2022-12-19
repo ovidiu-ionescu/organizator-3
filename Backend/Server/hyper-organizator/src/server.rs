@@ -12,10 +12,8 @@ use tower_http::{
     sensitive_headers::SetSensitiveRequestHeadersLayer, trace::TraceLayer,
 };
 
-use crate::authentication::login::login;
 use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::typedef::GenericError;
-use crate::under_construction::default_reply;
 use crate::{
     authentication::check_security::OrganizatorAuthorization,
     metrics::prometheus_metrics::PrometheusMetrics,
@@ -26,19 +24,7 @@ use tracing::info;
 
 // use crate::myservice::print_service::PrintLayer;
 
-/// All requests to the server are handled by this function.
-async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    match (request.method(), request.uri().path()) {
-        (&Method::POST, "/login") => login(request).await,
-        _ => default_reply(request).await,
-    }
-}
-
-pub async fn start_servers() -> Result<(), Error> {
-    start_servers_x(router).await
-}
-
-pub async fn start_servers_x<H, R>(f: H) -> Result<(), Error>
+pub async fn start_servers<H, R>(f: H) -> Result<(), Error>
 where
     H: FnMut(Request<Body>) -> R + Clone + Send + 'static,
     R: futures_util::Future<Output = Result<Response<Body>, GenericError>> + Send + 'static,
