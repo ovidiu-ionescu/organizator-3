@@ -1,12 +1,5 @@
-mod authentication;
-mod logging;
-mod metrics;
-mod response_utils;
 mod router;
-mod server;
-mod settings;
-mod typedef;
-mod under_construction;
+use lib_hyper_organizator::server;
 
 use mimalloc::MiMalloc;
 

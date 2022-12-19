@@ -1,14 +1,8 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod authentication;
+mod logging;
+mod metrics;
+mod response_utils;
+pub mod server;
+mod settings;
+pub mod typedef;
+pub mod under_construction;

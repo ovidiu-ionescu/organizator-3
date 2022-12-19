@@ -3,7 +3,7 @@ use http::{
     header::{HeaderName, AUTHORIZATION},
     Request, Response,
 };
-use hyper::{server::Server, Body, Error, Method};
+use hyper::{server::Server, Body, Error};
 use std::{iter::once, sync::Arc};
 use tower::{make::Shared, ServiceBuilder};
 use tower_http::{
