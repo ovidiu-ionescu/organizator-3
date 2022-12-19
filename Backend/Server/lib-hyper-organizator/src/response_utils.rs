@@ -36,8 +36,7 @@ impl GenericMessage {
             .header("content-type", "application/json")
             .header("server", "hyper")
             .body(Body::from(format!(
-                r#"{{ "code": {}, "message": "{}" }}"#,
-                code, msg
+                r#"{{ "code": {code}, "message": "{msg}" }}"#
             )))
             .unwrap();
         Ok(response)

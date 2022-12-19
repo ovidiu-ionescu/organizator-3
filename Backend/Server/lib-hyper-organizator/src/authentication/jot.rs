@@ -69,7 +69,7 @@ impl Jot {
         }
     }
 
-    pub fn generate_token(self: &Self, user_id: &str) -> Result<String, GenericError> {
+    pub fn generate_token(&self, user_id: &str) -> Result<String, GenericError> {
         let exp = Self::now() + self.session_expiry;
         let claims = Claims {
             sub: user_id.to_string(),
@@ -78,7 +78,7 @@ impl Jot {
         Ok(encode(&Header::default(), &claims, &self.encoding_key)?)
     }
 
-    pub fn validate_token(self: &Self, token: &str) -> Result<Claims, Box<dyn Error>> {
+    pub fn validate_token(&self, token: &str) -> Result<Claims, Box<dyn Error>> {
         let validation = Validation::new(Algorithm::HS256);
         let token_data = decode::<Claims>(token, &self.decoding_key, &validation)?;
         Ok(token_data.claims)

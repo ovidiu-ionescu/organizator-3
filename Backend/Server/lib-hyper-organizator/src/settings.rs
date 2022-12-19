@@ -15,7 +15,7 @@ pub struct Settings {
 #[must_use]
 fn read_config() -> Settings {
     let config_file_name = "settings.toml";
-    let Ok(mut config_file) = File::open(&config_file_name) else {
+    let Ok(mut config_file) = File::open(config_file_name) else {
         warn!("Could not open config file, using defaults");
         return Settings::default();
     };

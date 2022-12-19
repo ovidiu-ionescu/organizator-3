@@ -44,7 +44,7 @@ pub fn start_metrics_server(
     settings: &Settings,
 ) -> impl Future<Output = Result<(), hyper::Error>> {
     let service = ServiceBuilder::new()
-        .layer(AddExtensionLayer::new(metrics.clone()))
+        .layer(AddExtensionLayer::new(metrics))
         .service_fn(metrics_handler);
     let metrics_ip = settings.metrics_ip();
     info!("start server on {}", &metrics_ip);

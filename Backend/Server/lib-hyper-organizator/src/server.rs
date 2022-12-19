@@ -20,9 +20,31 @@ use crate::{
 };
 use crate::{authentication::jot::Jot, metrics::metrics_layer::MetricsLayer};
 use tower_http::request_id::SetRequestIdLayer;
+use tower_layer::Stack;
 use tracing::info;
 
-// use crate::myservice::print_service::PrintLayer;
+#[cfg(feature = "security")]
+fn add_authorization<L>(
+    service_builder: ServiceBuilder<L>,
+) -> ServiceBuilder<
+    Stack<RequireAuthorizationLayer<OrganizatorAuthorization>, Stack<PropagateHeaderLayer, L>>,
+> {
+    info!("Security enabled");
+    // Propagate the JWT token from the request to the response; if it's close
+    // to expiring, a new one will be generated and returned in the response
+    service_builder
+        .layer(PropagateHeaderLayer::new(AUTHORIZATION))
+        // If the response has a known size set the `Content-Length` header
+        // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
+        // Authorize requests using a token
+        .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
+}
+
+#[cfg(not(feature = "security"))]
+fn add_authorization<L>(service_builder: ServiceBuilder<L>) -> ServiceBuilder<L> {
+    info!("Security disabled");
+    service_builder
+}
 
 pub async fn start_servers<H, R>(f: H) -> Result<(), Error>
 where
@@ -35,7 +57,7 @@ where
 
     let metrics = Arc::new(PrometheusMetrics::new());
 
-    let service = ServiceBuilder::new()
+    let service_builder = ServiceBuilder::new()
         // set `x-request-id` header on all requests
         .layer(SetRequestIdLayer::new(
             x_request_id.clone(),
@@ -71,17 +93,11 @@ where
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
-        .layer(PropagateHeaderLayer::new(x_request_id))
-        // Propagate the JWT token from the request to the response; if it's close
-        // to expiring, a new one will be generated and returned in the response
-        .layer(PropagateHeaderLayer::new(AUTHORIZATION))
-        // If the response has a known size set the `Content-Length` header
-        // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
-        // Authorize requests using a token
-        .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
-        // .layer(PrintLayer)
-        // Wrap a `Service` in our middleware stack
-        .service_fn(f);
+        .layer(PropagateHeaderLayer::new(x_request_id));
+
+    let service_builder = add_authorization(service_builder);
+    // Wrap a `Service` in our middleware stack
+    let service = service_builder.service_fn(f);
 
     // And run our service using `hyper`
     let api_ip = settings.api_ip();

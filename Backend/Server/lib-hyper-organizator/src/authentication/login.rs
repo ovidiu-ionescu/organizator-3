@@ -33,7 +33,7 @@ pub async fn login(mut request: Request<Body>) -> Result<Response<Body>, Generic
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return GenericMessage::error();
     };
-    let new_token: String = jot.generate_token(&username)?;
+    let new_token: String = jot.generate_token(username)?;
     info!("User 「{}」 logged in", &username);
 
     GenericMessage::text_reply(&new_token)
