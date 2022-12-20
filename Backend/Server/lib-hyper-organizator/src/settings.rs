@@ -5,11 +5,23 @@ use tracing::{info, warn};
 
 /// Read the settings file and return a Settings struct.
 ///
+
+#[derive(Deserialize, Debug)]
+#[serde(default)]
+pub struct Postgres {
+    pg_user:     String,
+    pg_password: String,
+    pg_host:     String,
+    pg_port:     u16,
+    pg_db:       String,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Settings {
     api_ip:     String,
     metrics_ip: String,
+    postgres:   Postgres,
 }
 
 #[must_use]
@@ -22,9 +34,14 @@ fn read_config() -> Settings {
     info!("Reading config file {}", config_file_name);
     let mut config_str = String::new();
     config_file.read_to_string(&mut config_str).unwrap();
-    let config: Settings = toml::from_str(&config_str).unwrap();
+    let config: Settings = parse_config(&config_str);
     info!("Config file read {:?}", config);
     config
+}
+
+#[must_use]
+fn parse_config(text: &str) -> Settings {
+    toml::from_str(text).unwrap()
 }
 
 impl Settings {
@@ -46,6 +63,19 @@ impl Default for Settings {
         Settings {
             api_ip:     "127.0.0.1:3000".to_string(),
             metrics_ip: "127.0.0.1:3001".to_string(),
+            postgres:   Postgres::default(),
+        }
+    }
+}
+
+impl Default for Postgres {
+    fn default() -> Self {
+        Postgres {
+            pg_user:     "postgres".to_string(),
+            pg_password: "postgres".to_string(),
+            pg_host:     "postgres_server".to_string(),
+            pg_port:     5432,
+            pg_db:       "postgres".to_string(),
         }
     }
 }
@@ -54,10 +84,24 @@ impl Default for Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
     #[test]
     fn test_read_config() {
         let config = read_config();
         assert_eq!(config.api_ip, "127.0.0.1:3000");
+    }
+
+    #[test]
+    fn test_parse_config() {
+        let config = parse_config(indoc! {r#"
+            [postgres]
+            pg_user = "user"
+            pg_password = "password"
+            pg_host = "host"
+            pg_port = 5432
+            pg_db = "db"
+        "#});
+        assert_eq!(config.postgres.pg_user, "user");
     }
 }

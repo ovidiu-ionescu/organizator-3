@@ -7,47 +7,22 @@ use hyper::{server::Server, Body, Error};
 use std::{iter::once, sync::Arc};
 use tower::{make::Shared, ServiceBuilder};
 use tower_http::{
-    add_extension::AddExtensionLayer, auth::RequireAuthorizationLayer,
-    compression::CompressionLayer, propagate_header::PropagateHeaderLayer,
-    sensitive_headers::SetSensitiveRequestHeadersLayer, trace::TraceLayer,
+    add_extension::AddExtensionLayer, compression::CompressionLayer,
+    propagate_header::PropagateHeaderLayer, sensitive_headers::SetSensitiveRequestHeadersLayer,
+    trace::TraceLayer,
 };
 
+use crate::authentication::authentication_layers::add_authorization;
+use crate::metrics::metrics_layer::MetricsLayer;
 use crate::metrics::numeric_request_id::NumericMakeRequestId;
+use crate::metrics::prometheus_metrics::PrometheusMetrics;
 use crate::typedef::GenericError;
-use crate::{
-    authentication::check_security::OrganizatorAuthorization,
-    metrics::prometheus_metrics::PrometheusMetrics,
-};
-use crate::{authentication::jot::Jot, metrics::metrics_layer::MetricsLayer};
 use tower_http::request_id::SetRequestIdLayer;
-use tower_layer::Stack;
 use tracing::info;
 
-#[cfg(feature = "security")]
-fn add_authorization<L>(
-    service_builder: ServiceBuilder<L>,
-) -> ServiceBuilder<
-    Stack<
-        RequireAuthorizationLayer<OrganizatorAuthorization>,
-        Stack<PropagateHeaderLayer, Stack<AddExtensionLayer<Arc<Jot>>, L>>,
-    >,
-> {
-    info!("Security enabled");
-    service_builder
-        // Share an `Arc<Jot>` with all requests
-        .layer(AddExtensionLayer::new(Arc::new(Jot::new().unwrap())))
-        // Propagate the JWT token from the request to the response; if it's close
-        // to expiring, a new one will be generated and returned in the response
-        .layer(PropagateHeaderLayer::new(AUTHORIZATION))
-        // If the response has a known size set the `Content-Length` header
-        // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
-        // Authorize requests using a token
-        .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
-}
-
-#[cfg(not(feature = "security"))]
-fn add_authorization<L>(service_builder: ServiceBuilder<L>) -> ServiceBuilder<L> {
-    info!("Security disabled");
+#[cfg(feature = "database")]
+fn add_database<L>(service_builder: ServiceBuilder<L>) -> ServiceBuilder<L> {
+    info!("No database support");
     service_builder
 }
 

@@ -50,4 +50,5 @@ toml = { workspace = true }
 
 [features]
 security = []
+postgres = []
 
