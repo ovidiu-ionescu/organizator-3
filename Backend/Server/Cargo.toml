@@ -5,6 +5,8 @@ members = [
   "lib-hyper-organizator",
 ]
 
+# The docs on how to use a centralized set of dependency versions can be found here:
+# https://github.com/rust-lang/rfcs/blob/master/text/2906-cargo-workspace-deduplicate.md#workspace-level-dependencies
 [workspace.dependencies]
 hyper= { version="0.14.16", features = ["full", "http1", "http2"] }
 futures = "0.3"

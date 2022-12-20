@@ -27,12 +27,17 @@ use tracing::info;
 fn add_authorization<L>(
     service_builder: ServiceBuilder<L>,
 ) -> ServiceBuilder<
-    Stack<RequireAuthorizationLayer<OrganizatorAuthorization>, Stack<PropagateHeaderLayer, L>>,
+    Stack<
+        RequireAuthorizationLayer<OrganizatorAuthorization>,
+        Stack<PropagateHeaderLayer, Stack<AddExtensionLayer<Arc<Jot>>, L>>,
+    >,
 > {
     info!("Security enabled");
-    // Propagate the JWT token from the request to the response; if it's close
-    // to expiring, a new one will be generated and returned in the response
     service_builder
+        // Share an `Arc<Jot>` with all requests
+        .layer(AddExtensionLayer::new(Arc::new(Jot::new().unwrap())))
+        // Propagate the JWT token from the request to the response; if it's close
+        // to expiring, a new one will be generated and returned in the response
         .layer(PropagateHeaderLayer::new(AUTHORIZATION))
         // If the response has a known size set the `Content-Length` header
         // .layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
@@ -69,32 +74,16 @@ where
         .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
         // High level logging of requests and responses
         .layer(
-            TraceLayer::new_for_http().make_span_with(
-                TraceRequestMakeSpan::new(tracing::Level::INFO), /*
-                                                                 DefaultMakeSpan::new()
-                                                                     .include_headers(true)
-                                                                     .level(tracing::Level::INFO),
-                                                                 */
-            ), /*
-               .on_request(
-                   DefaultOnRequest::new()
-                       //.include_headers(true)
-                       .level(tracing::Level::INFO),
-               )
-               .on_response(
-                   DefaultOnResponse::new()
-                       .include_headers(true)
-                       .level(tracing::Level::INFO),
-               ),
-               */
+            TraceLayer::new_for_http()
+                // no events handled in trace yet, e.g. on_request, on_response
+                .make_span_with(TraceRequestMakeSpan::new(tracing::Level::INFO)),
         )
-        // Share an `Arc<State>` with all requests
-        .layer(AddExtensionLayer::new(Arc::new(Jot::new().unwrap())))
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
         .layer(PropagateHeaderLayer::new(x_request_id));
 
+    // Add security if enabled
     let service_builder = add_authorization(service_builder);
     // Wrap a `Service` in our middleware stack
     let service = service_builder.service_fn(f);
