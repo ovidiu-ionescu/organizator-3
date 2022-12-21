@@ -96,11 +96,11 @@ mod tests {
     fn test_parse_config() {
         let config = parse_config(indoc! {r#"
             [postgres]
-            pg_user = "user"
-            pg_password = "password"
-            pg_host = "host"
-            pg_port = 5432
-            pg_db = "db"
+            user = "user"
+            password = "password"
+            host = "host"
+            port = 5432
+            dbname = "db"
         "#});
         assert_eq!(config.postgres.user, "user");
     }
