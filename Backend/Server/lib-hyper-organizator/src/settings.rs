@@ -6,22 +6,22 @@ use tracing::{info, warn};
 /// Read the settings file and return a Settings struct.
 ///
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Postgres {
-    pg_user:     String,
-    pg_password: String,
-    pg_host:     String,
-    pg_port:     u16,
-    pg_db:       String,
+    pub user:     String,
+    pub password: String,
+    pub host:     String,
+    pub port:     u16,
+    pub dbname:   String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Settings {
-    api_ip:     String,
-    metrics_ip: String,
-    postgres:   Postgres,
+    api_ip:       String,
+    metrics_ip:   String,
+    pub postgres: Postgres,
 }
 
 #[must_use]
@@ -71,11 +71,11 @@ impl Default for Settings {
 impl Default for Postgres {
     fn default() -> Self {
         Postgres {
-            pg_user:     "postgres".to_string(),
-            pg_password: "postgres".to_string(),
-            pg_host:     "postgres_server".to_string(),
-            pg_port:     5432,
-            pg_db:       "postgres".to_string(),
+            user:     "postgres".to_string(),
+            password: "postgres".to_string(),
+            host:     "postgres_server".to_string(),
+            port:     5432,
+            dbname:   "postgres".to_string(),
         }
     }
 }
@@ -102,6 +102,6 @@ mod tests {
             pg_port = 5432
             pg_db = "db"
         "#});
-        assert_eq!(config.postgres.pg_user, "user");
+        assert_eq!(config.postgres.user, "user");
     }
 }

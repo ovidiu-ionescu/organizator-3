@@ -16,15 +16,10 @@ use crate::authentication::authentication_layers::add_authorization;
 use crate::metrics::metrics_layer::MetricsLayer;
 use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::metrics::prometheus_metrics::PrometheusMetrics;
+use crate::postgres::add_database;
 use crate::typedef::GenericError;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
-
-#[cfg(feature = "database")]
-fn add_database<L>(service_builder: ServiceBuilder<L>) -> ServiceBuilder<L> {
-    info!("No database support");
-    service_builder
-}
 
 pub async fn start_servers<H, R>(f: H) -> Result<(), Error>
 where
@@ -60,6 +55,8 @@ where
 
     // Add security if enabled
     let service_builder = add_authorization(service_builder);
+    // Add a database pool if enabled
+    let service_builder = add_database(service_builder, settings.postgres.clone());
     // Wrap a `Service` in our middleware stack
     let service = service_builder.service_fn(f);
 

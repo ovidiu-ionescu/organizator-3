@@ -50,5 +50,8 @@ prometheus = "0.13"
 
 toml = "0.5"
 
+deadpool-postgres = "*"
+tokio-postgres = "*"
+
 lib-hyper-organizator = { path = "lib-hyper-organizator" }
 
