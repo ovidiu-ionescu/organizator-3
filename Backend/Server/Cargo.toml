@@ -3,6 +3,7 @@
 members = [
   "hyper-organizator",
   "lib-hyper-organizator",
+  "identity",
 ]
 
 # The docs on how to use a centralized set of dependency versions can be found here:

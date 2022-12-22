@@ -8,12 +8,13 @@ use tracing::{info, warn};
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
-pub struct Postgres {
-    pub user:     String,
-    pub password: String,
-    pub host:     String,
-    pub port:     u16,
-    pub dbname:   String,
+pub struct PostgresConfig {
+    pub user:             String,
+    pub password:         String,
+    pub host:             String,
+    pub port:             u16,
+    pub dbname:           String,
+    pub application_name: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -21,7 +22,7 @@ pub struct Postgres {
 pub struct Settings {
     api_ip:       String,
     metrics_ip:   String,
-    pub postgres: Postgres,
+    pub postgres: PostgresConfig,
 }
 
 #[must_use]
@@ -63,19 +64,20 @@ impl Default for Settings {
         Settings {
             api_ip:     "127.0.0.1:3000".to_string(),
             metrics_ip: "127.0.0.1:3001".to_string(),
-            postgres:   Postgres::default(),
+            postgres:   PostgresConfig::default(),
         }
     }
 }
 
-impl Default for Postgres {
+impl Default for PostgresConfig {
     fn default() -> Self {
-        Postgres {
-            user:     "postgres".to_string(),
-            password: "postgres".to_string(),
-            host:     "postgres_server".to_string(),
-            port:     5432,
-            dbname:   "postgres".to_string(),
+        PostgresConfig {
+            user:             "postgres".to_string(),
+            password:         "postgres".to_string(),
+            host:             "postgres_server".to_string(),
+            port:             5432,
+            dbname:           "postgres".to_string(),
+            application_name: "postgres".to_string(),
         }
     }
 }

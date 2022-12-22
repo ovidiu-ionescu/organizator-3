@@ -1,4 +1,4 @@
-use crate::settings::Postgres;
+use crate::settings::PostgresConfig;
 use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use tokio_postgres::NoTls;
 use tower::ServiceBuilder;
@@ -7,7 +7,7 @@ use tower_layer::Stack;
 use tracing::info;
 
 #[cfg(not(feature = "postgres"))]
-pub fn add_database<L>(service_builder: ServiceBuilder<L>, _: Postgres) -> ServiceBuilder<L> {
+pub fn add_database<L>(service_builder: ServiceBuilder<L>, _: PostgresConfig) -> ServiceBuilder<L> {
     info!("No database support");
     service_builder
 }
@@ -15,21 +15,21 @@ pub fn add_database<L>(service_builder: ServiceBuilder<L>, _: Postgres) -> Servi
 #[cfg(feature = "postgres")]
 pub fn add_database<L>(
     service_builder: ServiceBuilder<L>,
-    postgres: Postgres,
+    postgres: PostgresConfig,
 ) -> ServiceBuilder<Stack<AddExtensionLayer<Pool>, L>> {
     info!("Database support enabled");
     service_builder.layer(AddExtensionLayer::new(make_database_pool(postgres)))
 }
 
 #[cfg(feature = "postgres")]
-fn make_database_pool(postgres: Postgres) -> Pool {
+fn make_database_pool(postgres: PostgresConfig) -> Pool {
     let config = Config {
         host: Some(postgres.host),
         port: Some(postgres.port),
         user: Some(postgres.user),
         password: Some(postgres.password),
         dbname: Some(postgres.dbname),
-        application_name: Some("tower-grpc-example".to_string()),
+        application_name: Some(postgres.application_name),
         manager: Some(ManagerConfig {
             recycling_method: RecyclingMethod::Fast,
             ..Default::default()
