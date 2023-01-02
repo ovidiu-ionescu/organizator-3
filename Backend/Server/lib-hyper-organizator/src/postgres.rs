@@ -1,5 +1,6 @@
-use crate::settings::PostgresConfig;
-use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use crate::{settings::PostgresConfig, typedef::GenericError};
+use deadpool_postgres::{Config, ManagerConfig, Object, Pool, RecyclingMethod, Runtime};
+use http::Request;
 use tokio_postgres::NoTls;
 use tower::ServiceBuilder;
 use tower_http::add_extension::AddExtensionLayer;
@@ -37,4 +38,15 @@ fn make_database_pool(postgres: PostgresConfig) -> Pool {
         ..Default::default()
     };
     config.create_pool(Some(Runtime::Tokio1), NoTls).unwrap()
+}
+
+pub async fn get_connection<T>(request: &Request<T>) -> Result<Object, GenericError> {
+    let pool = request
+        .extensions()
+        .get::<Pool>()
+        .ok_or(GenericError::from("No database connection pool"))?;
+    // let a_boxed_error = Box::<dyn Error + Send + Sync>::from(a_str_error);
+    let connection = pool.get().await?;
+    info!("Got connection from pool");
+    Ok(connection)
 }

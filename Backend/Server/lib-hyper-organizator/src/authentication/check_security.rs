@@ -91,6 +91,7 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
 mod tests {
 
     use super::*;
+    use crate::settings::SecurityConfig;
     use hyper::Error;
     use tower::{Service, ServiceBuilder, ServiceExt};
     use tower_http::add_extension::AddExtensionLayer;
@@ -111,7 +112,7 @@ mod tests {
     #[test]
     fn test_check_jwt_header() {
         let mut request = Request::new(Body::empty());
-        let jot = Jot::new().unwrap();
+        let jot = Jot::new(&SecurityConfig::default()).unwrap();
         let token = jot.generate_token("admin").unwrap();
         let header = String::from(BEARER) + &token;
 
@@ -150,7 +151,12 @@ mod tests {
 
     macro_rules! test_with_env {
         ($expiry: expr, $grace: expr, $response: ident) => {
-            let mut jot = Jot::new().unwrap();
+            let security_config = SecurityConfig {
+                session_expiry:              $expiry,
+                session_expiry_grace_period: $grace,
+                jwt_public_key:              "public_key".to_string(),
+            };
+            let mut jot = Jot::new(&security_config).unwrap();
             jot.session_expiry = $expiry;
             jot.session_expiry_grace_period = $grace;
             let token = jot.generate_token("admin").unwrap();

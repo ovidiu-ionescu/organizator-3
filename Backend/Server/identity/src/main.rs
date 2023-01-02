@@ -1,3 +1,4 @@
+mod db;
 mod router;
 use lib_hyper_organizator::server;
 

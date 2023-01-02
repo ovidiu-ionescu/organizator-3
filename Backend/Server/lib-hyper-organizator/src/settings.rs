@@ -17,12 +17,23 @@ pub struct PostgresConfig {
     pub application_name: String,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct SecurityConfig {
+    /// The number of seconds a session is valid for.
+    pub session_expiry:              u64,
+    /// The number of seconds a session can be refreshed after it has expired.
+    pub session_expiry_grace_period: u64,
+    pub jwt_public_key:              String,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Settings {
     api_ip:       String,
     metrics_ip:   String,
     pub postgres: PostgresConfig,
+    pub security: SecurityConfig,
 }
 
 #[must_use]
@@ -65,6 +76,7 @@ impl Default for Settings {
             api_ip:     "127.0.0.1:3000".to_string(),
             metrics_ip: "127.0.0.1:3001".to_string(),
             postgres:   PostgresConfig::default(),
+            security:   SecurityConfig::default(),
         }
     }
 }
@@ -78,6 +90,16 @@ impl Default for PostgresConfig {
             port:             5432,
             dbname:           "postgres".to_string(),
             application_name: "postgres".to_string(),
+        }
+    }
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        SecurityConfig {
+            session_expiry:              3600,
+            session_expiry_grace_period: 300,
+            jwt_public_key:              "".to_string(),
         }
     }
 }
