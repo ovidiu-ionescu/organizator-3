@@ -1,5 +1,5 @@
 use crate::authentication::jot::{ExpiredToken, Jot};
-use crate::response_utils::GenericMessage;
+use crate::response_utils::{GenericMessage, PolymorphicGenericMessage};
 use http::header::AUTHORIZATION;
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
@@ -30,7 +30,9 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
         let Some(jot) = request
             .extensions()
             .get::<Arc<Jot>>()
-            else { return Err(GenericMessage::error().unwrap()); };
+            else {
+                return Err( GenericMessage::error()); 
+            };
         if jot.is_ignored_path(&request.uri().path()) {
             return Ok(());
         }

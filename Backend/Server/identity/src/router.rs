@@ -3,7 +3,9 @@ use http::{Method, Request, Response};
 use hyper::Body;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
-use lib_hyper_organizator::response_utils::{read_full_body, GenericMessage};
+use lib_hyper_organizator::response_utils::{
+    read_full_body, GenericMessage, PolymorphicGenericMessage,
+};
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use ring::pbkdf2;

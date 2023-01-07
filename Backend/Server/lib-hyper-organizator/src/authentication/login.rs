@@ -1,5 +1,5 @@
 use crate::authentication::jot::Jot;
-use crate::response_utils::{read_full_body, GenericMessage};
+use crate::response_utils::{read_full_body, GenericMessage, PolymorphicGenericMessage};
 use crate::typedef::GenericError;
 use http::{Request, Response};
 use hyper::Body;
