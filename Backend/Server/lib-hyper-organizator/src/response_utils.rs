@@ -44,6 +44,7 @@ impl GenericMessage {
 }
 
 pub async fn read_full_body(req: &mut Request<Body>) -> Result<Vec<u8>, GenericError> {
+    // FIXME: prevent a DoS attack by limiting the size of the body
     let mut body = match req
         .headers()
         .get("Content-Length")

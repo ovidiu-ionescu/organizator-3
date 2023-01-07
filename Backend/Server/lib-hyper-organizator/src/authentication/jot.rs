@@ -20,6 +20,7 @@ pub struct Jot {
     pub session_expiry: u64,
     pub session_expiry_grace_period: u64,
     public_key: String,
+    ignore_paths: Vec<String>,
 }
 
 pub enum ExpiredToken {
@@ -46,6 +47,7 @@ impl Jot {
             session_expiry,
             session_expiry_grace_period,
             public_key,
+            ignore_paths: security_config.ignore_paths.clone(),
         })
     }
 
@@ -60,6 +62,7 @@ impl Jot {
             session_expiry: security_config.session_expiry,
             session_expiry_grace_period: security_config.session_expiry_grace_period,
             public_key: base64::encode(public_key),
+            ignore_paths: security_config.ignore_paths.clone(),
         })
     }
 
@@ -110,6 +113,10 @@ impl Jot {
 
     pub fn get_public_key(&self) -> String {
         self.public_key.clone()
+    }
+
+    pub fn is_ignored_path(&self, path: &str) -> bool {
+        self.ignore_paths.contains(&path.to_string())
     }
 }
 

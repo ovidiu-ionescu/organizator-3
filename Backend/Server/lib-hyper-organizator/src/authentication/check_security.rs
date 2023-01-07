@@ -1,4 +1,5 @@
 use crate::authentication::jot::{ExpiredToken, Jot};
+use crate::response_utils::GenericMessage;
 use http::header::AUTHORIZATION;
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
@@ -24,17 +25,24 @@ pub struct UserId(String);
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
 
-    fn authorize(&mut self, req: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+    fn authorize(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
         // check if the url is in the list of allowed urls (e.g. /login)
-        match (req.method(), req.uri().path()) {
+        let Some(jot) = request
+            .extensions()
+            .get::<Arc<Jot>>()
+            else { return Err(GenericMessage::error().unwrap()); };
+        if jot.is_ignored_path(&request.uri().path()) {
+            return Ok(());
+        }
+        match (request.method(), request.uri().path()) {
             (&Method::POST, "/login") => return Ok(()),
             _ => (),
         }
-        if let Some(user_id) = check_ssl_header(req) {
-            req.extensions_mut().insert(user_id);
+        if let Some(user_id) = check_ssl_header(request) {
+            request.extensions_mut().insert(user_id);
             Ok(())
-        } else if let Some(user_id) = check_jwt_header(req) {
-            req.extensions_mut().insert(user_id);
+        } else if let Some(user_id) = check_jwt_header(request) {
+            request.extensions_mut().insert(user_id);
             Ok(())
         } else {
             warn!("Unauthorized request");

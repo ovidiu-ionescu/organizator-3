@@ -24,7 +24,7 @@ pub struct SecurityConfig {
     pub session_expiry:              u64,
     /// The number of seconds a session can be refreshed after it has expired.
     pub session_expiry_grace_period: u64,
-    pub jwt_public_key:              String,
+    pub ignore_paths:                Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -99,7 +99,7 @@ impl Default for SecurityConfig {
         SecurityConfig {
             session_expiry:              3600,
             session_expiry_grace_period: 300,
-            jwt_public_key:              "".to_string(),
+            ignore_paths:                vec![],
         }
     }
 }
