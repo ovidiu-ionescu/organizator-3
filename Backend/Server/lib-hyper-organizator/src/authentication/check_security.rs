@@ -31,6 +31,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             .extensions()
             .get::<Arc<Jot>>()
             else {
+                println!("No Jot in the request");
                 return Err( GenericMessage::error()); 
             };
         if jot.is_ignored_path(&request.uri().path()) {
@@ -140,6 +141,7 @@ mod tests {
     #[tokio::test]
     async fn integration_test() -> Result<(), Error> {
         let mut service = ServiceBuilder::new()
+            .layer(AddExtensionLayer::new(Arc::new(Jot::new(&SecurityConfig::default()).unwrap())))
             .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
             .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
 
@@ -149,6 +151,7 @@ mod tests {
             .headers_mut()
             .insert(SSL_HEADER, "CN=admin".parse().unwrap());
         let response = service.ready().await?.call(request).await?;
+        println!("Response: {:#?}", &response);
         assert_eq!(response.status(), StatusCode::OK);
 
         // request without the header should be unauthorized
@@ -164,7 +167,7 @@ mod tests {
             let security_config = SecurityConfig {
                 session_expiry:              $expiry,
                 session_expiry_grace_period: $grace,
-                jwt_public_key:              "public_key".to_string(),
+                ignore_paths:                vec![],
             };
             let mut jot = Jot::new(&security_config).unwrap();
             jot.session_expiry = $expiry;
