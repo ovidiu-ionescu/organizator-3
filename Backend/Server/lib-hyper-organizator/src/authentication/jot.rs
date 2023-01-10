@@ -116,6 +116,7 @@ impl Jot {
     }
 
     pub fn is_ignored_path(&self, path: &str) -> bool {
+        debug!("path: {}, ignored_paths: {:#?}", path, &self.ignore_paths);
         self.ignore_paths.contains(&path.to_string())
     }
 }

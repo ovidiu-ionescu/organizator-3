@@ -24,6 +24,7 @@ pub struct SecurityConfig {
     pub session_expiry:              u64,
     /// The number of seconds a session can be refreshed after it has expired.
     pub session_expiry_grace_period: u64,
+    #[serde(rename = "ignore")]
     pub ignore_paths:                Vec<String>,
 }
 

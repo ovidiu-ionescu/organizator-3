@@ -1,6 +1,7 @@
 use deadpool_postgres::Pool;
 use http::{Method, Request, Response};
 use hyper::Body;
+use indoc::indoc;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{
@@ -114,5 +115,14 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
         return GenericMessage::error();
     };
     let public_key = jot.get_public_key();
-    GenericMessage::text_reply(&public_key)
+    let reply = format!(
+        indoc! {r#"
+        {{
+            "alg": "EdDSA",
+            "public_key": "{}"
+        }}
+        "#},
+        public_key
+    );
+    GenericMessage::text_reply(&reply)
 }
