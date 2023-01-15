@@ -27,3 +27,19 @@ pub async fn fetch_login(client: Client, username: &str) -> Result<Login, Generi
     let row = client.query_one(&stmt, &[&username]).await?;
     Ok(Login::from(row))
 }
+
+pub async fn update_password(
+    db_client: Client,
+    requester: &str,
+    username: &str,
+    salt: &[u8],
+    pbkdf2: &[u8],
+) -> Result<(), GenericError> {
+    let stmt = db_client
+        .prepare(include_str!("sql/update_password.sql"))
+        .await?;
+    db_client
+        .execute(&stmt, &[&requester, &username, &pbkdf2, &salt])
+        .await?;
+    Ok(())
+}

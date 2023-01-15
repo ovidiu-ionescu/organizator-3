@@ -3,6 +3,7 @@ use hyper::{Body, StatusCode};
 
 use crate::typedef::GenericError;
 use futures::StreamExt;
+
 pub struct GenericMessage;
 
 pub trait PolymorphicGenericMessage<T> {

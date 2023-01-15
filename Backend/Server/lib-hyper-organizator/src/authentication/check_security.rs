@@ -20,7 +20,7 @@ pub const BEARER: &str = "Bearer ";
 pub struct OrganizatorAuthorization;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct UserId(String);
+pub struct UserId(pub String);
 
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
