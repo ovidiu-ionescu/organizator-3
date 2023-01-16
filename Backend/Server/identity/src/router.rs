@@ -21,19 +21,6 @@ use crate::db::{self, fetch_login, Login};
 
 /// All requests to the server are handled by this function.
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let pool = request
-        .extensions()
-        .get::<Pool>()
-        .ok_or(GenericError::from("No database connection pool"))?;
-    // let a_boxed_error = Box::<dyn Error + Send + Sync>::from(a_str_error);
-    let connection = get_connection(&request).await?;
-    let stmt = connection
-        .prepare("SELECT username FROM users WHERE id = $1")
-        .await?;
-    let i: i32 = 1;
-    let rows = connection.query(&stmt, &[&i]).await?;
-    let v: &str = rows[0].get(0);
-    info!("rows: {:?}, username: {}", rows, v);
     match (request.method(), request.uri().path()) {
         (&Method::POST, "/login") => login(request).await,
         (&Method::GET, "/refresh") => refresh(request).await,
