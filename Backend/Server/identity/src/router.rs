@@ -60,7 +60,7 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
 
     let client = get_connection(&request).await?;
 
-    let login = fetch_login(client, username).await?;
+    let login = fetch_login(&client, username).await?;
     if !verify_password(password, &login) {
         return GenericMessage::unauthorized();
     }
@@ -97,18 +97,29 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
         warn!("No username");
         return GenericMessage::bad_request();
     };
-    let Some(password) = params.get("username") else {
-        warn!("No username");
+    let Some(old_password) = params.get("old_password") else {
+        warn!("No current password");
         return GenericMessage::bad_request();
     };
+    let Some(new_password) = params.get("new_password") else {
+        warn!("No new password");
+        return GenericMessage::bad_request();
+    };
+
     // get the current user from the request
     let Some(user_id) = request.extensions().get::<UserId>() else {
         return GenericMessage::unauthorized();
     };
     let requester = &user_id.0;
 
-    //fn update_password(requester, username: &str, password: &str) -> Result<(), GenericError> {
     let client = get_connection(&request).await?;
+
+    // check the old password was correctly supplied
+    let login = fetch_login(&client, requester).await?;
+    if !verify_password(old_password, &login) {
+        return GenericMessage::unauthorized();
+    }
+
     let salt = ring::rand::SystemRandom::new();
     let mut salt_bytes = [0u8; SHA512_OUTPUT_LEN];
     ring::rand::SecureRandom::fill(&salt, &mut salt_bytes)?;
@@ -118,10 +129,10 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
         pbkdf2::PBKDF2_HMAC_SHA512,
         n_iter,
         &salt_bytes,
-        password.as_bytes(),
+        new_password.as_bytes(),
         &mut pbkdf2_bytes,
     );
-    db::update_password(client, &requester, username, &salt_bytes, &pbkdf2_bytes).await?;
+    db::update_password(&client, &requester, username, &salt_bytes, &pbkdf2_bytes).await?;
     info!("User 「{requester}」 updated password for 「{username}」");
     GenericMessage::text_reply("Password updated")
 }

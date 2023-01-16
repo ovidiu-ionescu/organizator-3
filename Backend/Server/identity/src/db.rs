@@ -22,14 +22,14 @@ impl From<Row> for Login {
     }
 }
 
-pub async fn fetch_login(client: Client, username: &str) -> Result<Login, GenericError> {
+pub async fn fetch_login(client: &Client, username: &str) -> Result<Login, GenericError> {
     let stmt = client.prepare(include_str!("sql/login.sql")).await?;
     let row = client.query_one(&stmt, &[&username]).await?;
     Ok(Login::from(row))
 }
 
 pub async fn update_password(
-    db_client: Client,
+    db_client: &Client,
     requester: &str,
     username: &str,
     salt: &[u8],
