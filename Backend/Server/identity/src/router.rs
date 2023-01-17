@@ -162,5 +162,5 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
         "#},
         public_key
     );
-    GenericMessage::text_reply(&reply)
+    GenericMessage::json_response(&reply)
 }

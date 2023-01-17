@@ -10,6 +10,7 @@ pub trait PolymorphicGenericMessage<T> {
     fn error() -> T;
     fn unauthorized() -> T;
     fn bad_request() -> T;
+    fn json_response(text: &str) -> T;
 }
 
 impl GenericMessage {
@@ -32,6 +33,15 @@ impl GenericMessage {
             )))
             .unwrap()
     }
+
+    pub fn json_reply(body: &str) -> Response<Body> {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "application/json")
+            .header("server", "hyper")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
 }
 
 impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
@@ -45,6 +55,10 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
 
     fn bad_request() -> Response<Body> {
         Self::json_message_response(StatusCode::BAD_REQUEST, "Bad Request")
+    }
+
+    fn json_response(body: &str) -> Response<Body> {
+        Self::json_reply(body)
     }
 }
 
@@ -60,6 +74,10 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
 
     fn unauthorized() -> Result<Response<Body>, GenericError> {
         Ok(Self::unauthorized())
+    }
+
+    fn json_response(body: &str) -> Result<Response<Body>, GenericError> {
+        Ok(Self::json_response(body))
     }
 }
 
