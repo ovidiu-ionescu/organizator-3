@@ -120,10 +120,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_check_jwt_header() {
+    #[tokio::test]
+    async fn test_check_jwt_header() {
         let mut request = Request::new(Body::empty());
-        let jot = Jot::new(&SecurityConfig::default()).unwrap();
+        let jot = Jot::new(&SecurityConfig::default()).await.unwrap();
         let token = jot.generate_token("admin").unwrap();
         let header = String::from(BEARER) + &token;
 
@@ -141,7 +141,7 @@ mod tests {
     #[tokio::test]
     async fn integration_test() -> Result<(), Error> {
         let mut service = ServiceBuilder::new()
-            .layer(AddExtensionLayer::new(Arc::new(Jot::new(&SecurityConfig::default()).unwrap())))
+            .layer(AddExtensionLayer::new(Arc::new(Jot::new(&SecurityConfig::default()).await.unwrap())))
             .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
             .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
 
@@ -170,7 +170,7 @@ mod tests {
                 ignore_paths:                vec![],
                 public_key_url:              None,
             };
-            let mut jot = Jot::new(&security_config).unwrap();
+            let mut jot = Jot::new(&security_config).await.unwrap();
             jot.session_expiry = $expiry;
             jot.session_expiry_grace_period = $grace;
             let token = jot.generate_token("admin").unwrap();
