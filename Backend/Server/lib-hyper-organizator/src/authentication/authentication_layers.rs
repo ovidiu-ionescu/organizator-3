@@ -16,7 +16,7 @@ mod authorization {
 
     use super::*;
 
-    pub fn add_authorization<L>(
+    pub async fn add_authorization<L>(
         service_builder: ServiceBuilder<L>,
         security_config: SecurityConfig,
     ) -> ServiceBuilder<
@@ -29,7 +29,7 @@ mod authorization {
         service_builder
             // Share an `Arc<Jot>` with all requests
             .layer(AddExtensionLayer::new(Arc::new(
-                Jot::new(&security_config).unwrap(),
+                Jot::new(&security_config).await.unwrap(),
             )))
             // Propagate the JWT token from the request to the response; if it's close
             // to expiring, a new one will be generated and returned in the response
@@ -45,7 +45,7 @@ mod authorization {
 mod authorization {
     use super::*;
 
-    pub fn add_authorization<L>(
+    pub async fn add_authorization<L>(
         service_builder: ServiceBuilder<L>,
         _security_config: SecurityConfig,
     ) -> ServiceBuilder<L> {

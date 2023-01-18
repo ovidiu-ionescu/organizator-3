@@ -54,7 +54,7 @@ where
         .layer(PropagateHeaderLayer::new(x_request_id));
 
     // Add security if enabled
-    let service_builder = add_authorization(service_builder, settings.security.clone());
+    let service_builder = add_authorization(service_builder, settings.security.clone()).await;
     // Add a database pool if enabled
     let service_builder = add_database(service_builder, settings.postgres.clone());
     // Wrap a `Service` in our middleware stack

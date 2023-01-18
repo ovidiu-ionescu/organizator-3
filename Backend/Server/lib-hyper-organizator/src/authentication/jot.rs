@@ -1,12 +1,15 @@
 use crate::settings::SecurityConfig;
 use crate::typedef::GenericError;
+use bytes::Buf as _;
+use hyper::client::HttpConnector;
+use hyper::Client;
 use jsonwebtoken::{
     decode, encode, get_current_timestamp, Algorithm, DecodingKey, EncodingKey, Header, Validation,
 };
 use ring::rand::SystemRandom;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -29,8 +32,16 @@ pub enum ExpiredToken {
     Expired,
 }
 
+/// Struct to transfer the public key among processes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PublicKey {
+    algorithm:  String,
+    public_key: String,
+}
+
 impl Jot {
-    pub fn new(security_config: &SecurityConfig) -> Result<Jot, GenericError> {
+    fn autogenerate(security_config: &SecurityConfig) -> Result<Jot, GenericError> {
+        info!("Generating new keypair");
         let document = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())?;
         let encoding_key = EncodingKey::from_ed_der(document.as_ref());
         let pair = Ed25519KeyPair::from_pkcs8(document.as_ref())?;
@@ -119,6 +130,34 @@ impl Jot {
         debug!("path: {}, ignored_paths: {:#?}", path, &self.ignore_paths);
         self.ignore_paths.contains(&path.to_string())
     }
+
+    // creates a JOT out of a public key from the identity service
+    pub async fn new(security_config: &SecurityConfig) -> Result<Jot, GenericError> {
+        let Some(ref public_key_url) = security_config.public_key_url else {
+            return Self::autogenerate(security_config);
+        };
+
+        let client: Client<HttpConnector> = Client::builder().build_http();
+
+        let uri = public_key_url.parse()?;
+        let response = client.get(uri).await?;
+        // asynchronously aggregate all the chunks of the body
+        let body = hyper::body::aggregate(response).await?;
+        // parse into a PublicKey struct
+        let public_key_base64: PublicKey = serde_json::from_reader(body.reader())?;
+        let public_key = base64::decode(&public_key_base64.public_key)?;
+        info!("Got public key from identity service");
+
+        let encoding_key = EncodingKey::from_ed_der(&public_key);
+        Ok(Jot {
+            encoding_key,
+            decoding_key: DecodingKey::from_ed_der(&public_key),
+            session_expiry: 0,
+            session_expiry_grace_period: 0,
+            public_key: public_key_base64.public_key,
+            ignore_paths: vec![],
+        })
+    }
 }
 
 #[cfg(test)]
@@ -128,7 +167,7 @@ mod tests {
     #[test]
     fn test_encoding() {
         let security_config = SecurityConfig::default();
-        let jot = Jot::new(&security_config).unwrap();
+        let jot = Jot::autogenerate(&security_config).unwrap();
         let token = jot.generate_token("admin").unwrap();
         println!("{}", token);
 

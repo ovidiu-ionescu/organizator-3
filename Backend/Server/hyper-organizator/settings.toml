@@ -1,2 +1,7 @@
-api_ip = "0.0.0.0:8080"
+api_ip = "0.0.0.0:8082"
+metrics_ip = "0.0.0.0:3002"
+
+[security]
+public_key_url = "http://localhost:8080/public"
+
 

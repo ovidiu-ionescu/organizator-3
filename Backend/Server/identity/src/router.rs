@@ -156,7 +156,7 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
     let reply = format!(
         indoc! {r#"
         {{
-            "alg": "EdDSA",
+            "algorithm": "EdDSA",
             "public_key": "{}"
         }}
         "#},

@@ -26,6 +26,8 @@ pub struct SecurityConfig {
     pub session_expiry_grace_period: u64,
     #[serde(rename = "ignore")]
     pub ignore_paths:                Vec<String>,
+    /// Get the public key from here
+    pub public_key_url:              Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -101,6 +103,7 @@ impl Default for SecurityConfig {
             session_expiry:              3600,
             session_expiry_grace_period: 300,
             ignore_paths:                vec![],
+            public_key_url:              None,
         }
     }
 }

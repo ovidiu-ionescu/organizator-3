@@ -168,6 +168,7 @@ mod tests {
                 session_expiry:              $expiry,
                 session_expiry_grace_period: $grace,
                 ignore_paths:                vec![],
+                public_key_url:              None,
             };
             let mut jot = Jot::new(&security_config).unwrap();
             jot.session_expiry = $expiry;
