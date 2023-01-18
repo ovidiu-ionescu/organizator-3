@@ -123,7 +123,11 @@ impl Jot {
     }
 
     pub fn get_public_key(&self) -> String {
-        self.public_key.clone()
+        serde_json::to_string(&PublicKey {
+            algorithm:  "EdDSA".to_string(),
+            public_key: self.public_key.clone(),
+        })
+        .unwrap()
     }
 
     pub fn is_ignored_path(&self, path: &str) -> bool {

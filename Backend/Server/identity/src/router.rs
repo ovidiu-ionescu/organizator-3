@@ -152,15 +152,6 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return GenericMessage::error();
     };
-    let public_key = jot.get_public_key();
-    let reply = format!(
-        indoc! {r#"
-        {{
-            "algorithm": "EdDSA",
-            "public_key": "{}"
-        }}
-        "#},
-        public_key
-    );
-    GenericMessage::json_response(&reply)
+    let public_key_info = jot.get_public_key();
+    GenericMessage::json_response(&public_key_info)
 }
