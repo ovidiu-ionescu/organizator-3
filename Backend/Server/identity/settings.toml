@@ -1,0 +1,13 @@
+api_ip = "0.0.0.0:8080"
+
+[postgres]
+host = "organizator-postgresql"
+port = 5432
+user = "postgres"
+dbname = "organizator_prod"
+#application_name = "Identity Service"
+# password comes from the environment variable POSTGRES_PASSWORD
+
+[security]
+ignore = [ "/login", "/public" ]
+

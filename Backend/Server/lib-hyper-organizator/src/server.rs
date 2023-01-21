@@ -56,7 +56,7 @@ where
     // Add security if enabled
     let service_builder = add_authorization(service_builder, settings.security.clone()).await;
     // Add a database pool if enabled
-    let service_builder = add_database(service_builder, settings.postgres.clone());
+    let service_builder = add_database(service_builder, settings.postgres.clone()).await;
     // Wrap a `Service` in our middleware stack
     let service = service_builder.service_fn(f);
 

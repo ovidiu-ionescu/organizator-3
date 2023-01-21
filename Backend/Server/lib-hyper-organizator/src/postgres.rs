@@ -14,16 +14,16 @@ pub fn add_database<L>(service_builder: ServiceBuilder<L>, _: PostgresConfig) ->
 }
 
 #[cfg(feature = "postgres")]
-pub fn add_database<L>(
+pub async fn add_database<L>(
     service_builder: ServiceBuilder<L>,
     postgres: PostgresConfig,
 ) -> ServiceBuilder<Stack<AddExtensionLayer<Pool>, L>> {
     info!("Database support enabled");
-    service_builder.layer(AddExtensionLayer::new(make_database_pool(postgres)))
+    service_builder.layer(AddExtensionLayer::new(make_database_pool(postgres).await))
 }
 
 #[cfg(feature = "postgres")]
-fn make_database_pool(postgres: PostgresConfig) -> Pool {
+async fn make_database_pool(postgres: PostgresConfig) -> Pool {
     let config = Config {
         host: Some(postgres.host),
         port: Some(postgres.port),
@@ -36,7 +36,17 @@ fn make_database_pool(postgres: PostgresConfig) -> Pool {
         }),
         ..Default::default()
     };
-    config.create_pool(Some(Runtime::Tokio1), NoTls).unwrap()
+    let pool = config.create_pool(Some(Runtime::Tokio1), NoTls).unwrap();
+    // check we can connect to the Database, we abort if we can't
+    match pool.get().await {
+        Ok(_) => info!("Connected to database"),
+        Err(e) => panic!(
+            "Failed to connect to database: {},\nusing config: {:#?}",
+            e, config
+        ),
+    }
+
+    pool
 }
 
 pub async fn get_connection<T>(request: &Request<T>) -> Result<Object, GenericError> {

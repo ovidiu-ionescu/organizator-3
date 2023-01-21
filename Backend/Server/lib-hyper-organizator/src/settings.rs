@@ -14,6 +14,7 @@ pub struct PostgresConfig {
     pub host:             String,
     pub port:             u16,
     pub dbname:           String,
+    // The name of the application as it will appear in the Postgres logs.
     pub application_name: String,
 }
 
@@ -86,15 +87,24 @@ impl Default for Settings {
 
 impl Default for PostgresConfig {
     fn default() -> Self {
-        let postgres_password =
-            std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "password".to_string());
+        let pwd_env_var = "POSTGRES_PASSWORD";
+        let postgres_password = match std::env::var(&pwd_env_var) {
+            Ok(password) => password,
+            Err(e) => {
+                warn!(
+                    "Could not read {pwd_env_var} while getting default settings: {}",
+                    e
+                );
+                "password".to_string()
+            }
+        };
         PostgresConfig {
             user:             "postgres".to_string(),
             password:         postgres_password,
             host:             "postgres_server".to_string(),
             port:             5432,
             dbname:           "postgres".to_string(),
-            application_name: "postgres".to_string(),
+            application_name: "organizator".to_string(),
         }
     }
 }
