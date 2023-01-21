@@ -5,7 +5,7 @@ use http::header::AUTHORIZATION;
 ///  - check a header filled in by Nginx from a client certificate
 ///  - check the JWT token in the Authorization header
 ///
-use http::{Method, StatusCode};
+use http::StatusCode;
 use hyper::{Body, Request, Response};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
@@ -34,12 +34,8 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
                 println!("No Jot in the request");
                 return Err( GenericMessage::error()); 
             };
-        if jot.is_ignored_path(&request.uri().path()) {
+        if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
-        }
-        match (request.method(), request.uri().path()) {
-            (&Method::POST, "/login") => return Ok(()),
-            _ => (),
         }
         if let Some(user_id) = check_ssl_header(request) {
             request.extensions_mut().insert(user_id);

@@ -33,7 +33,6 @@ fn make_database_pool(postgres: PostgresConfig) -> Pool {
         application_name: Some(postgres.application_name),
         manager: Some(ManagerConfig {
             recycling_method: RecyclingMethod::Fast,
-            ..Default::default()
         }),
         ..Default::default()
     };

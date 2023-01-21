@@ -86,9 +86,11 @@ impl Default for Settings {
 
 impl Default for PostgresConfig {
     fn default() -> Self {
+        let postgres_password =
+            std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "password".to_string());
         PostgresConfig {
             user:             "postgres".to_string(),
-            password:         "postgres".to_string(),
+            password:         postgres_password,
             host:             "postgres_server".to_string(),
             port:             5432,
             dbname:           "postgres".to_string(),

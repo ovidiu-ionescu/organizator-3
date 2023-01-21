@@ -11,6 +11,7 @@ pub trait PolymorphicGenericMessage<T> {
     fn unauthorized() -> T;
     fn bad_request() -> T;
     fn json_response(text: &str) -> T;
+    fn not_implemented() -> T;
 }
 
 impl GenericMessage {
@@ -60,6 +61,10 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
     fn json_response(body: &str) -> Response<Body> {
         Self::json_reply(body)
     }
+
+    fn not_implemented() -> Response<Body> {
+        Self::json_message_response(StatusCode::NOT_IMPLEMENTED, "Not Implemented")
+    }
 }
 
 impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for GenericMessage {
@@ -78,6 +83,10 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
 
     fn json_response(body: &str) -> Result<Response<Body>, GenericError> {
         Ok(Self::json_response(body))
+    }
+
+    fn not_implemented() -> Result<Response<Body>, GenericError> {
+        Ok(Self::not_implemented())
     }
 }
 

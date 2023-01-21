@@ -1,7 +1,5 @@
-use deadpool_postgres::Pool;
 use http::{Method, Request, Response};
 use hyper::Body;
-use indoc::indoc;
 use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
@@ -119,7 +117,7 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
         new_password.as_bytes(),
         &mut pbkdf2_bytes,
     );
-    db::update_password(&client, &requester, username, &salt_bytes, &pbkdf2_bytes).await?;
+    db::update_password(&client, requester, username, &salt_bytes, &pbkdf2_bytes).await?;
     info!("User 「{requester}」 updated password for 「{username}」");
     GenericMessage::text_reply("Password updated")
 }
@@ -136,16 +134,8 @@ async fn refresh(request: Request<Body>) -> Result<Response<Body>, GenericError>
     GenericMessage::text_reply(&new_token)
 }
 
-async fn logout(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
-        return GenericMessage::error();
-    };
-    let Some(token) = request.headers().get("Authorization") else {
-        return GenericMessage::unauthorized();
-    };
-    let token = token.to_str()?;
-    //jot.invalidate_token(token)?;
-    GenericMessage::text_reply("Logged out")
+async fn logout(_request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    GenericMessage::not_implemented()
 }
 
 async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericError> {
