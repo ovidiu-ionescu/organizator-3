@@ -58,3 +58,5 @@ tokio-postgres = "*"
 
 lib-hyper-organizator = { path = "lib-hyper-organizator" }
 
+[profile.release]
+lto = true

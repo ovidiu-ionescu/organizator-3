@@ -4,17 +4,15 @@ use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{
-    parse_body, read_full_body, GenericMessage, PolymorphicGenericMessage,
+    parse_body, GenericMessage, PolymorphicGenericMessage,
 };
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use ring::{digest::SHA512_OUTPUT_LEN, pbkdf2};
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use tracing::{info, warn};
-use url::form_urlencoded;
+use tracing::info;
 
 use crate::db::{self, fetch_login, Login};
 
@@ -37,20 +35,20 @@ struct LoginForm {
 }
 
 async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let login_form: LoginForm = parse_body(&mut request).await?;
+    let form: LoginForm = parse_body(&mut request).await?;
 
     let client = get_connection(&request).await?;
 
-    let login = fetch_login(&client, &login_form.username).await?;
-    if !verify_password(&login_form.password, &login) {
+    let login = fetch_login(&client, &form.username).await?;
+    if !verify_password(&form.password, &login) {
         return GenericMessage::unauthorized();
     }
 
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return GenericMessage::error();
     };
-    let new_token: String = jot.generate_token(&login_form.username)?;
-    info!("User 「{}」 logged in", &login_form.username);
+    let new_token: String = jot.generate_token(&form.username)?;
+    info!("User 「{}」 logged in", &form.username);
 
     GenericMessage::text_reply(&new_token)
 }
@@ -69,25 +67,17 @@ pub fn verify_password(password: &str, login: &Login) -> bool {
     should_succeed.is_ok()
 }
 
-async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let body = read_full_body(&mut request).await?;
-    let params = form_urlencoded::parse(&body)
-        .into_owned()
-        .collect::<HashMap<String, String>>();
-    let Some(username) = params.get("username") else {
-        warn!("No username");
-        return GenericMessage::bad_request();
-    };
-    let Some(old_password) = params.get("old_password") else {
-        warn!("No current password");
-        return GenericMessage::bad_request();
-    };
-    let Some(new_password) = params.get("new_password") else {
-        warn!("No new password");
-        return GenericMessage::bad_request();
-    };
+#[derive(Deserialize, Debug, Clone)]
+struct ChangePasswordForm {
+    username:     Option<String>,
+    old_password: String,
+    new_password: String,
+}
 
-    // get the current user from the request
+async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let form: ChangePasswordForm = parse_body(&mut request).await?;
+
+    // get the current logged in user from the request
     let Some(user_id) = request.extensions().get::<UserId>() else {
         return GenericMessage::unauthorized();
     };
@@ -97,10 +87,11 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
 
     // check the old password was correctly supplied
     let login = fetch_login(&client, requester).await?;
-    if !verify_password(old_password, &login) {
+    if !verify_password(&form.old_password, &login) {
         return GenericMessage::unauthorized();
     }
 
+    // compute the new password hash and salt
     let salt = ring::rand::SystemRandom::new();
     let mut salt_bytes = [0u8; SHA512_OUTPUT_LEN];
     ring::rand::SecureRandom::fill(&salt, &mut salt_bytes)?;
@@ -110,9 +101,15 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
         pbkdf2::PBKDF2_HMAC_SHA512,
         n_iter,
         &salt_bytes,
-        new_password.as_bytes(),
+        &form.new_password.as_bytes(),
         &mut pbkdf2_bytes,
     );
+
+    // use the form username if supplied and not empty, otherwise use the requester
+    let username = match form.username {
+        Some(ref username) if !username.is_empty() => username,
+        _ => requester,
+    };
     db::update_password(&client, requester, username, &salt_bytes, &pbkdf2_bytes).await?;
     info!("User 「{requester}」 updated password for 「{username}」");
     GenericMessage::text_reply("Password updated")
