@@ -1,5 +1,7 @@
 use http::{Request, Response};
 use hyper::{Body, StatusCode};
+use serde::Deserialize;
+use std::error::Error;
 
 use crate::typedef::GenericError;
 use futures::StreamExt;
@@ -105,4 +107,16 @@ pub async fn read_full_body(req: &mut Request<Body>) -> Result<Vec<u8>, GenericE
         body.extend_from_slice(&chunk?);
     }
     Ok(body.to_vec())
+}
+
+pub async fn parse_body<T: for<'a> Deserialize<'a>>(
+    request: &mut Request<Body>,
+) -> Result<T, GenericError> {
+    let body = read_full_body(request).await?;
+    match serde_urlencoded::from_bytes::<T>(&body) {
+        Ok(login_form) => Ok(login_form),
+        Err(e) => {
+            Err(Box::<dyn Error + Send + Sync>::from(format!("Error parsing body: {}", e)).into())
+        }
+    }
 }

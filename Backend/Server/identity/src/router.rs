@@ -4,14 +4,13 @@ use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{
-    read_full_body, GenericMessage, PolymorphicGenericMessage,
+    parse_body, read_full_body, GenericMessage, PolymorphicGenericMessage,
 };
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use ring::{digest::SHA512_OUTPUT_LEN, pbkdf2};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::error::Error;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -37,32 +36,8 @@ struct LoginForm {
     password: String,
 }
 
-async fn parse_body(request: &mut Request<Body>) -> Result<LoginForm, GenericError> {
-    let body = read_full_body(request).await?;
-    match serde_urlencoded::from_bytes::<LoginForm>(&body) {
-        Ok(login_form) => Ok(login_form),
-        Err(e) => {
-            Err(Box::<dyn Error + Send + Sync>::from(format!("Error parsing body: {}", e)).into())
-        }
-    }
-}
-
 async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    /*
-    let body = read_full_body(&mut request).await?;
-    let params = form_urlencoded::parse(&body)
-        .into_owned()
-        .collect::<HashMap<String, String>>();
-    let Some(username) = params.get("username") else {
-        warn!("No username");
-        return GenericMessage::bad_request();
-    };
-    let Some(password) = params.get("password") else {
-        warn!("No password");
-        return GenericMessage::bad_request();
-    };
-    */
-    let login_form = parse_body(&mut request).await?;
+    let login_form: LoginForm = parse_body(&mut request).await?;
 
     let client = get_connection(&request).await?;
 
