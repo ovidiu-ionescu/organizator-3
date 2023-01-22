@@ -9,7 +9,9 @@ use lib_hyper_organizator::response_utils::{
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use ring::{digest::SHA512_OUTPUT_LEN, pbkdf2};
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::error::Error;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -29,7 +31,24 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+struct LoginForm {
+    username: String,
+    password: String,
+}
+
+async fn parse_body(request: &mut Request<Body>) -> Result<LoginForm, GenericError> {
+    let body = read_full_body(request).await?;
+    match serde_urlencoded::from_bytes::<LoginForm>(&body) {
+        Ok(login_form) => Ok(login_form),
+        Err(e) => {
+            Err(Box::<dyn Error + Send + Sync>::from(format!("Error parsing body: {}", e)).into())
+        }
+    }
+}
+
 async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    /*
     let body = read_full_body(&mut request).await?;
     let params = form_urlencoded::parse(&body)
         .into_owned()
@@ -42,19 +61,21 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
         warn!("No password");
         return GenericMessage::bad_request();
     };
+    */
+    let login_form = parse_body(&mut request).await?;
 
     let client = get_connection(&request).await?;
 
-    let login = fetch_login(&client, username).await?;
-    if !verify_password(password, &login) {
+    let login = fetch_login(&client, &login_form.username).await?;
+    if !verify_password(&login_form.password, &login) {
         return GenericMessage::unauthorized();
     }
 
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return GenericMessage::error();
     };
-    let new_token: String = jot.generate_token(username)?;
-    info!("User 「{}」 logged in", &username);
+    let new_token: String = jot.generate_token(&login_form.username)?;
+    info!("User 「{}」 logged in", &login_form.username);
 
     GenericMessage::text_reply(&new_token)
 }
