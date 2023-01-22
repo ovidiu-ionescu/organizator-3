@@ -40,10 +40,7 @@ async fn make_database_pool(postgres: PostgresConfig) -> Pool {
     // check we can connect to the Database, we abort if we can't
     match pool.get().await {
         Ok(_) => info!("Connected to database"),
-        Err(e) => panic!(
-            "Failed to connect to database: {},\nusing config: {:#?}",
-            e, config
-        ),
+        Err(e) => panic!("Failed to connect to database: {e},\nusing config: {config:#?}"),
     }
 
     pool

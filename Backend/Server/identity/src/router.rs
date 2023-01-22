@@ -101,7 +101,7 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
         pbkdf2::PBKDF2_HMAC_SHA512,
         n_iter,
         &salt_bytes,
-        &form.new_password.as_bytes(),
+        form.new_password.as_bytes(),
         &mut pbkdf2_bytes,
     );
 

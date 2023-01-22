@@ -88,7 +88,7 @@ impl Default for Settings {
 impl Default for PostgresConfig {
     fn default() -> Self {
         let pwd_env_var = "POSTGRES_PASSWORD";
-        let postgres_password = match std::env::var(&pwd_env_var) {
+        let postgres_password = match std::env::var(pwd_env_var) {
             Ok(password) => password,
             Err(e) => {
                 warn!(
