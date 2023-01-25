@@ -114,7 +114,7 @@ pub async fn parse_body<T: for<'a> Deserialize<'a>>(
 ) -> Result<T, GenericError> {
     let body = read_full_body(request).await?;
     match serde_urlencoded::from_bytes::<T>(&body) {
-        Ok(login_form) => Ok(login_form),
+        Ok(form) => Ok(form),
         Err(e) => Err(Box::<dyn Error + Send + Sync>::from(format!(
             "Error parsing body: {e}"
         ))),
