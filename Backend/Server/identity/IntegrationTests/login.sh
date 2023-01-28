@@ -6,8 +6,9 @@ log() {
   printf "\n%s\n" "$1"
 }
 
-host="http://localhost:8080"
-crl="curl --fail-with-body -s"
+
+host="http://${1:-localhost:8080}"
+crl="curl --fail-with-body -s -v"
 
 # read the current password from stdin
 read -s -p "Current password for ${USERNAME}: " current_password

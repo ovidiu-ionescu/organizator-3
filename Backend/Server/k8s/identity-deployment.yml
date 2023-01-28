@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hyper-organizator
+  name: identity
   labels: 
-    app: hyper-organizator
+    app: identity
   namespace: organizator-dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: hyper-organizator
+      app: identity
   template:
     metadata:
       labels:
-        app: hyper-organizator
+        app: identity
     spec:
       containers:
-        - image: hyper-organizator:v0.1.0
-          name: hyper-organizator
+        - image: identity:v0.1.0
+          name: identity
           # This is only informative, the executable decides the ports
           ports:
             - containerPort: 8080
@@ -28,7 +28,7 @@ spec:
             - name: RUST_LOG
               valueFrom:
                 configMapKeyRef:
-                  name: hyper-organizator
+                  name: identity
                   key: rust_log_level
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -36,7 +36,6 @@ spec:
                   name: organizator-postgresql
                   key: postgresql-password
                   optional: true
- 
           volumeMounts:
             - name: config
               mountPath: /settings.toml
@@ -45,5 +44,5 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: hyper-organizator
+            name: identity
 

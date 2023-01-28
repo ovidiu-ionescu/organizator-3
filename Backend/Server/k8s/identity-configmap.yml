@@ -2,14 +2,14 @@ apiVersion: v1
 kind: ConfigMap
 metadata: 
   namespace: organizator-dev 
-  name: hyper-organizator
+  name: identity
   annotations:
-    description: "Configuration for hyper-organizator"
+    description: "Configuration for identity service"
 data:
   settings.toml: |-
     api_ip = "0.0.0.0:8080"
     metrics_ip = "0.0.0.0:8081"
-
+    
     [postgres]
     host = "organizator-postgresql"
     port = 5432
@@ -17,6 +17,8 @@ data:
     dbname = "organizator_prod"
 
     [security]
-    public_key_url = "http://identity/public"
+    ignore = [ "/login", "/public" ]
+
   rust_log_level: INFO
+
 
