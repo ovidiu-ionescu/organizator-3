@@ -1,6 +1,12 @@
 api_ip = "0.0.0.0:8082"
 metrics_ip = "0.0.0.0:3002"
 
+[postgres]
+host = "organizator-postgresql"
+port = 5432
+user = "postgres"
+dbname = "organizator_prod"
+
 [security]
 public_key_url = "http://localhost:8080/public"
 

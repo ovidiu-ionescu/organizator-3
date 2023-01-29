@@ -1,4 +1,7 @@
+mod db;
+mod model;
 mod router;
+
 use lib_hyper_organizator::server;
 
 use mimalloc::MiMalloc;

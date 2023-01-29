@@ -19,7 +19,6 @@ pin-project-lite = { workspace = true }
 tokio = { workspace = true }
 pretty_env_logger = { workspace = true }
 log = { workspace = true }
-config = { workspace = true }
 lazy_static = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }
@@ -52,6 +51,9 @@ opentelemetry-prometheus = { workspace = true }
 prometheus = { workspace = true }
 
 toml = { workspace = true }
+
+deadpool-postgres = { workspace = true }
+tokio-postgres = { workspace = true }
 
 lib-hyper-organizator = { workspace = true, features = ["security", "postgres"] }
 

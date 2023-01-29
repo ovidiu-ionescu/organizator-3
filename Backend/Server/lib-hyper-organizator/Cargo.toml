@@ -13,7 +13,6 @@ pin-project-lite = { workspace = true }
 tokio = { workspace = true }
 pretty_env_logger = { workspace = true }
 log = { workspace = true }
-config = { workspace = true }
 lazy_static = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }
