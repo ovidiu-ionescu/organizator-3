@@ -14,6 +14,9 @@ pub trait PolymorphicGenericMessage<T> {
     fn bad_request() -> T;
     fn json_response(text: &str) -> T;
     fn not_implemented() -> T;
+    fn forbidden() -> T;
+    fn not_found() -> T;
+    fn internal_server_error() -> T;
 }
 
 impl GenericMessage {
@@ -67,6 +70,18 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
     fn not_implemented() -> Response<Body> {
         Self::json_message_response(StatusCode::NOT_IMPLEMENTED, "Not Implemented")
     }
+
+    fn forbidden() -> Response<Body> {
+        Self::json_message_response(StatusCode::FORBIDDEN, "Forbidden")
+    }
+
+    fn not_found() -> Response<Body> {
+        Self::json_message_response(StatusCode::NOT_FOUND, "Not Found")
+    }
+
+    fn internal_server_error() -> Response<Body> {
+        Self::json_message_response(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+    }
 }
 
 impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for GenericMessage {
@@ -89,6 +104,18 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
 
     fn not_implemented() -> Result<Response<Body>, GenericError> {
         Ok(Self::not_implemented())
+    }
+
+    fn forbidden() -> Result<Response<Body>, GenericError> {
+        Ok(Self::forbidden())
+    }
+
+    fn not_found() -> Result<Response<Body>, GenericError> {
+        Ok(Self::not_found())
+    }
+
+    fn internal_server_error() -> Result<Response<Body>, GenericError> {
+        Ok(Self::internal_server_error())
     }
 }
 

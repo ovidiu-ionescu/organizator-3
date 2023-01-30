@@ -9,6 +9,8 @@ use lib_hyper_organizator::response_utils::PolymorphicGenericMessage;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use regex::Regex;
+use std::error::Error;
+use tokio_postgres::Error as PgError;
 
 /*
  * Routes to implement:
@@ -58,11 +60,22 @@ async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericErro
 
     let client = get_connection(&request).await?;
 
-    let memo = db::get_memo(&client, memo_id, &username).await?;
+    let memo = db::get_memo(&client, memo_id, &username).await;
     build_response(memo)
     //Ok(Response::new(Body::from(serde_json::to_string(&memo)?)))
 }
 
-fn build_response<T: serde::Serialize>(data: T) -> Result<Response<Body>, GenericError> {
-    Ok(Response::new(Body::from(serde_json::to_string(&data)?)))
+fn build_response<T: serde::Serialize>(
+    data_result: Result<T, PgError>,
+) -> Result<Response<Body>, GenericError> {
+    match data_result {
+        Ok(data) => GenericMessage::json_response(&serde_json::to_string(&data)?),
+        Err(e) if e.code().is_some() => match e.code().unwrap().code() {
+            "2F004" => GenericMessage::forbidden(),
+            "28000" => GenericMessage::unauthorized(),
+            "02000" => GenericMessage::not_found(),
+            _ => GenericMessage::internal_server_error(),
+        },
+        Err(x) => GenericMessage::internal_server_error(),
+    }
 }
