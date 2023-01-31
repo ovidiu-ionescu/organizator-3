@@ -1,5 +1,6 @@
 use crate::{settings::PostgresConfig, typedef::GenericError};
-use deadpool_postgres::{Config, ManagerConfig, Object, Pool, RecyclingMethod, Runtime};
+use deadpool_postgres::Client;
+use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use http::Request;
 use tokio_postgres::NoTls;
 use tower::ServiceBuilder;
@@ -46,7 +47,7 @@ async fn make_database_pool(postgres: PostgresConfig) -> Pool {
     pool
 }
 
-pub async fn get_connection<T>(request: &Request<T>) -> Result<Object, GenericError> {
+pub async fn get_connection<T>(request: &Request<T>) -> Result<Client, GenericError> {
     let pool = request
         .extensions()
         .get::<Pool>()

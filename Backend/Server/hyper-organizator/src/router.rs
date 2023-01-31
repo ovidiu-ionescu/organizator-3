@@ -9,7 +9,6 @@ use lib_hyper_organizator::response_utils::PolymorphicGenericMessage;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use regex::Regex;
-use std::error::Error;
 use tokio_postgres::Error as PgError;
 
 /*
@@ -49,23 +48,29 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
 }
 
 async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, username) = get_client_and_user(&request).await?;
+
     let path = request.uri().path();
     let captures = MEMO_GET.captures(path).unwrap();
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
-    // get the current logged in user from the request
-    let Some(user_id) = request.extensions().get::<UserId>() else {
-        return GenericMessage::unauthorized();
-    };
-    let username = &user_id.0;
-
-    let client = get_connection(&request).await?;
-
     let memo = db::get_memo(&client, memo_id, &username).await;
-    build_response(memo)
-    //Ok(Response::new(Body::from(serde_json::to_string(&memo)?)))
+
+    build_json_response(memo)
 }
 
-fn build_response<T: serde::Serialize>(
+async fn get_client_and_user(
+    request: &Request<Body>,
+) -> Result<(deadpool_postgres::Client, &str), GenericError> {
+    let client = get_connection(&request).await?;
+    // get the current logged in user from the request
+    let Some(user_id) = request.extensions().get::<UserId>() else {
+        return Err(GenericError::from("No user found in request, this should not happen"));
+    };
+    let username = &user_id.0;
+    Ok((client, username))
+}
+
+fn build_json_response<T: serde::Serialize>(
     data_result: Result<T, PgError>,
 ) -> Result<Response<Body>, GenericError> {
     match data_result {
