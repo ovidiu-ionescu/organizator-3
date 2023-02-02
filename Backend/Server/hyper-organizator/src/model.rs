@@ -1,6 +1,9 @@
 use serde::Serialize;
-use tokio_postgres::error::Error;
 use tokio_postgres::row::Row;
+
+pub trait DBPersistence {
+    fn query() -> &'static str;
+}
 
 #[derive(Serialize)]
 pub struct User {
@@ -26,6 +29,21 @@ pub struct MemoTitleList {
 pub struct MemoGroup {
     pub id:   i32,
     pub name: String,
+}
+
+impl DBPersistence for MemoGroup {
+    fn query() -> &'static str {
+        include_str!("sql/get_memo_groups_for_user.sql")
+    }
+}
+
+impl From<Row> for MemoGroup {
+    fn from(row: Row) -> Self {
+        Self {
+            id:   row.get("o_id"),
+            name: row.get("o_name"),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -55,16 +73,13 @@ pub struct GetMemo {
     user: MemoUser,
 }
 
-impl From<&Row> for GetMemo {
-    fn from(row: &Row) -> Self {
+impl From<Row> for GetMemo {
+    fn from(row: Row) -> Self {
         let group_id: Option<i32> = row.get("o_memo_group_id");
-        let memo_group = match group_id {
-            None => None,
-            Some(id) => Some(MemoGroup {
-                id,
-                name: row.get("o_memo_group_name"),
-            }),
-        };
+        let memo_group = group_id.map(|id| MemoGroup {
+            id,
+            name: row.get("o_memo_group_name"),
+        });
 
         Self {
             memo: Memo {
@@ -86,6 +101,12 @@ impl From<&Row> for GetMemo {
     }
 }
 
+impl DBPersistence for GetMemo {
+    fn query() -> &'static str {
+        include_str!("sql/get_memo.sql")
+    }
+}
+
 #[derive(Serialize)]
 pub struct GetWriteMemo {
     memo: Option<Memo>,
@@ -96,30 +117,24 @@ impl From<&Row> for GetWriteMemo {
     fn from(row: &Row) -> Self {
         // not all memos are assigned to groups
         let group_id: Option<i32> = row.get("io_memo_group_id");
-        let memo_group = match group_id {
-            None => None,
-            Some(id) => Some(MemoGroup {
-                id,
-                name: row.get("o_memo_group_name"),
-            }),
-        };
+        let memo_group = group_id.map(|id| MemoGroup {
+            id,
+            name: row.get("o_memo_group_name"),
+        });
 
         // when a memo gets deleted we don't get the id back
         let memo_id: Option<i32> = row.get("io_memo_id");
-        let memo = match memo_id {
-            None => None,
-            Some(id) => Some(Memo {
-                id,
-                title: row.get("io_memo_title"),
-                memotext: row.get("io_memo_memotext"),
-                savetime: row.get("io_savetime"),
-                memogroup: memo_group,
-                user: MemoUser {
-                    id:   row.get("o_user_id"),
-                    name: row.get("o_username"),
-                },
-            }),
-        };
+        let memo = memo_id.map(|id| Memo {
+            id,
+            title: row.get("io_memo_title"),
+            memotext: row.get("io_memo_memotext"),
+            savetime: row.get("io_savetime"),
+            memogroup: memo_group,
+            user: MemoUser {
+                id:   row.get("o_user_id"),
+                name: row.get("o_username"),
+            },
+        });
 
         Self {
             memo,
@@ -128,11 +143,5 @@ impl From<&Row> for GetWriteMemo {
                 name: row.get("io_requester_name"),
             },
         }
-    }
-}
-
-impl GetWriteMemo {
-    pub fn from_row(row: &Row) -> Result<Self, Error> {
-        Ok(Self::from(row))
     }
 }
