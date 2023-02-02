@@ -145,3 +145,34 @@ impl From<&Row> for GetWriteMemo {
         }
     }
 }
+
+#[derive(Serialize)]
+pub struct ExplicitPermission {
+    pub memo_group_id:   i32,
+    pub memo_group_name: Option<String>,
+    pub user_group_id:   i32,
+    pub user_group_name: Option<String>,
+    pub user_id:         i32,
+    pub username:        Option<String>,
+    pub access:          i32,
+}
+
+impl From<Row> for ExplicitPermission {
+    fn from(row: Row) -> Self {
+        Self {
+            memo_group_id:   row.get("memo_group_id"),
+            memo_group_name: row.get("memo_group_name"),
+            user_group_id:   row.get("user_group_id"),
+            user_group_name: row.get("user_group_name"),
+            user_id:         row.get("user_id"),
+            username:        row.get("username"),
+            access:          row.get("access"),
+        }
+    }
+}
+
+impl DBPersistence for ExplicitPermission {
+    fn query() -> &'static str {
+        include_str!("sql/get_explicit_memo_permissions.sql")
+    }
+}

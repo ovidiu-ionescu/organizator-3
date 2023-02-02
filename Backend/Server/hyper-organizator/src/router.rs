@@ -1,4 +1,5 @@
 use crate::db;
+use crate::model::ExplicitPermission;
 use crate::model::GetMemo;
 use http::{Method, Request, Response};
 use hyper::Body;
@@ -16,11 +17,11 @@ use tokio_postgres::Error as PgError;
  * Routes to implement:
  get(/user/{id})                 get_user
  get(/user)                      get_users
-✓get(/memo/)                     get_memo_titles
+ get(/memo/)                     get_memo_titles
  post(/memo/search)              search_memo
 ✓get(/memo/{id})                 get_memo
  post(/memo/)                    memo_write
- get(/memogroup)                 get_memo_group
+✓get(/memogroup)                 get_memo_group
  put(/upload)                    upload_file
  get(/file_auth)                 file_auth
  get(/explicit_permissions/{id}) explicit_permissions
@@ -37,15 +38,17 @@ kubernetes:
 lazy_static! {
     static ref MEMO_GET: Regex = Regex::new(r"^/memo/(\d+)$").unwrap();
     static ref MEMO_GROUP_GET: Regex = Regex::new(r"^/memogroup/(\d+)$").unwrap();
-    static ref USER_GET: Regex = Regex::new(r"^/user/(\d+)$").unwrap();
+    static ref EXPLICIT_PERMISSIONS: Regex = Regex::new(r"^/explicit_permissions/(\d+)$").unwrap();
 }
 
 /// All requests to the server are handled by this function.
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, path) if MEMO_GET.is_match(path) => get_memo(&request).await,
-        //        (&Method::GET, ref path) if MEMO_GROUP_GET.is_match(path) => get_memo_group(&request).await,
-        (&Method::GET, "/memogroup") => get_memogroup_for_user(&request).await,
+        (&Method::GET, "/memogroup") => get_memogroups_for_user(&request).await,
+        (&Method::GET, path) if EXPLICIT_PERMISSIONS.is_match(path) => {
+            get_explicit_permissions(&request).await
+        }
         _ => default_reply(request).await,
     }
 }
@@ -56,18 +59,30 @@ async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericErro
     let path = request.uri().path();
     let captures = MEMO_GET.captures(path).unwrap();
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
-    let memo: Result<GetMemo, _> = db::get_by_id(&client, &memo_id, username).await;
+    let memo: Result<GetMemo, _> = db::get_single(&client, &[&memo_id, &username]).await;
 
     build_json_response(memo)
 }
 
-async fn get_memogroup_for_user(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
+async fn get_memogroups_for_user(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
     let (client, username) = get_client_and_user(request).await?;
 
     let memo_group: Result<Vec<crate::model::MemoGroup>, _> =
-        db::get_for_user(&client, username).await;
+        db::get_multiple(&client, &[&username]).await;
 
     build_json_response(memo_group)
+}
+
+async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, username) = get_client_and_user(request).await?;
+
+    let path = request.uri().path();
+    let captures = EXPLICIT_PERMISSIONS.captures(path).unwrap();
+    let memogroup_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
+    let permissions: Result<Vec<ExplicitPermission>, _> =
+        db::get_multiple(&client, &[&memogroup_id, &username]).await;
+
+    build_json_response(permissions)
 }
 
 async fn get_client_and_user(
