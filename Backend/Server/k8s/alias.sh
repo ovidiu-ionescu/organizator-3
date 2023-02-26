@@ -4,3 +4,6 @@ modify the environment" && exit 1
 
 alias k='kubectl -n organizator-dev'
 alias h='helm -n organizator-dev'
+
+eval $(minikube docker-env)
+
