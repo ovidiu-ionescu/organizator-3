@@ -6,15 +6,17 @@ use hyper::{Body, Server};
 
 use tower::{make::Shared, ServiceBuilder};
 use tower_http::add_extension::AddExtensionLayer;
-use tracing::info;
+use tracing::{trace, info};
 
 use crate::{settings::Settings, typedef::GenericError, under_construction::default_reply};
+use crate::response_utils::GenericMessage;
+use crate::response_utils::PolymorphicGenericMessage;
 
 use super::prometheus_metrics::PrometheusMetrics;
 use prometheus::{Encoder, TextEncoder};
 
 async fn metrics_handler(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    //default_reply(request).await
+    trace!("metrics_handler");
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/metrics") => {
             let mut buffer = vec![];
@@ -35,7 +37,11 @@ async fn metrics_handler(request: Request<Body>) -> Result<Response<Body>, Gener
                 .body(Body::from(buffer))
                 .unwrap())
         }
-        _ => default_reply(request).await,
+        _ => {
+            info!("metrics_handler: no such url in the metrics endpoint");
+            GenericMessage::not_found()
+            //default_reply(request).await
+        },
     }
 }
 

@@ -9,7 +9,7 @@ use http::StatusCode;
 use hyper::{Body, Request, Response};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
-use tracing::{info, warn};
+use tracing::{info, warn, trace};
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
 
@@ -26,18 +26,20 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
 
     fn authorize(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+        trace!("Checking authorization");
         // check if the url is in the list of allowed urls (e.g. /login)
         let Some(jot) = request
             .extensions()
             .get::<Arc<Jot>>()
             else {
-                println!("No Jot in the request");
+                trace!("No Jot in the request");
                 return Err( GenericMessage::error()); 
             };
         if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
         }
         if let Some(user_id) = check_ssl_header(request) {
+            trace!("User {} is authorized via ssl header", user_id.0);
             request.extensions_mut().insert(user_id);
             Ok(())
         } else if let Some(user_id) = check_jwt_header(request) {

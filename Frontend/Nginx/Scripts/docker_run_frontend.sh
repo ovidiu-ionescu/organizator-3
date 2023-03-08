@@ -11,7 +11,7 @@ fi
 PREF=$PWD
 
 echo "make sure the network interface exists"
-Scripts/setup_dummy_network.sh
+Scripts/setup_dummy_network.sh -a -n dummy_nginx -i 192.168.71.78/16
 
 # From now on we stop on any error
 set -e
