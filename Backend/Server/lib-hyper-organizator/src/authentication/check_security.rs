@@ -9,7 +9,7 @@ use http::StatusCode;
 use hyper::{Body, Request, Response};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
-use tracing::{info, warn, trace};
+use tracing::{info, trace, warn};
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
 
@@ -33,7 +33,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             .get::<Arc<Jot>>()
             else {
                 trace!("No Jot in the request");
-                return Err( GenericMessage::error()); 
+                return Err( GenericMessage::error());
             };
         if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
@@ -139,7 +139,9 @@ mod tests {
     #[tokio::test]
     async fn integration_test() -> Result<(), Error> {
         let mut service = ServiceBuilder::new()
-            .layer(AddExtensionLayer::new(Arc::new(Jot::new(&SecurityConfig::default()).await.unwrap())))
+            .layer(AddExtensionLayer::new(Arc::new(
+                Jot::new(&SecurityConfig::default()).await.unwrap(),
+            )))
             .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
             .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
 
