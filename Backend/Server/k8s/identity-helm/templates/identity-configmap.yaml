@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: 
+  name: identity
+  annotations:
+    description: "Configuration for identity service"
+data:
+  settings.toml: |-
+    api_ip = "0.0.0.0:8080"
+    metrics_ip = "0.0.0.0:8081"
+    
+    [postgres]
+    host = "organizator-postgresql"
+    port = 5432
+    user = "postgres"
+    dbname = "organizator_prod"
+
+    [security]
+    ignore = [ "/login", "/public" ]
+
+  rust_log_level: INFO
+
+

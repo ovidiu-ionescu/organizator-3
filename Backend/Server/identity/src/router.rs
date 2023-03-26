@@ -13,6 +13,7 @@ use serde::Deserialize;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use tracing::info;
+use utoipa::ToSchema;
 
 use crate::db::{self, fetch_login, Login};
 
@@ -28,7 +29,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, ToSchema)]
 struct LoginForm {
     username: String,
     password: String,
@@ -67,7 +68,7 @@ pub fn verify_password(password: &str, login: &Login) -> bool {
     should_succeed.is_ok()
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, ToSchema)]
 struct ChangePasswordForm {
     username:     Option<String>,
     old_password: String,

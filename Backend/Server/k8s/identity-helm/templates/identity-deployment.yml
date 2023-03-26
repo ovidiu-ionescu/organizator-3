@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity
+  labels: 
+    app: identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity
+  template:
+    metadata:
+      labels:
+        app: identity
+    spec:
+      containers:
+        - image: identity:v0.1.0
+          name: identity
+          # This is only informative, the executable decides the ports
+          ports:
+            - containerPort: 8080
+              name: "http"
+            - containerPort: 8081
+              name: "metrics"
+          env:
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: identity
+                  key: rust_log_level
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: organizator-postgresql
+                  key: postgresql-password
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /settings.toml
+              subPath: settings.toml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: identity
+

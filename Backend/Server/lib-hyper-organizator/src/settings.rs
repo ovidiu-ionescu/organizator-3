@@ -34,10 +34,11 @@ pub struct SecurityConfig {
 #[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Settings {
-    api_ip:       String,
-    metrics_ip:   String,
-    pub postgres: PostgresConfig,
-    pub security: SecurityConfig,
+    api_ip:           String,
+    metrics_ip:       String,
+    pub postgres:     PostgresConfig,
+    pub security:     SecurityConfig,
+    pub swagger_path: String,
 }
 
 #[must_use]
@@ -77,10 +78,11 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            api_ip:     "127.0.0.1:3000".to_string(),
-            metrics_ip: "127.0.0.1:3001".to_string(),
-            postgres:   PostgresConfig::default(),
-            security:   SecurityConfig::default(),
+            api_ip:       "127.0.0.1:3000".to_string(),
+            metrics_ip:   "127.0.0.1:3001".to_string(),
+            postgres:     PostgresConfig::default(),
+            security:     SecurityConfig::default(),
+            swagger_path: "/swagger-api/".to_string(),
         }
     }
 }

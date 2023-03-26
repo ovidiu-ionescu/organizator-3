@@ -13,7 +13,7 @@ use tracing::{info, trace, warn};
 
 const SSL_HEADER: &str = "X-SSL-Client-S-DN";
 
-/// Bearer token is described here: https://www.rfc-editor.org/rfc/rfc6750
+/// Bearer token is described here: <https://www.rfc-editor.org/rfc/rfc6750>
 pub const BEARER: &str = "Bearer ";
 
 #[derive(Clone, Copy)]

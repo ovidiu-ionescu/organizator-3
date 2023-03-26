@@ -17,6 +17,7 @@ use crate::metrics::metrics_layer::MetricsLayer;
 use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::metrics::prometheus_metrics::PrometheusMetrics;
 use crate::postgres::add_database;
+use crate::swagger::SwaggerUiConfig;
 use crate::typedef::GenericError;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
@@ -39,6 +40,7 @@ where
             NumericMakeRequestId::default(),
         ))
         .layer(AddExtensionLayer::new(metrics.clone()))
+        .layer(AddExtensionLayer::new(SwaggerUiConfig::from(&settings)))
         .layer(MetricsLayer)
         // Mark the `Authorization` request header as sensitive so it doesn't show in logs
         .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))

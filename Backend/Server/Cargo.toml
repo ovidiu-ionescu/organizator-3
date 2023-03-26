@@ -57,5 +57,8 @@ tokio-postgres = "*"
 
 lib-hyper-organizator = { path = "lib-hyper-organizator" }
 
+utoipa = "3"
+utoipa-swagger-ui = "3"
+
 [profile.release]
 lto = true
