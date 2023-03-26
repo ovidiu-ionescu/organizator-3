@@ -50,7 +50,7 @@ pub async fn get_swagger_ui(
     let cutoff = std::cmp::min(swagger_ui_config.path.len(), request.uri().path().len());
     let path = &request.uri().path()[cutoff..];
 
-    match utoipa_swagger_ui::serve(path.as_ref(), swagger_ui_config.config.clone()) {
+    match utoipa_swagger_ui::serve(path, swagger_ui_config.config.clone()) {
         Ok(swagger_file) => swagger_file
             .map(|file| {
                 Ok(Response::builder()
@@ -58,7 +58,7 @@ pub async fn get_swagger_ui(
                     .body(Body::from(file.bytes.to_vec()))
                     .unwrap())
             })
-            .unwrap_or_else(|| GenericMessage::not_found()),
+            .unwrap_or_else(GenericMessage::not_found),
         Err(error) => GenericMessage::text_reply(&error.to_string()),
     }
 }
