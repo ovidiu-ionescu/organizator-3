@@ -1,4 +1,5 @@
 api_ip = "0.0.0.0:8080"
+swagger_path = "/swagger"
 
 [postgres]
 host = "organizator-postgresql"
@@ -9,5 +10,14 @@ dbname = "organizator_prod"
 # password comes from the environment variable POSTGRES_PASSWORD
 
 [security]
-ignore = [ "/login", "/public" ]
+ignore = [ "/login", "/public", 
+"/swagger", 
+"/swagger/", 
+"/swagger/api-doc.json", 
+"/swagger/swagger-ui.css", 
+"/swagger/index.css", 
+"/swagger/swagger-ui-bundle.js",
+"/swagger/swagger-ui-standalone-preset.js",
+"/swagger/swagger-initializer.js",
+]
 

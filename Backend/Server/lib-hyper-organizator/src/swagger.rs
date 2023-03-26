@@ -4,7 +4,6 @@ use crate::typedef::GenericError;
 use http::{Request, Response};
 use hyper::Body;
 use std::sync::Arc;
-use tracing::debug;
 use utoipa_swagger_ui::Config;
 
 #[derive(Clone)]
@@ -15,11 +14,29 @@ pub struct SwaggerUiConfig<'a> {
 
 impl SwaggerUiConfig<'_> {
     pub fn from(settings: &Settings) -> Self {
-        let path = settings.swagger_path.clone();
+        let path = &settings.swagger_path;
+        let path = format!("{}{}", path, if path.ends_with('/') { "" } else { "/" });
+        let config = Arc::new(Config::from(format!("{}api-doc.json", &path)));
 
-        let config = Arc::new(utoipa_swagger_ui::Config::from("/api-doc.json"));
         Self { path, config }
     }
+}
+
+pub fn get_swagger_urls(settings: &Settings) -> Vec<String> {
+    let path = &settings.swagger_path;
+    let path = format!("{}{}", path, if path.ends_with('/') { "" } else { "/" });
+    vec![
+        "",
+        "api-doc.json",
+        "index.css",
+        "swagger-initializer.js",
+        "swagger-ui-bundle.js",
+        "swagger-ui.css",
+        "swagger-ui-standalone-preset.js",
+    ]
+    .iter()
+    .map(|s| format!("{}{}", path, s))
+    .collect()
 }
 
 pub async fn get_swagger_ui(
@@ -29,7 +46,9 @@ pub async fn get_swagger_ui(
         .extensions()
         .get::<SwaggerUiConfig>()
         .ok_or_else(|| GenericError::from("No swagger config"))?;
-    let path = &request.uri().path()[swagger_ui_config.path.len()..];
+    // minumn from the path
+    let cutoff = std::cmp::min(swagger_ui_config.path.len(), request.uri().path().len());
+    let path = &request.uri().path()[cutoff..];
 
     match utoipa_swagger_ui::serve(path.as_ref(), swagger_ui_config.config.clone()) {
         Ok(swagger_file) => swagger_file

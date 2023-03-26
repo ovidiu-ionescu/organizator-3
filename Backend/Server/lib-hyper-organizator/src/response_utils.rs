@@ -17,6 +17,7 @@ pub trait PolymorphicGenericMessage<T> {
     fn forbidden() -> T;
     fn not_found() -> T;
     fn internal_server_error() -> T;
+    fn moved_permanently(location: &str) -> T;
 }
 
 impl GenericMessage {
@@ -82,6 +83,14 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
     fn internal_server_error() -> Response<Body> {
         Self::json_message_response(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
     }
+
+    fn moved_permanently(location: &str) -> Response<Body> {
+        Response::builder()
+            .status(StatusCode::MOVED_PERMANENTLY)
+            .header("Location", location)
+            .body(Body::empty())
+            .unwrap()
+    }
 }
 
 impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for GenericMessage {
@@ -117,6 +126,10 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
     fn internal_server_error() -> Result<Response<Body>, GenericError> {
         Ok(Self::internal_server_error())
     }
+
+    fn moved_permanently(location: &str) -> Result<Response<Body>, GenericError> {
+        Ok(Self::moved_permanently(location))
+    }
 }
 
 pub async fn read_full_body(req: &mut Request<Body>) -> Result<Vec<u8>, GenericError> {
@@ -140,10 +153,23 @@ pub async fn parse_body<T: for<'a> Deserialize<'a>>(
     request: &mut Request<Body>,
 ) -> Result<T, GenericError> {
     let body = read_full_body(request).await?;
-    match serde_urlencoded::from_bytes::<T>(&body) {
-        Ok(form) => Ok(form),
-        Err(e) => Err(Box::<dyn Error + Send + Sync>::from(format!(
-            "Error parsing body: {e}"
-        ))),
+    // get the request content type
+    match request
+        .headers()
+        .get("Content-Type")
+        .and_then(|v| v.to_str().ok())
+    {
+        Some("application/json") => match serde_json::from_slice::<T>(&body) {
+            Ok(form) => Ok(form),
+            Err(e) => Err(Box::<dyn Error + Send + Sync>::from(format!(
+                "Error parsing body: {e}"
+            ))),
+        },
+        _ => match serde_urlencoded::from_bytes::<T>(&body) {
+            Ok(form) => Ok(form),
+            Err(e) => Err(Box::<dyn Error + Send + Sync>::from(format!(
+                "Error parsing body: {e}"
+            ))),
+        },
     }
 }

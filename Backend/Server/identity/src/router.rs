@@ -25,6 +25,12 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::GET, "/logout") => logout(request).await,
         (&Method::GET, "/public") => public_key(request).await,
         (&Method::POST, "/password") => update_password(request).await,
+
+        (&Method::GET, "/swagger") => GenericMessage::moved_permanently("/swagger/"),
+        (&Method::GET, "/swagger/api-doc.json") => swagger::api_doc().await,
+        (&Method::GET, path) if path.starts_with("/swagger") => {
+            lib_hyper_organizator::swagger::get_swagger_ui(request).await
+        }
         _ => default_reply(request).await,
     }
 }
@@ -35,6 +41,11 @@ struct LoginForm {
     password: String,
 }
 
+#[utoipa::path(post, path="/login", request_body=LoginForm,
+    responses(
+        (status=200, description="Login successful", body=String),
+    ),
+)]
 async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let form: LoginForm = parse_body(&mut request).await?;
 
@@ -138,4 +149,22 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
     };
     let public_key_info = jot.get_public_key();
     GenericMessage::json_response(&public_key_info)
+}
+
+mod swagger {
+    use super::*;
+    use utoipa::OpenApi;
+
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(super::login,),
+        components(schemas(LoginForm, ChangePasswordForm,))
+    )]
+    struct ApiDoc;
+
+    pub(super) async fn api_doc() -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>>
+    {
+        let json = serde_json::to_string_pretty(&ApiDoc::openapi()).unwrap();
+        Ok(GenericMessage::json_reply(&json))
+    }
 }

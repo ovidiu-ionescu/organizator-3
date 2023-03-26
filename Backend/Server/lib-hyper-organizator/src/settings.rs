@@ -82,7 +82,7 @@ impl Default for Settings {
             metrics_ip:   "127.0.0.1:3001".to_string(),
             postgres:     PostgresConfig::default(),
             security:     SecurityConfig::default(),
-            swagger_path: "/swagger-api/".to_string(),
+            swagger_path: "/swagger-ui".to_string(),
         }
     }
 }
