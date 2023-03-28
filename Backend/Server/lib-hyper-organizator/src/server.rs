@@ -40,7 +40,6 @@ where
             NumericMakeRequestId::default(),
         ))
         .layer(AddExtensionLayer::new(metrics.clone()))
-        .layer(AddExtensionLayer::new(SwaggerUiConfig::from(&settings)))
         .layer(MetricsLayer)
         // Mark the `Authorization` request header as sensitive so it doesn't show in logs
         .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
@@ -53,8 +52,11 @@ where
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
-        .layer(PropagateHeaderLayer::new(x_request_id));
-
+        .layer(PropagateHeaderLayer::new(x_request_id))
+        .layer(AddExtensionLayer::new(SwaggerUiConfig::from(&settings)))
+        .layer(crate::swagger::log_layer::SwaggerLayer::new(
+            &settings.swagger_path,
+        ));
     // Add security if enabled
     let service_builder = add_authorization(service_builder, settings.security.clone()).await;
     // Add a database pool if enabled

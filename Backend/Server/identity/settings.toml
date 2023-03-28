@@ -12,12 +12,6 @@ dbname = "organizator_prod"
 [security]
 ignore = [ "/login", "/public", 
 "/swagger", 
-"/swagger/", 
 "/swagger/api-doc.json", 
-"/swagger/swagger-ui.css", 
-"/swagger/index.css", 
-"/swagger/swagger-ui-bundle.js",
-"/swagger/swagger-ui-standalone-preset.js",
-"/swagger/swagger-initializer.js",
 ]
 
