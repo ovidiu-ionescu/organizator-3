@@ -1,4 +1,6 @@
-use crate::{logging::logging_trace_span::TraceRequestMakeSpan, settings::Settings};
+use crate::{
+    logging::logging_trace_span::TraceRequestMakeSpan, settings::Settings, swagger::add_swagger,
+};
 use http::{
     header::{HeaderName, AUTHORIZATION},
     Request, Response,
@@ -53,10 +55,8 @@ where
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
         .layer(PropagateHeaderLayer::new(x_request_id))
-        .layer(AddExtensionLayer::new(SwaggerUiConfig::from(&settings)))
-        .layer(crate::swagger::log_layer::SwaggerLayer::new(
-            &settings.swagger_path,
-        ));
+        .layer(AddExtensionLayer::new(SwaggerUiConfig::from(&settings)));
+    let service_builder = add_swagger(service_builder, &settings.swagger_path).await;
     // Add security if enabled
     let service_builder = add_authorization(service_builder, settings.security.clone()).await;
     // Add a database pool if enabled

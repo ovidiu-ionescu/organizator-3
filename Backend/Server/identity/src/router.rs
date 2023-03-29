@@ -28,9 +28,6 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
 
         (&Method::GET, "/swagger") => GenericMessage::moved_permanently("/swagger/"),
         (&Method::GET, "/swagger/api-doc.json") => swagger::api_doc().await,
-        (&Method::GET, path) if path.starts_with("/swagger") => {
-            lib_hyper_organizator::swagger::get_swagger_ui(&request)
-        }
         _ => default_reply(request).await,
     }
 }

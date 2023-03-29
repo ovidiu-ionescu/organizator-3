@@ -1,15 +1,16 @@
 use crate::settings::Settings;
 use std::sync::Arc;
+use tracing::info;
 use utoipa_swagger_ui::Config;
 
 pub use submodule::add_swagger;
-pub use submodule::get_swagger_ui;
 
 #[derive(Clone)]
 pub struct SwaggerUiConfig<'a> {
     pub path:   String,
     pub config: Arc<Config<'a>>,
 }
+use tower::ServiceBuilder;
 
 impl SwaggerUiConfig<'_> {
     pub fn from(settings: &Settings) -> Self {
@@ -24,10 +25,7 @@ impl SwaggerUiConfig<'_> {
 #[cfg(not(feature = "swagger"))]
 mod submodule {
     use super::*;
-    pub async fn add_swagger<L>(
-        service_builder: ServiceBuilder<L>,
-        _: Settings,
-    ) -> ServiceBuilder<L> {
+    pub async fn add_swagger<L>(service_builder: ServiceBuilder<L>, _: &str) -> ServiceBuilder<L> {
         info!("No swagger support");
         service_builder
     }
@@ -40,6 +38,14 @@ mod submodule {
     use crate::typedef::GenericError;
     use http::{Request, Response};
     use hyper::Body;
+
+    pub async fn add_swagger<'a, L>(
+        service_builder: ServiceBuilder<L>,
+        swagger_path: &'a str,
+    ) -> ServiceBuilder<Stack<SwaggerLayer<'a>, L>> {
+        info!("Swagger support enabled");
+        service_builder.layer(SwaggerLayer::new(swagger_path))
+    }
 
     pub fn get_swagger_urls(path: &str) -> Vec<String> {
         let path = format!("{}{}", path, if path.ends_with('/') { "" } else { "/" });
@@ -81,19 +87,12 @@ mod submodule {
         }
     }
 
-    pub fn add_swagger() {}
-}
-
-pub mod log_layer {
-    use crate::typedef::GenericError;
     use futures::Future;
-    use http::Request;
-    use hyper::Body;
     use std::{
         pin::Pin,
         task::{Context, Poll},
     };
-    use tower_layer::Layer;
+    use tower_layer::{Layer, Stack};
     use tower_service::Service;
 
     pub struct SwaggerLayer<'a> {
@@ -113,7 +112,7 @@ pub mod log_layer {
 
         fn layer(&self, service: S) -> Self::Service {
             SwaggerService {
-                swagger_paths: super::submodule::get_swagger_urls(self.swagger_path),
+                swagger_paths: get_swagger_urls(self.swagger_path),
                 service,
             }
         }
@@ -145,12 +144,10 @@ pub mod log_layer {
         }
 
         fn call(&mut self, request: Request<Body>) -> Self::Future {
-            // Insert log statement here or other functionality
-
             let path = request.uri().path();
 
             let (res, fut) = if self.swagger_paths.iter().any(|s| s == path) {
-                (Some(super::submodule::get_swagger_ui(&request)), None)
+                (Some(get_swagger_ui(&request)), None)
             } else {
                 (None, Some(self.service.call(request)))
             };
