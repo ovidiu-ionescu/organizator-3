@@ -39,10 +39,10 @@ mod submodule {
     use http::{Request, Response};
     use hyper::Body;
 
-    pub async fn add_swagger<'a, L>(
+    pub async fn add_swagger<L>(
         service_builder: ServiceBuilder<L>,
-        swagger_path: &'a str,
-    ) -> ServiceBuilder<Stack<SwaggerLayer<'a>, L>> {
+        swagger_path: &str,
+    ) -> ServiceBuilder<Stack<SwaggerLayer, L>> {
         info!("Swagger support enabled");
         service_builder.layer(SwaggerLayer::new(swagger_path))
     }
