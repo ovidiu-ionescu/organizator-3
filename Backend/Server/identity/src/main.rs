@@ -1,6 +1,7 @@
 mod db;
 mod router;
 use lib_hyper_organizator::server;
+use router::swagger_json;
 
 use mimalloc::MiMalloc;
 
@@ -13,6 +14,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing_subscriber::fmt::init();
     //console_subscriber::init();
 
-    server::start_servers(router::router).await?;
+    server::start_servers(router::router, Some(swagger_json())).await?;
     Ok(())
 }

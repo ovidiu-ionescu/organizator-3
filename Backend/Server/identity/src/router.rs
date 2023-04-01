@@ -27,7 +27,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::POST, "/password") => update_password(request).await,
 
         //(&Method::GET, "/swagger") => GenericMessage::moved_permanently("/swagger/"),
-        (&Method::GET, "/swagger/api-doc.json") => swagger::api_doc().await,
+        //(&Method::GET, "/swagger/api-doc.json") => swagger::api_doc().await,
         _ => default_reply(request).await,
     }
 }
@@ -148,6 +148,7 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
     GenericMessage::json_response(&public_key_info)
 }
 
+pub use swagger::swagger_json;
 mod swagger {
     use super::*;
     use utoipa::OpenApi;
@@ -157,11 +158,9 @@ mod swagger {
         paths(super::login,),
         components(schemas(LoginForm, ChangePasswordForm,))
     )]
-    struct ApiDoc;
+    pub struct ApiDoc;
 
-    pub(super) async fn api_doc() -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>>
-    {
-        let json = serde_json::to_string_pretty(&ApiDoc::openapi()).unwrap();
-        Ok(GenericMessage::json_reply(&json))
+    pub fn swagger_json() -> String {
+        serde_json::to_string_pretty(&ApiDoc::openapi()).unwrap()
     }
 }

@@ -10,7 +10,11 @@ use tower::ServiceBuilder;
 #[cfg(not(feature = "swagger"))]
 mod submodule {
     use super::*;
-    pub async fn add_swagger<L>(service_builder: ServiceBuilder<L>, _: &str) -> ServiceBuilder<L> {
+    pub async fn add_swagger<L>(
+        service_builder: ServiceBuilder<L>,
+        _: &str,
+        _: Option<String>,
+    ) -> ServiceBuilder<L> {
         info!("No swagger support");
         service_builder
     }
@@ -24,19 +28,20 @@ mod submodule {
     use http::{Request, Response};
     use hyper::Body;
 
-    pub async fn add_swagger<L>(
+    pub async fn add_swagger<'a, L>(
         service_builder: ServiceBuilder<L>,
-        swagger_path: &str,
-    ) -> ServiceBuilder<Stack<SwaggerLayer, L>> {
+        swagger_path: &'a str,
+        swagger_json: Option<String>,
+    ) -> ServiceBuilder<Stack<SwaggerLayer<'a>, L>> {
         info!("Swagger support enabled");
-        service_builder.layer(SwaggerLayer::new(swagger_path))
+        service_builder.layer(SwaggerLayer::new(swagger_path, swagger_json))
     }
 
     pub fn get_swagger_urls(path: &str) -> Vec<String> {
         let path = format!("{}{}", path, if path.ends_with('/') { "" } else { "/" });
         vec![
             "",
-            //"api-doc.json",
+            "api-doc.json",
             "index.css",
             "swagger-initializer.js",
             "swagger-ui-bundle.js",
@@ -76,12 +81,14 @@ mod submodule {
 
     pub struct SwaggerLayer<'a> {
         swagger_path: &'a str,
+        json:         Option<String>,
     }
 
     impl<'a> SwaggerLayer<'a> {
-        pub fn new(target: &'a str) -> Self {
+        pub fn new(target: &'a str, json: Option<String>) -> Self {
             Self {
                 swagger_path: target,
+                json,
             }
         }
     }
@@ -104,6 +111,7 @@ mod submodule {
                 swagger_paths: get_swagger_urls(self.swagger_path),
                 swagger_path,
                 swagger_config: Arc::new(Config::from(config_path)),
+                json: self.json.clone().unwrap_or("{}".to_string()),
                 service,
             }
         }
@@ -114,6 +122,7 @@ mod submodule {
         swagger_paths:  Vec<String>,
         swagger_path:   String,
         swagger_config: Arc<Config<'static>>,
+        json:           String,
         service:        S,
     }
 
@@ -143,10 +152,14 @@ mod submodule {
             let computed_answer = if is_redirect {
                 Some(GenericMessage::moved_permanently(&format!("{}/", path)))
             } else if is_swagger {
-                Some(get_swagger_ui(
-                    &path[self.swagger_path.len()..],
-                    self.swagger_config.clone(),
-                ))
+                if path.ends_with("api-doc.json") {
+                    Some(GenericMessage::json_response(&self.json))
+                } else {
+                    Some(get_swagger_ui(
+                        &path[self.swagger_path.len()..],
+                        self.swagger_config.clone(),
+                    ))
+                }
             } else {
                 None
             };

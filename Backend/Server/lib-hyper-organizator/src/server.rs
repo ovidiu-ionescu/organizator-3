@@ -23,7 +23,7 @@ use crate::typedef::GenericError;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
-pub async fn start_servers<H, R>(f: H) -> Result<(), Error>
+pub async fn start_servers<H, R>(f: H, swagger_json: Option<String>) -> Result<(), Error>
 where
     H: FnMut(Request<Body>) -> R + Clone + Send + 'static,
     R: futures_util::Future<Output = Result<Response<Body>, GenericError>> + Send + 'static,
@@ -55,7 +55,7 @@ where
         // Propagate `X-Request-Id`s from requests to responses
         .layer(PropagateHeaderLayer::new(x_request_id));
 
-    let service_builder = add_swagger(service_builder, &settings.swagger_path).await;
+    let service_builder = add_swagger(service_builder, &settings.swagger_path, swagger_json).await;
     // Add security if enabled
     let service_builder = add_authorization(service_builder, settings.security.clone()).await;
     // Add a database pool if enabled
