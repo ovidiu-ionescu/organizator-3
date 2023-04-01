@@ -5,22 +5,7 @@ use utoipa_swagger_ui::Config;
 
 pub use submodule::add_swagger;
 
-#[derive(Clone)]
-pub struct SwaggerUiConfig<'a> {
-    pub path:   String,
-    pub config: Arc<Config<'a>>,
-}
 use tower::ServiceBuilder;
-
-impl SwaggerUiConfig<'_> {
-    pub fn from(settings: &Settings) -> Self {
-        let path = &settings.swagger_path;
-        let path = format!("{}{}", path, if path.ends_with('/') { "" } else { "/" });
-        let config = Arc::new(Config::from(format!("{}api-doc.json", &path)));
-
-        Self { path, config }
-    }
-}
 
 #[cfg(not(feature = "swagger"))]
 mod submodule {
@@ -64,15 +49,11 @@ mod submodule {
     }
 
     /// Service the swagger ui files
-    pub fn get_swagger_ui(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-        let swagger_ui_config = request
-            .extensions()
-            .get::<SwaggerUiConfig>()
-            .ok_or_else(|| GenericError::from("No swagger config"))?;
-        let cutoff = swagger_ui_config.path.len();
-        let path = &request.uri().path()[cutoff..];
-
-        match utoipa_swagger_ui::serve(path, swagger_ui_config.config.clone()) {
+    pub fn get_swagger_ui(
+        swagger_file_path: &str,
+        config: Arc<Config>,
+    ) -> Result<Response<Body>, GenericError> {
+        match utoipa_swagger_ui::serve(swagger_file_path, config) {
             Ok(swagger_file) => swagger_file
                 .map(|file| {
                     Ok(Response::builder()
@@ -109,9 +90,20 @@ mod submodule {
         type Service = SwaggerService<S>;
 
         fn layer(&self, service: S) -> Self::Service {
+            let swagger_path = format!(
+                "{}{}",
+                &self.swagger_path,
+                if self.swagger_path.ends_with('/') {
+                    ""
+                } else {
+                    "/"
+                }
+            );
+            let config_path = format!("{}api-doc.json", &swagger_path);
             SwaggerService {
                 swagger_paths: get_swagger_urls(self.swagger_path),
-                swagger_path: self.swagger_path.to_string(),
+                swagger_path,
+                swagger_config: Arc::new(Config::from(config_path)),
                 service,
             }
         }
@@ -119,9 +111,10 @@ mod submodule {
 
     #[derive(Clone)]
     pub struct SwaggerService<S> {
-        swagger_paths: Vec<String>,
-        swagger_path:  String,
-        service:       S,
+        swagger_paths:  Vec<String>,
+        swagger_path:   String,
+        swagger_config: Arc<Config<'static>>,
+        service:        S,
     }
 
     unsafe impl<S> Send for SwaggerService<S> {}
@@ -150,7 +143,10 @@ mod submodule {
             let computed_answer = if is_redirect {
                 Some(GenericMessage::moved_permanently(&format!("{}/", path)))
             } else if is_swagger {
-                Some(get_swagger_ui(&request))
+                Some(get_swagger_ui(
+                    &path[self.swagger_path.len()..],
+                    self.swagger_config.clone(),
+                ))
             } else {
                 None
             };

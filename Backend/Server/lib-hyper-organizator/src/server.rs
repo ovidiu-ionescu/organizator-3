@@ -19,7 +19,6 @@ use crate::metrics::metrics_layer::MetricsLayer;
 use crate::metrics::numeric_request_id::NumericMakeRequestId;
 use crate::metrics::prometheus_metrics::PrometheusMetrics;
 use crate::postgres::add_database;
-use crate::swagger::SwaggerUiConfig;
 use crate::typedef::GenericError;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
@@ -54,8 +53,8 @@ where
         // Compress responses
         .layer(CompressionLayer::new())
         // Propagate `X-Request-Id`s from requests to responses
-        .layer(PropagateHeaderLayer::new(x_request_id))
-        .layer(AddExtensionLayer::new(SwaggerUiConfig::from(&settings)));
+        .layer(PropagateHeaderLayer::new(x_request_id));
+
     let service_builder = add_swagger(service_builder, &settings.swagger_path).await;
     // Add security if enabled
     let service_builder = add_authorization(service_builder, settings.security.clone()).await;
