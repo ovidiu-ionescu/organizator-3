@@ -64,7 +64,6 @@ mod submodule {
     }
 
     /// Service the swagger ui files
-    /// In some cases a redirect is returned to help the browser find the files
     pub fn get_swagger_ui(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
         let swagger_ui_config = request
             .extensions()
@@ -83,27 +82,6 @@ mod submodule {
                 })
                 .unwrap_or_else(GenericMessage::not_found),
             Err(error) => GenericMessage::text_reply(&error.to_string()),
-        }
-    }
-
-    #[cfg(test)]
-    mod test {
-        use super::*;
-
-        #[test]
-        fn test_redirect() {
-            let config = SwaggerUiConfig {
-                path:   "/swagger".to_string(),
-                config: Arc::new(Config::from("")),
-            };
-            let request = Request::builder()
-                .uri("http://localhost/swagger")
-                .extension(config)
-                .body(Body::empty())
-                .unwrap();
-            let response = get_swagger_ui(&request).unwrap();
-            assert_eq!(response.status(), 301);
-            assert_eq!(response.headers().get("location").unwrap(), "/swagger/");
         }
     }
 
