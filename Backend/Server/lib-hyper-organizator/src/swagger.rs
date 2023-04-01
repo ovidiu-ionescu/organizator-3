@@ -63,15 +63,14 @@ mod submodule {
         .collect()
     }
 
-    pub fn get_swagger_ui(
-        request: &Request<Body>,
-    ) -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>> {
+    /// Service the swagger ui files
+    /// In some cases a redirect is returned to help the browser find the files
+    pub fn get_swagger_ui(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
         let swagger_ui_config = request
             .extensions()
             .get::<SwaggerUiConfig>()
             .ok_or_else(|| GenericError::from("No swagger config"))?;
-        // minumn from the path
-        let cutoff = std::cmp::min(swagger_ui_config.path.len(), request.uri().path().len());
+        let cutoff = swagger_ui_config.path.len();
         let path = &request.uri().path()[cutoff..];
 
         match utoipa_swagger_ui::serve(path, swagger_ui_config.config.clone()) {
@@ -84,6 +83,27 @@ mod submodule {
                 })
                 .unwrap_or_else(GenericMessage::not_found),
             Err(error) => GenericMessage::text_reply(&error.to_string()),
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn test_redirect() {
+            let config = SwaggerUiConfig {
+                path:   "/swagger".to_string(),
+                config: Arc::new(Config::from("")),
+            };
+            let request = Request::builder()
+                .uri("http://localhost/swagger")
+                .extension(config)
+                .body(Body::empty())
+                .unwrap();
+            let response = get_swagger_ui(&request).unwrap();
+            assert_eq!(response.status(), 301);
+            assert_eq!(response.headers().get("location").unwrap(), "/swagger/");
         }
     }
 
@@ -113,6 +133,7 @@ mod submodule {
         fn layer(&self, service: S) -> Self::Service {
             SwaggerService {
                 swagger_paths: get_swagger_urls(self.swagger_path),
+                swagger_path: self.swagger_path.to_string(),
                 service,
             }
         }
@@ -121,6 +142,7 @@ mod submodule {
     #[derive(Clone)]
     pub struct SwaggerService<S> {
         swagger_paths: Vec<String>,
+        swagger_path:  String,
         service:       S,
     }
 
@@ -145,9 +167,18 @@ mod submodule {
 
         fn call(&mut self, request: Request<Body>) -> Self::Future {
             let path = request.uri().path();
+            let is_swagger = self.swagger_paths.iter().any(|s| s == path);
+            let is_redirect = !is_swagger && should_redirect(path, &self.swagger_path);
+            let computed_answer = if is_redirect {
+                Some(GenericMessage::moved_permanently(&format!("{}/", path)))
+            } else if is_swagger {
+                Some(get_swagger_ui(&request))
+            } else {
+                None
+            };
 
-            let (res, fut) = if self.swagger_paths.iter().any(|s| s == path) {
-                (Some(get_swagger_ui(&request)), None)
+            let (res, fut) = if computed_answer.is_some() {
+                (computed_answer, None)
             } else {
                 (None, Some(self.service.call(request)))
             };
@@ -159,5 +190,15 @@ mod submodule {
                 }
             })
         }
+    }
+
+    fn should_redirect(path: &str, swagger_path: &str) -> bool {
+        if path.ends_with('/') {
+            return false;
+        }
+        if path == swagger_path {
+            return true;
+        }
+        return false;
     }
 }
