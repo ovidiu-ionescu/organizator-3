@@ -26,8 +26,6 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::GET, "/public") => public_key(request).await,
         (&Method::POST, "/password") => update_password(request).await,
 
-        //(&Method::GET, "/swagger") => GenericMessage::moved_permanently("/swagger/"),
-        //(&Method::GET, "/swagger/api-doc.json") => swagger::api_doc().await,
         _ => default_reply(request).await,
     }
 }

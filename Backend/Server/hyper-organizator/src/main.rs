@@ -15,6 +15,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing_subscriber::fmt::init();
     //console_subscriber::init();
 
-    server::start_servers(router::router).await?;
+    server::start_servers(router::router, None).await?;
     Ok(())
 }

@@ -1,4 +1,3 @@
-use crate::settings::Settings;
 use std::sync::Arc;
 use tracing::info;
 use utoipa_swagger_ui::Config;
@@ -28,11 +27,11 @@ mod submodule {
     use http::{Request, Response};
     use hyper::Body;
 
-    pub async fn add_swagger<'a, L>(
+    pub async fn add_swagger<L>(
         service_builder: ServiceBuilder<L>,
-        swagger_path: &'a str,
+        swagger_path: &str,
         swagger_json: Option<String>,
-    ) -> ServiceBuilder<Stack<SwaggerLayer<'a>, L>> {
+    ) -> ServiceBuilder<Stack<SwaggerLayer, L>> {
         info!("Swagger support enabled");
         service_builder.layer(SwaggerLayer::new(swagger_path, swagger_json))
     }
@@ -186,6 +185,6 @@ mod submodule {
         if path == swagger_path {
             return true;
         }
-        return false;
+        false
     }
 }
