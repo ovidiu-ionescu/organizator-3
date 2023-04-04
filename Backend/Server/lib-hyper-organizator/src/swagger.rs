@@ -1,6 +1,4 @@
-use std::sync::Arc;
 use tracing::info;
-use utoipa_swagger_ui::Config;
 
 pub use submodule::add_swagger;
 
@@ -26,6 +24,8 @@ mod submodule {
     use crate::typedef::GenericError;
     use http::{Request, Response};
     use hyper::Body;
+    use std::sync::Arc;
+    use utoipa_swagger_ui::Config;
 
     pub async fn add_swagger<L>(
         service_builder: ServiceBuilder<L>,
