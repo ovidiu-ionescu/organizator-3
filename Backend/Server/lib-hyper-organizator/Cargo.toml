@@ -2,6 +2,10 @@
 name = "lib-hyper-organizator"
 version = "0.2.0"
 edition = "2021"
+authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
+description = "A set minimalistic set of features for building web services with Rust and Hyper"
+repository = "https://github.com/ovidiu-ionescu/organizator-3/tree/master/Backend/Server/lib-hyper-organizator"
+license = "AGPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
