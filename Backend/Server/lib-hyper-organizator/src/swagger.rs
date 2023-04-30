@@ -148,6 +148,10 @@ mod submodule {
             let path = request.uri().path();
             let is_swagger = self.swagger_paths.iter().any(|s| s == path);
             let is_redirect = !is_swagger && should_redirect(path, &self.swagger_path);
+            info!(
+                "is_swagger: {}, is_redirect: {}, swagger_path: {}",
+                is_swagger, is_redirect, self.swagger_path
+            );
             let computed_answer = if is_redirect {
                 Some(GenericMessage::moved_permanently(&format!("{}/", path)))
             } else if is_swagger {
@@ -182,7 +186,7 @@ mod submodule {
         if path.ends_with('/') {
             return false;
         }
-        if path == swagger_path {
+        if swagger_path.starts_with(path) && swagger_path.len() == path.len() + 1 {
             return true;
         }
         false

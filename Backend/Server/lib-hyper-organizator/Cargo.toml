@@ -1,6 +1,6 @@
 [package]
 name = "lib-hyper-organizator"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
 description = "A minimalistic set of features for building web services with Rust and Hyper"
