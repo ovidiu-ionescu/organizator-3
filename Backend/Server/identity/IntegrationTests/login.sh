@@ -17,3 +17,5 @@ JWT=$($crl "$host/login" -d "username=${USERNAME}&password=$current_password")
 log "Logged in as ${USERNAME}"
 AUTH="Authorization: Bearer $JWT"
 
+echo $AUTH
+

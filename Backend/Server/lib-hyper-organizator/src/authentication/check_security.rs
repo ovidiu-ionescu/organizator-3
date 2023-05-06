@@ -65,6 +65,7 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
 }
 
 fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
+    trace!("Checking for a JWT bearer token");
     match request.headers().get(AUTHORIZATION).map(|s| s.to_str()) {
         Some(Ok(bearer)) if bearer.len() > BEARER.len() => {
             let jwt = &bearer[BEARER.len()..];
@@ -91,6 +92,7 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
                     }
                 }
             } else {
+                trace!("Invalid token");
                 None
             }
         }

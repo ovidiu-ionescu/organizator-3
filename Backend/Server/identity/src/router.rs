@@ -33,10 +33,14 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
 #[derive(Deserialize, Debug, Clone, ToSchema)]
 struct LoginForm {
     username: String,
+    #[schema(format = Password)]
     password: String,
 }
 
-#[utoipa::path(post, path="/login", request_body=LoginForm,
+#[utoipa::path(post, path="/login", 
+    // the simple variant, commented out, will send json
+    //request_body=LoginForm,
+    request_body(content = LoginForm, content_type = "application/x-www-form-urlencoded"),
     responses(
         (status=200, description="Login successful", body=String),
     ),

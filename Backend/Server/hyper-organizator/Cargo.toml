@@ -55,5 +55,7 @@ toml = { workspace = true }
 deadpool-postgres = { workspace = true }
 tokio-postgres = { workspace = true }
 
-lib-hyper-organizator = { workspace = true, features = ["security", "postgres"] }
+lib-hyper-organizator = { workspace = true, features = ["security", "postgres", "swagger"] }
 
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }

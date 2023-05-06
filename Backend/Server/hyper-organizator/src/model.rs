@@ -1,17 +1,18 @@
 use serde::Serialize;
 use tokio_postgres::row::Row;
+use utoipa::ToSchema;
 
 pub trait DBPersistence {
     fn query() -> &'static str;
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct User {
     pub id:       i32,
     pub username: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MemoTitle {
     pub id:       i32,
     pub title:    Option<String>,
@@ -19,13 +20,13 @@ pub struct MemoTitle {
     pub savetime: Option<i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MemoTitleList {
     pub memos: Vec<MemoTitle>,
     pub user:  User,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MemoGroup {
     pub id:   i32,
     pub name: String,
@@ -46,12 +47,12 @@ impl From<Row> for MemoGroup {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MemoGroupList {
     pub memogroups: Vec<MemoGroup>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Memo {
     pub id:        i32,
     pub title:     Option<String>,
@@ -61,13 +62,13 @@ pub struct Memo {
     pub user:      MemoUser,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MemoUser {
     pub id:   i32,
     pub name: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetMemo {
     memo: Memo,
     user: MemoUser,
@@ -107,7 +108,7 @@ impl DBPersistence for GetMemo {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetWriteMemo {
     memo: Option<Memo>,
     user: MemoUser,
@@ -146,7 +147,7 @@ impl From<&Row> for GetWriteMemo {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ExplicitPermission {
     pub memo_group_id:   i32,
     pub memo_group_name: Option<String>,
