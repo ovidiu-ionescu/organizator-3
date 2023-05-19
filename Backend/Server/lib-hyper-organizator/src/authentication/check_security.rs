@@ -38,7 +38,6 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
         if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
         }
-        // check if it is a swagger request
 
         if let Some(user_id) = check_ssl_header(request) {
             trace!("User {} is authorized via ssl header", user_id.0);
