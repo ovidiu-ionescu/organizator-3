@@ -18,16 +18,21 @@ pub trait PolymorphicGenericMessage<T> {
     fn not_found() -> T;
     fn internal_server_error() -> T;
     fn moved_permanently(location: &str) -> T;
+    fn text(code: StatusCode, s: &str) -> T;
 }
 
 impl GenericMessage {
     pub fn text_reply(s: &str) -> Result<Response<Body>, GenericError> {
-        Ok(Response::builder()
-            .status(StatusCode::OK)
+        Ok(Self::text_message_response(StatusCode::OK, s))
+    }
+
+    fn text_message_response(code: StatusCode, s: &str) -> Response<Body> {
+        Response::builder()
+            .status(code)
             .header("content-type", "text/plain")
             .header("server", "hyper")
             .body(Body::from(s.to_string()))
-            .unwrap())
+            .unwrap()
     }
 
     pub fn json_message_response(code: StatusCode, msg: &str) -> Response<Body> {
@@ -91,6 +96,10 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
             .body(Body::empty())
             .unwrap()
     }
+
+    fn text(code: StatusCode, s: &str) -> Response<Body> {
+        Self::text_message_response(code, s)
+    }
 }
 
 impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for GenericMessage {
@@ -129,6 +138,10 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
 
     fn moved_permanently(location: &str) -> Result<Response<Body>, GenericError> {
         Ok(Self::moved_permanently(location))
+    }
+
+    fn text(code: StatusCode, s: &str) -> Result<Response<Body>, GenericError> {
+        Ok(Self::text_message_response(code, s))
     }
 }
 

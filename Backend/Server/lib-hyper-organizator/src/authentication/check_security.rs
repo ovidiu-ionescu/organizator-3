@@ -7,11 +7,13 @@ use http::header::AUTHORIZATION;
 ///
 use http::StatusCode;
 use hyper::{Body, Request, Response};
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
 use tracing::{info, trace, warn};
 
-const SSL_HEADER: &str = "X-SSL-Client-S-DN";
+const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
+const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
 
 /// Bearer token is described here: <https://www.rfc-editor.org/rfc/rfc6750>
 pub const BEARER: &str = "Bearer ";
@@ -21,6 +23,12 @@ pub struct OrganizatorAuthorization;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UserId(pub String);
+
+impl Display for UserId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
@@ -57,8 +65,19 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
 }
 
 fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
-    match request.headers().get(SSL_HEADER).map(|s| s.to_str()) {
-        Some(Ok(dn)) if dn.len() > 3 => Some(UserId(dn[3..].to_string())),
+    trace!("Check if the certificate verification was successful");
+    if request
+        .headers()
+        .get(SSL_HEADER_VERIFY)
+        .and_then(|s| if s == "SUCCESS" { Some(()) } else { None })
+        .is_none()
+    {
+        info!("SSL verification failed");
+        return None;
+    }
+    trace!("Check if the DN is present");
+    match request.headers().get(SSL_HEADER_DN).map(|s| s.to_str()) {
+        Some(Ok(dn)) if dn.len() > 3 && &dn[0..3] == "CN=" => Some(UserId(dn[3..].to_string())),
         _ => None,
     }
 }
