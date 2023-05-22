@@ -133,7 +133,10 @@ mod tests {
         let mut request = Request::new(Body::empty());
         request
             .headers_mut()
-            .insert(SSL_HEADER, "CN=admin".parse().unwrap());
+            .insert(SSL_HEADER_VERIFY, "SUCCESS".parse().unwrap());
+        request
+            .headers_mut()
+            .insert(SSL_HEADER_DN, "CN=admin".parse().unwrap());
         assert_eq!(
             check_ssl_header(&mut request),
             Some(UserId("admin".to_string()))
@@ -171,7 +174,10 @@ mod tests {
         // request with the header should be authorized
         request
             .headers_mut()
-            .insert(SSL_HEADER, "CN=admin".parse().unwrap());
+            .insert(SSL_HEADER_VERIFY, "SUCCESS".parse().unwrap());
+        request
+            .headers_mut()
+            .insert(SSL_HEADER_DN, "CN=admin".parse().unwrap());
         let response = service.ready().await?.call(request).await?;
         println!("Response: {:#?}", &response);
         assert_eq!(response.status(), StatusCode::OK);
