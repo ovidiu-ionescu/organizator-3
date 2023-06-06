@@ -13,6 +13,7 @@ pub trait PolymorphicGenericMessage<T> {
     fn unauthorized() -> T;
     fn bad_request() -> T;
     fn json_response(text: &str) -> T;
+    fn json_string_response(text: String) -> T;
     fn not_implemented() -> T;
     fn forbidden() -> T;
     fn not_found() -> T;
@@ -54,6 +55,15 @@ impl GenericMessage {
             .body(Body::from(body.to_string()))
             .unwrap()
     }
+
+    pub fn json_string_reply(body: String) -> Response<Body> {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "application/json")
+            .header("server", "hyper")
+            .body(Body::from(body))
+            .unwrap()
+    }
 }
 
 impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
@@ -71,6 +81,10 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
 
     fn json_response(body: &str) -> Response<Body> {
         Self::json_reply(body)
+    }
+
+    fn json_string_response(body: String) -> Response<Body> {
+        Self::json_string_reply(body)
     }
 
     fn not_implemented() -> Response<Body> {
@@ -118,6 +132,10 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
 
     fn json_response(body: &str) -> Result<Response<Body>, GenericError> {
         Ok(Self::json_response(body))
+    }
+
+    fn json_string_response(body: String) -> Result<Response<Body>, GenericError> {
+        Ok(Self::json_string_response(body))
     }
 
     fn not_implemented() -> Result<Response<Body>, GenericError> {
