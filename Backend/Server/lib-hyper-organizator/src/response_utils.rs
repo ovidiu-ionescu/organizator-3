@@ -12,27 +12,33 @@ pub trait PolymorphicGenericMessage<T> {
     fn error() -> T;
     fn unauthorized() -> T;
     fn bad_request() -> T;
-    fn json_response(text: &str) -> T;
-    fn json_string_response(text: String) -> T;
+    fn json_response<S>(text: S) -> T
+    where
+        Body: From<S>;
     fn not_implemented() -> T;
     fn forbidden() -> T;
     fn not_found() -> T;
     fn internal_server_error() -> T;
     fn moved_permanently(location: &str) -> T;
-    fn text(code: StatusCode, s: &str) -> T;
+    fn text<S>(code: StatusCode, s: S) -> T
+    where
+        Body: From<S>;
 }
 
 impl GenericMessage {
-    pub fn text_reply(s: &str) -> Result<Response<Body>, GenericError> {
+    pub fn text_reply(s: &'static str) -> Result<Response<Body>, GenericError> {
         Ok(Self::text_message_response(StatusCode::OK, s))
     }
 
-    fn text_message_response(code: StatusCode, s: &str) -> Response<Body> {
+    fn text_message_response<S>(code: StatusCode, s: S) -> Response<Body>
+    where
+        Body: From<S>,
+    {
         Response::builder()
             .status(code)
             .header("content-type", "text/plain")
             .header("server", "hyper")
-            .body(Body::from(s.to_string()))
+            .body(Body::from(s))
             .unwrap()
     }
 
@@ -47,16 +53,10 @@ impl GenericMessage {
             .unwrap()
     }
 
-    pub fn json_reply(body: &str) -> Response<Body> {
-        Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "application/json")
-            .header("server", "hyper")
-            .body(Body::from(body.to_string()))
-            .unwrap()
-    }
-
-    pub fn json_string_reply(body: String) -> Response<Body> {
+    pub fn json_reply<S>(body: S) -> Response<Body>
+    where
+        Body: From<S>,
+    {
         Response::builder()
             .status(StatusCode::OK)
             .header("content-type", "application/json")
@@ -79,12 +79,11 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
         Self::json_message_response(StatusCode::BAD_REQUEST, "Bad Request")
     }
 
-    fn json_response(body: &str) -> Response<Body> {
+    fn json_response<S>(body: S) -> Response<Body>
+    where
+        Body: From<S>,
+    {
         Self::json_reply(body)
-    }
-
-    fn json_string_response(body: String) -> Response<Body> {
-        Self::json_string_reply(body)
     }
 
     fn not_implemented() -> Response<Body> {
@@ -111,7 +110,10 @@ impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
             .unwrap()
     }
 
-    fn text(code: StatusCode, s: &str) -> Response<Body> {
+    fn text<S>(code: StatusCode, s: S) -> Response<Body>
+    where
+        Body: From<S>,
+    {
         Self::text_message_response(code, s)
     }
 }
@@ -130,12 +132,11 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
         Ok(Self::unauthorized())
     }
 
-    fn json_response(body: &str) -> Result<Response<Body>, GenericError> {
+    fn json_response<S>(body: S) -> Result<Response<Body>, GenericError>
+    where
+        Body: From<S>,
+    {
         Ok(Self::json_response(body))
-    }
-
-    fn json_string_response(body: String) -> Result<Response<Body>, GenericError> {
-        Ok(Self::json_string_response(body))
     }
 
     fn not_implemented() -> Result<Response<Body>, GenericError> {
@@ -158,7 +159,10 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
         Ok(Self::moved_permanently(location))
     }
 
-    fn text(code: StatusCode, s: &str) -> Result<Response<Body>, GenericError> {
+    fn text<S>(code: StatusCode, s: S) -> Result<Response<Body>, GenericError>
+    where
+        Body: From<S>,
+    {
         Ok(Self::text_message_response(code, s))
     }
 }
