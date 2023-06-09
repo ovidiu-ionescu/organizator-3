@@ -20,7 +20,9 @@ mod submodule {
 #[cfg(feature = "swagger")]
 mod submodule {
     use super::*;
-    use crate::response_utils::{GenericMessage, PolymorphicGenericMessage};
+    use crate::response_utils::{
+        GenericMessage, IntoResultHyperResponse, PolymorphicGenericMessage,
+    };
     use crate::typedef::GenericError;
     use http::{Request, Response};
     use hyper::Body;
@@ -66,7 +68,7 @@ mod submodule {
                         .unwrap())
                 })
                 .unwrap_or_else(GenericMessage::not_found),
-            Err(error) => GenericMessage::text_reply(&error.to_string()),
+            Err(error) => GenericMessage::text_reply(error.to_string()),
         }
     }
 
@@ -156,7 +158,7 @@ mod submodule {
                 Some(GenericMessage::moved_permanently(&format!("{}/", path)))
             } else if is_swagger {
                 if path.ends_with("api-doc.json") {
-                    Some(GenericMessage::json_response(&self.json))
+                    Some(self.json.clone().json_reply())
                 } else {
                     Some(get_swagger_ui(
                         &path[self.swagger_path.len()..],

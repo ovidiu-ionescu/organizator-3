@@ -26,7 +26,10 @@ pub trait PolymorphicGenericMessage<T> {
 }
 
 impl GenericMessage {
-    pub fn text_reply(s: &'static str) -> Result<Response<Body>, GenericError> {
+    pub fn text_reply<S>(s: S) -> Result<Response<Body>, GenericError>
+    where
+        Body: From<S>,
+    {
         Ok(Self::text_message_response(StatusCode::OK, s))
     }
 
@@ -164,6 +167,43 @@ impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for Generic
         Body: From<S>,
     {
         Ok(Self::text_message_response(code, s))
+    }
+}
+
+/// Utils to let something anything that can turn into a body to be used as a Response
+
+pub trait IntoHyperResponse {
+    fn json_reply(self) -> Response<Body>;
+    fn text_reply(self) -> Response<Body>;
+}
+
+impl<S> IntoHyperResponse for S
+where
+    Body: From<S>,
+{
+    fn json_reply(self) -> Response<Body> {
+        GenericMessage::json_response(self)
+    }
+
+    fn text_reply(self) -> Response<Body> {
+        GenericMessage::text_message_response(StatusCode::OK, self)
+    }
+}
+
+pub trait IntoResultHyperResponse {
+    fn json_reply(self) -> Result<Response<Body>, GenericError>;
+    fn text_reply(self) -> Result<Response<Body>, GenericError>;
+}
+
+impl<S> IntoResultHyperResponse for S
+where
+    Body: From<S>,
+{
+    fn json_reply(self) -> Result<Response<Body>, GenericError> {
+        GenericMessage::json_response(self)
+    }
+    fn text_reply(self) -> Result<Response<Body>, GenericError> {
+        Ok(GenericMessage::text_message_response(StatusCode::OK, self))
     }
 }
 

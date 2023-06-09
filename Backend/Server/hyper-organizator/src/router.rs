@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::GenericMessage;
+use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::response_utils::PolymorphicGenericMessage;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
@@ -122,7 +123,7 @@ fn build_json_response<T: serde::Serialize>(
     data_result: Result<T, PgError>,
 ) -> Result<Response<Body>, GenericError> {
     match data_result {
-        Ok(data) => GenericMessage::json_response(&serde_json::to_string(&data)?),
+        Ok(data) => serde_json::to_string(&data)?.json_reply(),
         Err(e) if e.code().is_some() => match e.code().unwrap().code() {
             "2F004" => GenericMessage::forbidden(),
             "28000" => GenericMessage::unauthorized(),

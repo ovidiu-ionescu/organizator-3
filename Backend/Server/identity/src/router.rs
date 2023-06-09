@@ -4,7 +4,7 @@ use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{
-    parse_body, GenericMessage, PolymorphicGenericMessage,
+    parse_body, GenericMessage, IntoResultHyperResponse, PolymorphicGenericMessage,
 };
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
@@ -61,7 +61,7 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     let new_token: String = jot.generate_token(&form.username)?;
     info!("User 「{}」 logged in", &form.username);
 
-    GenericMessage::text_reply(&new_token)
+    new_token.text_reply()
 }
 
 pub fn verify_password(password: &str, login: &Login) -> bool {
@@ -135,7 +135,7 @@ async fn refresh(request: Request<Body>) -> Result<Response<Body>, GenericError>
     };
     let token = token.to_str()?;
     let new_token = jot.refresh_token(token)?;
-    GenericMessage::text_reply(&new_token)
+    new_token.text_reply()
 }
 
 async fn logout(_request: Request<Body>) -> Result<Response<Body>, GenericError> {
@@ -146,8 +146,7 @@ async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericErr
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return GenericMessage::error();
     };
-    let public_key_info = jot.get_public_key();
-    GenericMessage::json_response(&public_key_info)
+    jot.get_public_key().json_reply()
 }
 
 pub use swagger::swagger_json;
