@@ -1,14 +1,13 @@
 use crate::db;
 use crate::model::ExplicitPermission;
 use crate::model::GetMemo;
+use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
 use lazy_static::lazy_static;
 use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::postgres::get_connection;
-use lib_hyper_organizator::response_utils::GenericMessage;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
-use lib_hyper_organizator::response_utils::PolymorphicGenericMessage;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use regex::Regex;
@@ -125,12 +124,16 @@ fn build_json_response<T: serde::Serialize>(
     match data_result {
         Ok(data) => serde_json::to_string(&data)?.json_reply(),
         Err(e) if e.code().is_some() => match e.code().unwrap().code() {
-            "2F004" => GenericMessage::forbidden(),
-            "28000" => GenericMessage::unauthorized(),
-            "02000" => GenericMessage::not_found(),
-            _ => GenericMessage::internal_server_error(),
+            "2F004" => "Data access forbidden".text_reply_with_code(StatusCode::FORBIDDEN),
+            "28000" => "Data access unauthorized".text_reply_with_code(StatusCode::UNAUTHORIZED),
+            "02000" => "No data found".text_reply_with_code(StatusCode::NOT_FOUND),
+            _ => e
+                .to_string()
+                .text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR),
         },
-        Err(_x) => GenericMessage::internal_server_error(),
+        Err(x) => x
+            .to_string()
+            .text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

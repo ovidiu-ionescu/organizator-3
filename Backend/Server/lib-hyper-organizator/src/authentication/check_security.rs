@@ -1,5 +1,5 @@
 use crate::authentication::jot::{ExpiredToken, Jot};
-use crate::response_utils::{GenericMessage, PolymorphicGenericMessage};
+use crate::response_utils::IntoHyperResponse;
 use http::header::AUTHORIZATION;
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
@@ -10,7 +10,7 @@ use hyper::{Body, Request, Response};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
-use tracing::{info, trace, warn};
+use tracing::{info, trace};
 
 const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
 const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
@@ -40,8 +40,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             .extensions()
             .get::<Arc<Jot>>()
             else {
-                trace!("No Jot in the request");
-                return Err( GenericMessage::error());
+                return Err("No Jot in the request".text_reply_with_code(StatusCode::UNAUTHORIZED));
             };
         if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
@@ -55,11 +54,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             request.extensions_mut().insert(user_id);
             Ok(())
         } else {
-            warn!("Unauthorized request");
-            Err(Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body(Body::empty())
-                .unwrap())
+            Err("Unauthorized request".text_reply_with_code(StatusCode::UNAUTHORIZED))
         }
     }
 }

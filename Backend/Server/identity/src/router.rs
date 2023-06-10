@@ -1,11 +1,9 @@
-use http::{Method, Request, Response};
+use http::{Method, Request, Response, StatusCode};
 use hyper::Body;
 use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
-use lib_hyper_organizator::response_utils::{
-    parse_body, GenericMessage, IntoResultHyperResponse, PolymorphicGenericMessage,
-};
+use lib_hyper_organizator::response_utils::{parse_body, IntoResultHyperResponse};
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_reply;
 use ring::{digest::SHA512_OUTPUT_LEN, pbkdf2};
@@ -52,11 +50,11 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
 
     let login = fetch_login(&client, &form.username).await?;
     if !verify_password(&form.password, &login) {
-        return GenericMessage::unauthorized();
+        return "Bad password".text_reply_with_code(StatusCode::UNAUTHORIZED);
     }
 
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
-        return GenericMessage::error();
+        return "No Jot".text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR);
     };
     let new_token: String = jot.generate_token(&form.username)?;
     info!("User 「{}」 logged in", &form.username);
@@ -90,7 +88,7 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
 
     // get the current logged in user from the request
     let Some(user_id) = request.extensions().get::<UserId>() else {
-        return GenericMessage::unauthorized();
+        return "User is not logged in".text_reply_with_code(StatusCode::UNAUTHORIZED);
     };
     let requester = &user_id.0;
 
@@ -99,7 +97,7 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
     // check the old password was correctly supplied
     let login = fetch_login(&client, requester).await?;
     if !verify_password(&form.old_password, &login) {
-        return GenericMessage::unauthorized();
+        return "Bad old password".text_reply_with_code(StatusCode::UNAUTHORIZED);
     }
 
     // compute the new password hash and salt
@@ -123,15 +121,15 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
     };
     db::update_password(&client, requester, username, &salt_bytes, &pbkdf2_bytes).await?;
     info!("User 「{requester}」 updated password for 「{username}」");
-    GenericMessage::text_reply("Password updated")
+    "Password updated".text_reply()
 }
 
 async fn refresh(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
-        return GenericMessage::error();
+        return "No Jot".text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR);
     };
     let Some(token) = request.headers().get("Authorization") else {
-        return GenericMessage::unauthorized();
+        return "No Authorization header".text_reply_with_code(StatusCode::UNAUTHORIZED);
     };
     let token = token.to_str()?;
     let new_token = jot.refresh_token(token)?;
@@ -139,12 +137,12 @@ async fn refresh(request: Request<Body>) -> Result<Response<Body>, GenericError>
 }
 
 async fn logout(_request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    GenericMessage::not_implemented()
+    "Not implemented".text_reply_with_code(StatusCode::NOT_IMPLEMENTED)
 }
 
 async fn public_key(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
-        return GenericMessage::error();
+        return "No Jot".text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR);
     };
     jot.get_public_key().json_reply()
 }

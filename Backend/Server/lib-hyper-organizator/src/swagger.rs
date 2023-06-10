@@ -20,11 +20,9 @@ mod submodule {
 #[cfg(feature = "swagger")]
 mod submodule {
     use super::*;
-    use crate::response_utils::{
-        GenericMessage, IntoResultHyperResponse, PolymorphicGenericMessage,
-    };
+    use crate::response_utils::{IntoPermanentlyMovedResultHyperResponse, IntoResultHyperResponse};
     use crate::typedef::GenericError;
-    use http::{Request, Response};
+    use http::{Request, Response, StatusCode};
     use hyper::Body;
     use std::sync::Arc;
     use utoipa_swagger_ui::Config;
@@ -67,8 +65,10 @@ mod submodule {
                         .body(Body::from(file.bytes.to_vec()))
                         .unwrap())
                 })
-                .unwrap_or_else(GenericMessage::not_found),
-            Err(error) => GenericMessage::text_reply(error.to_string()),
+                .unwrap_or("swagger file not found".text_reply_with_code(StatusCode::NOT_FOUND)),
+            Err(error) => error
+                .to_string()
+                .text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
 
@@ -155,7 +155,7 @@ mod submodule {
                 is_swagger, is_redirect, self.swagger_path
             );
             let computed_answer = if is_redirect {
-                Some(GenericMessage::moved_permanently(&format!("{}/", path)))
+                Some(format!("{}/", path).moved_permanently())
             } else if is_swagger {
                 if path.ends_with("api-doc.json") {
                     Some(self.json.clone().json_reply())

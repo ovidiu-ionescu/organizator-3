@@ -1,4 +1,4 @@
-use http::{Request, Response};
+use http::{HeaderValue, Request, Response};
 use hyper::{Body, StatusCode};
 use serde::Deserialize;
 use std::error::Error;
@@ -6,174 +6,47 @@ use std::error::Error;
 use crate::typedef::GenericError;
 use futures::StreamExt;
 
-pub struct GenericMessage;
-
-pub trait PolymorphicGenericMessage<T> {
-    fn error() -> T;
-    fn unauthorized() -> T;
-    fn bad_request() -> T;
-    fn json_response<S>(text: S) -> T
-    where
-        Body: From<S>;
-    fn not_implemented() -> T;
-    fn forbidden() -> T;
-    fn not_found() -> T;
-    fn internal_server_error() -> T;
-    fn moved_permanently(location: &str) -> T;
-    fn text<S>(code: StatusCode, s: S) -> T
-    where
-        Body: From<S>;
-}
-
-impl GenericMessage {
-    pub fn text_reply<S>(s: S) -> Result<Response<Body>, GenericError>
-    where
-        Body: From<S>,
-    {
-        Ok(Self::text_message_response(StatusCode::OK, s))
-    }
-
-    fn text_message_response<S>(code: StatusCode, s: S) -> Response<Body>
-    where
-        Body: From<S>,
-    {
-        Response::builder()
-            .status(code)
-            .header("content-type", "text/plain")
-            .header("server", "hyper")
-            .body(Body::from(s))
-            .unwrap()
-    }
-
-    pub fn json_message_response(code: StatusCode, msg: &str) -> Response<Body> {
-        Response::builder()
-            .status(code)
-            .header("content-type", "application/json")
-            .header("server", "hyper")
-            .body(Body::from(format!(
-                r#"{{ "code": {code}, "message": "{msg}" }}"#
-            )))
-            .unwrap()
-    }
-
-    pub fn json_reply<S>(body: S) -> Response<Body>
-    where
-        Body: From<S>,
-    {
-        Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "application/json")
-            .header("server", "hyper")
-            .body(Body::from(body))
-            .unwrap()
-    }
-}
-
-impl PolymorphicGenericMessage<Response<Body>> for GenericMessage {
-    fn unauthorized() -> Response<Body> {
-        Self::json_message_response(StatusCode::UNAUTHORIZED, "Unauthorized")
-    }
-
-    fn error() -> Response<Body> {
-        Self::json_message_response(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-    }
-
-    fn bad_request() -> Response<Body> {
-        Self::json_message_response(StatusCode::BAD_REQUEST, "Bad Request")
-    }
-
-    fn json_response<S>(body: S) -> Response<Body>
-    where
-        Body: From<S>,
-    {
-        Self::json_reply(body)
-    }
-
-    fn not_implemented() -> Response<Body> {
-        Self::json_message_response(StatusCode::NOT_IMPLEMENTED, "Not Implemented")
-    }
-
-    fn forbidden() -> Response<Body> {
-        Self::json_message_response(StatusCode::FORBIDDEN, "Forbidden")
-    }
-
-    fn not_found() -> Response<Body> {
-        Self::json_message_response(StatusCode::NOT_FOUND, "Not Found")
-    }
-
-    fn internal_server_error() -> Response<Body> {
-        Self::json_message_response(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-    }
-
-    fn moved_permanently(location: &str) -> Response<Body> {
-        Response::builder()
-            .status(StatusCode::MOVED_PERMANENTLY)
-            .header("Location", location)
-            .body(Body::empty())
-            .unwrap()
-    }
-
-    fn text<S>(code: StatusCode, s: S) -> Response<Body>
-    where
-        Body: From<S>,
-    {
-        Self::text_message_response(code, s)
-    }
-}
-
-impl PolymorphicGenericMessage<Result<Response<Body>, GenericError>> for GenericMessage {
-    fn error() -> Result<Response<Body>, GenericError> {
-        let e: Response<Body> = Self::error();
-        Ok(e)
-    }
-
-    fn bad_request() -> Result<Response<Body>, GenericError> {
-        Ok(Self::bad_request())
-    }
-
-    fn unauthorized() -> Result<Response<Body>, GenericError> {
-        Ok(Self::unauthorized())
-    }
-
-    fn json_response<S>(body: S) -> Result<Response<Body>, GenericError>
-    where
-        Body: From<S>,
-    {
-        Ok(Self::json_response(body))
-    }
-
-    fn not_implemented() -> Result<Response<Body>, GenericError> {
-        Ok(Self::not_implemented())
-    }
-
-    fn forbidden() -> Result<Response<Body>, GenericError> {
-        Ok(Self::forbidden())
-    }
-
-    fn not_found() -> Result<Response<Body>, GenericError> {
-        Ok(Self::not_found())
-    }
-
-    fn internal_server_error() -> Result<Response<Body>, GenericError> {
-        Ok(Self::internal_server_error())
-    }
-
-    fn moved_permanently(location: &str) -> Result<Response<Body>, GenericError> {
-        Ok(Self::moved_permanently(location))
-    }
-
-    fn text<S>(code: StatusCode, s: S) -> Result<Response<Body>, GenericError>
-    where
-        Body: From<S>,
-    {
-        Ok(Self::text_message_response(code, s))
-    }
-}
-
 /// Utils to let something anything that can turn into a body to be used as a Response
+enum ContentType {
+    Json,
+    Text,
+}
+
+fn make_reply<S>(code: StatusCode, content_type: ContentType, s: S) -> Response<Body>
+where
+    Body: From<S>,
+{
+    Response::builder()
+        .status(code)
+        .header(
+            "content-type",
+            match content_type {
+                ContentType::Json => "application/json; charset=utf-8",
+                ContentType::Text => "text/plain; charset=utf-8",
+            },
+        )
+        .header("server", "hyper")
+        .body(Body::from(s))
+        .unwrap()
+}
+
+fn moved_permanently<V>(location: V) -> Response<Body>
+where
+    HeaderValue: TryFrom<V>,
+    <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+{
+    Response::builder()
+        .status(StatusCode::MOVED_PERMANENTLY)
+        .header("Location", location)
+        .body(Body::empty())
+        .unwrap()
+}
 
 pub trait IntoHyperResponse {
+    fn json_reply_with_code(self, code: StatusCode) -> Response<Body>;
     fn json_reply(self) -> Response<Body>;
+
+    fn text_reply_with_code(self, code: StatusCode) -> Response<Body>;
     fn text_reply(self) -> Response<Body>;
 }
 
@@ -181,17 +54,28 @@ impl<S> IntoHyperResponse for S
 where
     Body: From<S>,
 {
+    fn json_reply_with_code(self, code: StatusCode) -> Response<Body> {
+        make_reply(code, ContentType::Json, self)
+    }
+
     fn json_reply(self) -> Response<Body> {
-        GenericMessage::json_response(self)
+        make_reply(StatusCode::OK, ContentType::Json, self)
+    }
+
+    fn text_reply_with_code(self, code: StatusCode) -> Response<Body> {
+        make_reply(code, ContentType::Text, self)
     }
 
     fn text_reply(self) -> Response<Body> {
-        GenericMessage::text_message_response(StatusCode::OK, self)
+        make_reply(StatusCode::OK, ContentType::Text, self)
     }
 }
 
 pub trait IntoResultHyperResponse {
+    fn json_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError>;
     fn json_reply(self) -> Result<Response<Body>, GenericError>;
+
+    fn text_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError>;
     fn text_reply(self) -> Result<Response<Body>, GenericError>;
 }
 
@@ -199,11 +83,38 @@ impl<S> IntoResultHyperResponse for S
 where
     Body: From<S>,
 {
-    fn json_reply(self) -> Result<Response<Body>, GenericError> {
-        GenericMessage::json_response(self)
+    fn json_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::json_reply_with_code(
+            self, code,
+        ))
     }
+
+    fn json_reply(self) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::json_reply(self))
+    }
+
+    fn text_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::text_reply_with_code(
+            self, code,
+        ))
+    }
+
     fn text_reply(self) -> Result<Response<Body>, GenericError> {
-        Ok(GenericMessage::text_message_response(StatusCode::OK, self))
+        Ok(<Self as IntoHyperResponse>::text_reply(self))
+    }
+}
+
+pub trait IntoPermanentlyMovedResultHyperResponse {
+    fn moved_permanently(self) -> Result<Response<Body>, GenericError>;
+}
+
+impl<V> IntoPermanentlyMovedResultHyperResponse for V
+where
+    HeaderValue: TryFrom<V>,
+    <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+{
+    fn moved_permanently(self) -> Result<Response<Body>, GenericError> {
+        Ok(moved_permanently(self))
     }
 }
 

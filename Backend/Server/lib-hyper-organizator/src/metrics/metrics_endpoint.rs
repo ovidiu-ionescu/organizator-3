@@ -1,16 +1,14 @@
 use std::sync::Arc;
 
 use futures::Future;
-use http::{header::CONTENT_TYPE, Method, Request, Response};
+use http::{header::CONTENT_TYPE, Method, Request, Response, StatusCode};
 use hyper::{Body, Server};
 
 use tower::{make::Shared, ServiceBuilder};
 use tower_http::add_extension::AddExtensionLayer;
 use tracing::{info, trace};
 
-use crate::response_utils::GenericMessage;
-use crate::response_utils::PolymorphicGenericMessage;
-use crate::{settings::Settings, typedef::GenericError};
+use crate::{response_utils::IntoResultHyperResponse, settings::Settings, typedef::GenericError};
 
 use super::prometheus_metrics::PrometheusMetrics;
 use prometheus::{Encoder, TextEncoder};
@@ -37,11 +35,8 @@ async fn metrics_handler(request: Request<Body>) -> Result<Response<Body>, Gener
                 .body(Body::from(buffer))
                 .unwrap())
         }
-        _ => {
-            info!("metrics_handler: no such url in the metrics endpoint");
-            GenericMessage::not_found()
-            //default_reply(request).await
-        }
+        _ => "metrics_handler: no such url in the metrics endpoint"
+            .text_reply_with_code(StatusCode::NOT_FOUND),
     }
 }
 
