@@ -5,7 +5,7 @@ use tracing::{debug, info};
 
 /// Contains various functions that are not yet properly implemented.
 
-pub async fn default_reply(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+pub async fn default_response(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     debug!(
         "Creds: 「{:#?}」, uri:「{}」",
         &request.headers().get("Authorization"),

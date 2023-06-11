@@ -36,7 +36,7 @@ async fn metrics_handler(request: Request<Body>) -> Result<Response<Body>, Gener
                 .unwrap())
         }
         _ => "metrics_handler: no such url in the metrics endpoint"
-            .text_reply_with_code(StatusCode::NOT_FOUND),
+            .to_text_response_with_status(StatusCode::NOT_FOUND),
     }
 }
 

@@ -12,7 +12,7 @@ enum ContentType {
     Text,
 }
 
-fn make_reply<S>(code: StatusCode, content_type: ContentType, s: S) -> Response<Body>
+fn make_response<S>(code: StatusCode, content_type: ContentType, s: S) -> Response<Body>
 where
     Body: From<S>,
 {
@@ -43,64 +43,72 @@ where
 }
 
 pub trait IntoHyperResponse {
-    fn json_reply_with_code(self, code: StatusCode) -> Response<Body>;
-    fn json_reply(self) -> Response<Body>;
+    fn to_json_response_with_status(self, code: StatusCode) -> Response<Body>;
+    fn to_json_response(self) -> Response<Body>;
 
-    fn text_reply_with_code(self, code: StatusCode) -> Response<Body>;
-    fn text_reply(self) -> Response<Body>;
+    fn to_text_response_with_status(self, code: StatusCode) -> Response<Body>;
+    fn to_text_response(self) -> Response<Body>;
 }
 
 impl<S> IntoHyperResponse for S
 where
     Body: From<S>,
 {
-    fn json_reply_with_code(self, code: StatusCode) -> Response<Body> {
-        make_reply(code, ContentType::Json, self)
+    fn to_json_response_with_status(self, code: StatusCode) -> Response<Body> {
+        make_response(code, ContentType::Json, self)
     }
 
-    fn json_reply(self) -> Response<Body> {
-        make_reply(StatusCode::OK, ContentType::Json, self)
+    fn to_json_response(self) -> Response<Body> {
+        make_response(StatusCode::OK, ContentType::Json, self)
     }
 
-    fn text_reply_with_code(self, code: StatusCode) -> Response<Body> {
-        make_reply(code, ContentType::Text, self)
+    fn to_text_response_with_status(self, code: StatusCode) -> Response<Body> {
+        make_response(code, ContentType::Text, self)
     }
 
-    fn text_reply(self) -> Response<Body> {
-        make_reply(StatusCode::OK, ContentType::Text, self)
+    fn to_text_response(self) -> Response<Body> {
+        make_response(StatusCode::OK, ContentType::Text, self)
     }
 }
 
 pub trait IntoResultHyperResponse {
-    fn json_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError>;
-    fn json_reply(self) -> Result<Response<Body>, GenericError>;
+    fn to_json_response_with_status(self, code: StatusCode)
+        -> Result<Response<Body>, GenericError>;
+    fn to_json_response(self) -> Result<Response<Body>, GenericError>;
 
-    fn text_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError>;
-    fn text_reply(self) -> Result<Response<Body>, GenericError>;
+    fn to_text_response_with_status(self, code: StatusCode)
+        -> Result<Response<Body>, GenericError>;
+    fn to_text_response(self) -> Result<Response<Body>, GenericError>;
 }
 
 impl<S> IntoResultHyperResponse for S
 where
     Body: From<S>,
 {
-    fn json_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError> {
-        Ok(<Self as IntoHyperResponse>::json_reply_with_code(
+    fn to_json_response_with_status(
+        self,
+        code: StatusCode,
+    ) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::to_json_response_with_status(
             self, code,
         ))
     }
 
-    fn json_reply(self) -> Result<Response<Body>, GenericError> {
-        Ok(<Self as IntoHyperResponse>::json_reply(self))
+    fn to_json_response(self) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::to_json_response(self))
     }
 
-    fn text_reply_with_code(self, code: StatusCode) -> Result<Response<Body>, GenericError> {
-        Ok(<Self as IntoHyperResponse>::text_reply_with_code(
+    fn to_text_response_with_status(
+        self,
+        code: StatusCode,
+    ) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::to_text_response_with_status(
             self, code,
         ))
     }
 
-    fn text_reply(self) -> Result<Response<Body>, GenericError> {
-        Ok(<Self as IntoHyperResponse>::text_reply(self))
+    fn to_text_response(self) -> Result<Response<Body>, GenericError> {
+        Ok(<Self as IntoHyperResponse>::to_text_response(self))
     }
 }
 

@@ -9,7 +9,7 @@ use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::typedef::GenericError;
-use lib_hyper_organizator::under_construction::default_reply;
+use lib_hyper_organizator::under_construction::default_response;
 use regex::Regex;
 use tokio_postgres::Error as PgError;
 
@@ -49,7 +49,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::GET, path) if EXPLICIT_PERMISSIONS.is_match(path) => {
             get_explicit_permissions(&request).await
         }
-        _ => default_reply(request).await,
+        _ => default_response(request).await,
     }
 }
 
@@ -122,18 +122,20 @@ fn build_json_response<T: serde::Serialize>(
     data_result: Result<T, PgError>,
 ) -> Result<Response<Body>, GenericError> {
     match data_result {
-        Ok(data) => serde_json::to_string(&data)?.json_reply(),
+        Ok(data) => serde_json::to_string(&data)?.to_json_response(),
         Err(e) if e.code().is_some() => match e.code().unwrap().code() {
-            "2F004" => "Data access forbidden".text_reply_with_code(StatusCode::FORBIDDEN),
-            "28000" => "Data access unauthorized".text_reply_with_code(StatusCode::UNAUTHORIZED),
-            "02000" => "No data found".text_reply_with_code(StatusCode::NOT_FOUND),
+            "2F004" => "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN),
+            "28000" => {
+                "Data access unauthorized".to_text_response_with_status(StatusCode::UNAUTHORIZED)
+            }
+            "02000" => "No data found".to_text_response_with_status(StatusCode::NOT_FOUND),
             _ => e
                 .to_string()
-                .text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR),
+                .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
         },
         Err(x) => x
             .to_string()
-            .text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR),
+            .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

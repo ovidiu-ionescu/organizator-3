@@ -65,10 +65,12 @@ mod submodule {
                         .body(Body::from(file.bytes.to_vec()))
                         .unwrap())
                 })
-                .unwrap_or("swagger file not found".text_reply_with_code(StatusCode::NOT_FOUND)),
+                .unwrap_or(
+                    "swagger file not found".to_text_response_with_status(StatusCode::NOT_FOUND),
+                ),
             Err(error) => error
                 .to_string()
-                .text_reply_with_code(StatusCode::INTERNAL_SERVER_ERROR),
+                .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
 
@@ -158,7 +160,7 @@ mod submodule {
                 Some(format!("{}/", path).moved_permanently())
             } else if is_swagger {
                 if path.ends_with("api-doc.json") {
-                    Some(self.json.clone().json_reply())
+                    Some(self.json.clone().to_json_response())
                 } else {
                     Some(get_swagger_ui(
                         &path[self.swagger_path.len()..],

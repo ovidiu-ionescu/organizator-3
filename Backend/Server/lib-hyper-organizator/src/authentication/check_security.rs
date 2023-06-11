@@ -40,7 +40,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             .extensions()
             .get::<Arc<Jot>>()
             else {
-                return Err("No Jot in the request".text_reply_with_code(StatusCode::UNAUTHORIZED));
+                return Err("No Jot in the request".to_text_response_with_status(StatusCode::UNAUTHORIZED));
             };
         if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
@@ -54,7 +54,7 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
             request.extensions_mut().insert(user_id);
             Ok(())
         } else {
-            Err("Unauthorized request".text_reply_with_code(StatusCode::UNAUTHORIZED))
+            Err("Unauthorized request".to_text_response_with_status(StatusCode::UNAUTHORIZED))
         }
     }
 }
