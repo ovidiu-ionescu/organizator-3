@@ -64,7 +64,10 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
     if request
         .headers()
         .get(SSL_HEADER_VERIFY)
-        .and_then(|s| if s == "SUCCESS" { Some(()) } else { None })
+        .and_then(|s| if s == "SUCCESS" { Some(()) } else {
+            info!("Content of {SSL_HEADER_DN} is {:?} instead of SUCCESS", s);
+            None 
+        })
         .is_none()
     {
         info!("SSL verification failed");
@@ -158,6 +161,8 @@ mod tests {
     // Test using the header set by Nginx from a client certificate
     #[tokio::test]
     async fn integration_test() -> Result<(), Error> {
+        pretty_env_logger::init();
+
         let mut service = ServiceBuilder::new()
             .layer(AddExtensionLayer::new(Arc::new(
                 Jot::new(&SecurityConfig::default()).await.unwrap(),
