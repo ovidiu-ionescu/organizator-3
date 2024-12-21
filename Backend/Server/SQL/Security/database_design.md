@@ -48,9 +48,45 @@ set session "organizator.current_user" = 1;
 ```
 This should filter the rows that can be selected in the memo table.
 
-- [ ] A function should be created so that the id is set based on the user name.
-- [ ] Add security policy so that a user can modify its own memos.
-- [ ] Add security policy so that a user can modify memos in the groups it is in.
+Create a function to set the current user in the session.
+```sql 
+CREATE OR REPLACE FUNCTION set_current_user(p_username VARCHAR(255)) RETURNS VOID AS $$
+DECLARE
+    user_id INT;
+BEGIN
+    -- Look up the user's ID in the users table
+    SELECT id INTO user_id FROM users WHERE username = p_username;
+    
+    -- Check if the user exists
+    IF user_id IS NULL THEN
+        RAISE EXCEPTION 'User % not found', username;
+    END IF;
+    
+    -- Set the session variable
+    PERFORM set_config('organizator.current_user', user_id::TEXT, false);
+END;
+$$ LANGUAGE plpgsql;
+```
+Example usage:
+```sql
+SELECT set_current_user('admin'); SELECT * FROM memo;
+```
+
+Policy allowing owner to modify their own memos:
+```sql
+CREATE POLICY update_policy_owner ON memo
+FOR UPDATE
+USING (user_id = current_setting('organizator.current_user')::int);
+```
+
+We can not use row level security to restrict the columns that can be updated.\
+For that is necessary to use a trigger.
+
+- [x] A function should be created so that the id is set based on the user name.
+- [x] Add security policy so that a user can modify its own memos.
+- [ ] Add security policy so that a user can modify memos in the groups it is in but only the body.
+- [ ] Add a trigger that will update the savetime saveuser_id when the memo is saved
+- [ ] Enhance the trigger to save a copy of the memo into the memo_history table.
 
 
 
