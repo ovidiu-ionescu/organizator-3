@@ -15,4 +15,6 @@ Technologies in use:
   - Browser
   - TypeScript
   - WebComponents
+  - WebAssembly
+  
 
