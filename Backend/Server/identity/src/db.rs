@@ -2,13 +2,13 @@ use deadpool_postgres::Client;
 use lib_hyper_organizator::typedef::GenericError;
 use serde::Serialize;
 use tokio_postgres::Row;
+use tracing::debug;
 
 #[derive(Serialize, Debug)]
 pub struct Login {
     pub id:       i32,
     pub username: Option<String>,
-    pub salt:     Vec<u8>,
-    pub pbkdf2:   Vec<u8>,
+    pub password_hash: Option<String>,
 }
 
 impl From<Row> for Login {
@@ -16,14 +16,13 @@ impl From<Row> for Login {
         Login {
             id:       row.get("id"),
             username: row.get("username"),
-            pbkdf2:   row.get("pbkdf2"),
-            salt:     row.get("salt"),
+            password_hash: row.get("password_hash"),
         }
     }
 }
 
 pub async fn fetch_login(client: &Client, username: &str) -> Result<Login, GenericError> {
-    let stmt = client.prepare(include_str!("sql/login.sql")).await?;
+    let stmt = client.prepare_cached(include_str!("sql/login.sql")).await?;
     let row = client.query_one(&stmt, &[&username]).await?;
     Ok(Login::from(row))
 }
@@ -32,14 +31,21 @@ pub async fn update_password(
     db_client: &Client,
     requester: &str,
     username: &str,
-    salt: &[u8],
-    pbkdf2: &[u8],
+    password_hash: &str,
 ) -> Result<(), GenericError> {
+    debug!("Setting requester to {}", requester);
+    let set_requester = db_client.prepare_cached(include_str!("sql/set_requester.sql")).await?;
+    db_client.execute(&set_requester, &[&requester]).await?;
+    debug!("Updating password for {}", username);
     let stmt = db_client
-        .prepare(include_str!("sql/update_password.sql"))
+        .prepare_cached(include_str!("sql/update_password.sql"))
         .await?;
-    db_client
-        .execute(&stmt, &[&requester, &username, &pbkdf2, &salt])
+    let rows = db_client
+        .execute(&stmt, &[&password_hash, &username])
         .await?;
+    if rows == 0 {
+      let err = format!("No rows updated when updating password for user 「{}」", username);
+        return Err(GenericError::from(err));
+    }
     Ok(())
 }

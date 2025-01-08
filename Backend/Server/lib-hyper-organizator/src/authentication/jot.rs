@@ -17,6 +17,7 @@ pub struct Claims {
     pub exp: u64,
 }
 
+// jot is the official pronunciation of JWT
 pub struct Jot {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,

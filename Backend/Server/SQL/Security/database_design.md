@@ -85,9 +85,35 @@ For that is necessary to use a trigger.
 - [x] A function should be created so that the id is set based on the user name.
 - [x] Add security policy so that a user can modify its own memos.
 - [ ] Add security policy so that a user can modify memos in the groups it is in but only the body.
-- [ ] Add a trigger that will update the savetime saveuser_id when the memo is saved
+- [ ] Add a trigger that will update the savetime, saveuser_id when the memo is saved
 - [ ] Enhance the trigger to save a copy of the memo into the memo_history table.
 
+## Passwords
+Start using argon2 for password hashing.\
 
+Policy allowing user to update their own password. Root (id=1) can update any password.
+```sql
+-- we use the table owner as the user so security is enforced
+ALTER TABLE users FORCE ROW LEVEL SECURITY;
 
+-- everybody can select
+DROP POLICY IF EXISTS select_policy ON users;
+CREATE POLICY select_policy on users
+FOR SELECT USING(true)
+
+DROP POLICY IF EXISTS update_policy ON users;
+CREATE POLICY update_policy ON users
+FOR UPDATE
+USING (current_setting('organizator.current_user')::int in (id, 1));
+
+DROP POLICY IF EXISTS insert_policy ON users;
+CREATE POLICY insert_policy ON users
+FOR INSERT
+USING (current_setting('organizator.current_user')::int = 1);
+```
+
+Can check with:
+```sql
+select set_current_user('admin'); update users set password_hash = 'bha' where username = 'regular';
+```
 

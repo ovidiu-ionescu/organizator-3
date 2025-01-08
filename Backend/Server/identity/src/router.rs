@@ -6,12 +6,16 @@ use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{parse_body, IntoResultHyperResponse};
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
-use ring::{digest::SHA512_OUTPUT_LEN, pbkdf2};
 use serde::Deserialize;
-use std::num::NonZeroU32;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 use utoipa::ToSchema;
+use argon2::{
+  password_hash::{
+    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+  },
+  Argon2,
+};
 
 use crate::db::{self, fetch_login, Login};
 
@@ -63,17 +67,19 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
 }
 
 pub fn verify_password(password: &str, login: &Login) -> bool {
-    let n_iter = NonZeroU32::new(100_000).unwrap();
-
-    let should_succeed = pbkdf2::verify(
-        pbkdf2::PBKDF2_HMAC_SHA512,
-        n_iter,
-        &login.salt,
-        password.as_bytes(),
-        &login.pbkdf2,
-    );
-
-    should_succeed.is_ok()
+  if let Some(password_hash_string) = &login.password_hash {
+    let password_hash = PasswordHash::new(password_hash_string).unwrap();
+    let ok = Argon2::default().verify_password(password.as_bytes(), &password_hash).is_ok();
+    if ok {
+      info!("Password for user 「{:?}」is correct", login.username);
+    } else {
+      warn!("Password hash found for user 「{:?}」 but password is incorrect", login.username);
+    }
+    ok
+  } else {
+    warn!("No password hash found for user 「{:?}」", login.username);
+    false
+  }
 }
 
 #[derive(Deserialize, Debug, Clone, ToSchema)]
@@ -101,25 +107,16 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
     }
 
     // compute the new password hash and salt
-    let salt = ring::rand::SystemRandom::new();
-    let mut salt_bytes = [0u8; SHA512_OUTPUT_LEN];
-    ring::rand::SecureRandom::fill(&salt, &mut salt_bytes)?;
-    let n_iter = NonZeroU32::new(100_000).unwrap();
-    let mut pbkdf2_bytes = [0u8; SHA512_OUTPUT_LEN];
-    pbkdf2::derive(
-        pbkdf2::PBKDF2_HMAC_SHA512,
-        n_iter,
-        &salt_bytes,
-        form.new_password.as_bytes(),
-        &mut pbkdf2_bytes,
-    );
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2.hash_password(form.new_password.as_bytes(), &salt)?.to_string();
 
     // use the form username if supplied and not empty, otherwise use the requester
     let username = match form.username {
         Some(ref username) if !username.is_empty() => username,
         _ => requester,
     };
-    db::update_password(&client, requester, username, &salt_bytes, &pbkdf2_bytes).await?;
+    db::update_password(&client, requester, username, &password_hash).await?;
     info!("User 「{requester}」 updated password for 「{username}」");
     "Password updated".to_text_response()
 }

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-reset; RUST_LOG=info cargo run --release
+reset; RUST_LOG=trace cargo run --release

@@ -2,9 +2,9 @@ api_ip = "0.0.0.0:8080"
 swagger_path = "/swagger"
 
 [postgres]
-host = "organizator-postgresql"
+host = "orgdb.lab"
 port = 5432
-user = "postgres"
+user = "organizator_prod"
 dbname = "organizator_prod"
 #application_name = "Identity Service"
 # password comes from the environment variable POSTGRES_PASSWORD

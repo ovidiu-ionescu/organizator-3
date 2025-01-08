@@ -1,9 +1,9 @@
+//! Contains various functions that are not yet properly implemented.
+//!
 use crate::typedef::GenericError;
 use http::{Request, Response, StatusCode};
 use hyper::Body;
 use tracing::{debug, info};
-
-/// Contains various functions that are not yet properly implemented.
 
 pub async fn default_response(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     debug!(

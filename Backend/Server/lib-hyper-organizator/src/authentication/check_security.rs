@@ -61,21 +61,24 @@ impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
 
 fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
     trace!("Check if the certificate verification was successful");
-    if request
-        .headers()
-        .get(SSL_HEADER_VERIFY)
-        .and_then(|s| if s == "SUCCESS" { Some(()) } else {
-            info!("Content of {SSL_HEADER_DN} is {:?} instead of SUCCESS", s);
-            None 
-        })
-        .is_none()
-    {
-        info!("SSL verification failed");
-        return None;
+    match request.headers().get(SSL_HEADER_VERIFY) {
+        Some(s) if s == "SUCCESS" => (),
+        Some(s) => {
+            info!("Content of {SSL_HEADER_VERIFY} is {:?} instead of SUCCESS, SSL verification failed", s);
+            return None;
+        }
+        None => {
+            info!("No {SSL_HEADER_VERIFY} header, can not allow access without SSL verification");
+            return None;
+        }
     }
     trace!("Check if the DN is present");
     match request.headers().get(SSL_HEADER_DN).map(|s| s.to_str()) {
         Some(Ok(dn)) if dn.len() > 3 && &dn[0..3] == "CN=" => Some(UserId(dn[3..].to_string())),
+        Some(Ok(dn)) => {
+            info!("Invalid DN: 「{}」", dn);
+            None
+        }
         _ => None,
     }
 }

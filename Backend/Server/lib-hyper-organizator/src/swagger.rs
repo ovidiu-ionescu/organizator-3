@@ -38,7 +38,7 @@ mod submodule {
 
     pub fn get_swagger_urls(path: &str) -> Vec<String> {
         let path = format!("{}{}", path, if path.ends_with('/') { "" } else { "/" });
-        vec![
+        [
             "",
             "api-doc.json",
             "index.css",

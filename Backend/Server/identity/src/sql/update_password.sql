@@ -1,2 +1,1 @@
-select update_password($1, $2, $3, $4);
-
+update users set password_hash = $1 where username = $2;
