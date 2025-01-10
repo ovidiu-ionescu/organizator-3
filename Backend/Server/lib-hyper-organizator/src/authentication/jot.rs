@@ -9,7 +9,7 @@ use jsonwebtoken::{
 use ring::rand::SystemRandom;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::{debug, info, error};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -145,7 +145,14 @@ impl Jot {
         let client: Client<HttpConnector> = Client::builder().build_http();
 
         let uri = public_key_url.parse()?;
-        let response = client.get(uri).await?;
+        let response = match client.get(uri).await {
+            Ok(response) => response,
+            Err(e) => {
+              let msg = format!("Failed to get public key from identity service: {}", e);
+              error!("{msg}");
+                return Err(GenericError::from(msg));
+            }
+        };
         // asynchronously aggregate all the chunks of the body
         let body = hyper::body::aggregate(response).await?;
         // parse into a PublicKey struct

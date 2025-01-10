@@ -1,0 +1,8 @@
+run_debug:
+  reset; RUST_LOG=hyper-organizator=trace,lib_hyper_organizator=trace,tower_http::trace=trace,tokio_postgres::prepare=trace,tokio_postgres::query=trace cargo run
+
+run_debug_all:
+  resetl RUST_LOG=trace cargo run
+
+run:
+  reset; RUST_LOG=trace cargo run --release
