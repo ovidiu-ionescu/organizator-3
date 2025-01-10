@@ -12,4 +12,5 @@ Old/
 tmp/
 **/Docker/hyper-organizator
 Secrets
+.idea
 

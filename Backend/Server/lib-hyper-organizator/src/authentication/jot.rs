@@ -148,7 +148,7 @@ impl Jot {
         let response = match client.get(uri).await {
             Ok(response) => response,
             Err(e) => {
-              let msg = format!("Failed to get public key from identity service: {}", e);
+              let msg = format!("Failed to get public key from identity service 「{public_key_url}」: {e}");
               error!("{msg}");
                 return Err(GenericError::from(msg));
             }
