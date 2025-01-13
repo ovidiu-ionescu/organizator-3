@@ -1,6 +1,10 @@
 use crate::db;
 use crate::model::ExplicitPermission;
 use crate::model::GetMemo;
+use crate::model::Memo;
+use crate::model::Named;
+use crate::model::Requester;
+use crate::model::User;
 use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
@@ -10,7 +14,9 @@ use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
+use log::debug;
 use regex::Regex;
+use serde_json::json;
 use tokio_postgres::Error as PgError;
 
 /*
@@ -62,14 +68,14 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
     ),
 )]
 async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, username) = get_client_and_user(request).await?;
+    let (client, requester) = get_client_and_user(request).await?;
 
     let path = request.uri().path();
     let captures = MEMO_GET.captures(path).unwrap();
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
-    let memo: Result<GetMemo, _> = db::get_single(&client, &[&memo_id, &username]).await;
-
-    build_json_response(memo)
+    let memo: Result<Memo, _> = db::get_single(&client, &[&memo_id]).await;
+    
+    build_json_response(memo, requester)
 }
 
 #[utoipa::path(get, path="/memogroup",
@@ -78,12 +84,12 @@ async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericErro
     ),
 )]
 async fn get_memogroups_for_user(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, username) = get_client_and_user(request).await?;
+    let (client, requester) = get_client_and_user(request).await?;
 
     let memo_group: Result<Vec<crate::model::MemoGroup>, _> =
-        db::get_multiple(&client, &[&username]).await;
+        db::get_multiple(&client, &[&requester.username]).await;
 
-    build_json_response(memo_group)
+    build_json_response(memo_group, requester)
 }
 
 #[utoipa::path(get, path="/explicit_permissions/{id}",
@@ -95,34 +101,47 @@ async fn get_memogroups_for_user(request: &Request<Body>) -> Result<Response<Bod
     ),
 )]
 async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, username) = get_client_and_user(request).await?;
+    let (client, requester) = get_client_and_user(request).await?;
 
     let path = request.uri().path();
     let captures = EXPLICIT_PERMISSIONS.captures(path).unwrap();
     let memogroup_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
     let permissions: Result<Vec<ExplicitPermission>, _> =
-        db::get_multiple(&client, &[&memogroup_id, &username]).await;
+        db::get_multiple(&client, &[&memogroup_id, &requester.username]).await;
 
-    build_json_response(permissions)
+    build_json_response(permissions, requester)
 }
 
 async fn get_client_and_user(
     request: &Request<Body>,
-) -> Result<(deadpool_postgres::Client, &str), GenericError> {
+) -> Result<(deadpool_postgres::Client, Requester), GenericError> {
     let client = get_connection(request).await?;
     // get the current logged in user from the request
-    let Some(user_id) = request.extensions().get::<UserId>() else {
+    let Some(user_identification) = request.extensions().get::<UserId>() else {
         return Err(GenericError::from("No user found in request, this should not happen"));
     };
-    let username = &user_id.0;
-    Ok((client, username))
+    let username = &user_identification.0;
+
+    let set_var = client.prepare_cached(include_str!("sql/set_current_user.sql")).await?;
+    let result = client.query_one(&set_var, &[&username]).await?;
+    let user_id = result.get::<_, i32>(0);
+    debug!("User id for {username} is {user_id}");
+
+    Ok((client, Requester { id: user_id, username }))
 }
 
-fn build_json_response<T: serde::Serialize>(
+fn build_json_response<T: serde::Serialize + Named>(
     data_result: Result<T, PgError>,
+    requester: Requester,
 ) -> Result<Response<Body>, GenericError> {
     match data_result {
-        Ok(data) => serde_json::to_string(&data)?.to_json_response(),
+        Ok(data) => {
+          let result = json!({
+            T::name(): data,
+            "requester": requester,
+          });
+          serde_json::to_string(&result)?.to_json_response()
+        },
         Err(e) if e.code().is_some() => match e.code().unwrap().code() {
             "2F004" => "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN),
             "28000" => {
@@ -142,8 +161,7 @@ fn build_json_response<T: serde::Serialize>(
 pub use swagger::swagger_json;
 mod swagger {
     use crate::model::{
-        ExplicitPermission, GetMemo, GetWriteMemo, Memo, MemoGroup, MemoGroupList, MemoTitle,
-        MemoTitleList, MemoUser, User,
+        ExplicitPermission, GetMemo, GetWriteMemo, Memo, MemoGroup, MemoGroupList, MemoTitle, MemoTitleList, MemoUser, Requester, User
     };
     use utoipa::{
         openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
@@ -165,6 +183,7 @@ mod swagger {
             MemoTitleList,
             MemoUser,
             User,
+            Requester,
           ),
         ),
         modifiers(&SecurityAddonBearer),

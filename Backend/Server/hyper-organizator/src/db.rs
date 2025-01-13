@@ -1,3 +1,5 @@
+//! Converts the database rows into the model structs.
+
 use crate::model::DBPersistence;
 use deadpool_postgres::Client;
 use tokio_postgres::{types::ToSql, Error, Row};

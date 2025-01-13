@@ -6,10 +6,26 @@ pub trait DBPersistence {
     fn query() -> &'static str;
 }
 
+pub trait Named {
+    fn name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}
+
+pub trait HasRequester {
+    fn add_requester(&mut self, requester: Requester) -> Self;
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct User {
     pub id:       i32,
     pub username: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct Requester<'a> {
+    pub id:       i32,
+    pub username: &'a str,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -69,43 +85,42 @@ pub struct MemoUser {
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct GetMemo {
+pub struct GetMemo<'a> {
     memo: Memo,
-    user: MemoUser,
+    requester: Option<Requester<'a>>,
 }
 
-impl From<Row> for GetMemo {
+impl From<Row> for Memo {
     fn from(row: Row) -> Self {
-        let group_id: Option<i32> = row.get("o_memo_group_id");
+      // display all field names to make sure they are correct
+      println!("{:?}", row.columns());
+        let group_id: Option<i32> = row.get("group_id");
         let memo_group = group_id.map(|id| MemoGroup {
             id,
-            name: row.get("o_memo_group_name"),
+            name: row.get("group_name"),
         });
 
         Self {
-            memo: Memo {
-                id:        row.get("o_id"),
-                title:     row.get("o_title"),
-                memotext:  row.get("o_memotext"),
-                savetime:  row.get("o_savetime"),
+                id:        row.get("id"),
+                title:     row.get("title"),
+                memotext:  row.get("memotext"),
+                savetime:  row.get("savetime"),
                 memogroup: memo_group,
                 user:      MemoUser {
-                    id:   row.get("o_user_id"),
-                    name: row.get("o_username"),
+                    id:   row.get("user_id"),
+                    name: row.get("username"),
                 },
-            },
-            user: MemoUser {
-                id:   row.get("o_requester_id"),
-                name: row.get("o_requester_name"),
-            },
         }
     }
 }
 
-impl DBPersistence for GetMemo {
+impl DBPersistence for Memo {
     fn query() -> &'static str {
         include_str!("sql/get_memo.sql")
     }
+}
+
+impl Named for Memo {
 }
 
 #[derive(Serialize, ToSchema)]
@@ -176,4 +191,16 @@ impl DBPersistence for ExplicitPermission {
     fn query() -> &'static str {
         include_str!("sql/get_explicit_memo_permissions.sql")
     }
+}
+
+impl Named for Vec<MemoGroup> {
+  fn name() -> &'static str {
+    "MemoGroupList"
+  }
+}
+
+impl Named for Vec<ExplicitPermission> {
+  fn name() -> &'static str {
+    "ExplicitPermissionList"
+  }
 }

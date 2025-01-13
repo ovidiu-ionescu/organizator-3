@@ -1,13 +1,18 @@
 api_ip = "0.0.0.0:8082"
 metrics_ip = "0.0.0.0:3002"
+swagger_path = "/swagger"
 
 [postgres]
-host = "organizator-postgresql"
+host = "orgdb.lab"
 port = 5432
-user = "postgres"
+user = "organizator_prod"
 dbname = "organizator_prod"
+# password comes from the environment variable POSTGRES_PASSWORD
 
 [security]
 public_key_url = "http://localhost:8080/public"
-
-
+ignore = [ 
+"/public",
+"/swagger",
+"/swagger/api-doc.json",
+]

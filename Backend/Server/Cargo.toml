@@ -54,7 +54,8 @@ prometheus = "0.13"
 
 toml = "0.5"
 
-deadpool-postgres = "0.10"
+deadpool = { version = "0", features = ["managed"] }
+deadpool-postgres = "0"
 tokio-postgres = "0.7"
 
 lib-hyper-organizator = { path = "lib-hyper-organizator" }

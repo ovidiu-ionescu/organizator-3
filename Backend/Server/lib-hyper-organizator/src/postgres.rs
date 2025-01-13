@@ -20,14 +20,60 @@ mod submodule {
 
 #[cfg(feature = "postgres")]
 mod submodule {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
     use super::*;
     use crate::typedef::GenericError;
-    use deadpool_postgres::Client;
-    use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
+    use deadpool_postgres::{Client, Metrics};
+    use deadpool_postgres::{ClientWrapper, Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
     use http::Request;
     use tokio_postgres::NoTls;
     use tower_http::add_extension::AddExtensionLayer;
     use tower_layer::Stack;
+
+    // we want to keep track of what variables are set in the session to save trips to the database
+    #[derive(Debug)]
+    pub struct OrgClientWrapper {
+      client: ClientWrapper,
+      set_vars: Arc<Mutex<HashMap<String, String>>>,
+    }
+
+    impl OrgClientWrapper {
+      async fn new(client: ClientWrapper) -> Self {
+        OrgClientWrapper {
+          client,
+          set_vars: Arc::new(Mutex::new(HashMap::new())),
+        }
+      }
+
+      async fn set_var(&self, key: String, value: String) {
+        let mut set_vars = self.set_vars.lock().unwrap();
+        // check if the value exists and only update if it has changed
+        if set_vars.get(&key) != Some(&value) {
+          self.client.execute("SET SESSION $1 = $2", &[&key, &value]).await.unwrap();
+          set_vars.insert(key, value);
+        }
+      }
+    }
+
+    struct OrgManager {
+      inner: deadpool_postgres::Manager,
+    }
+
+    impl deadpool::managed::Manager for OrgManager {
+      type Type = OrgClientWrapper;
+      type Error = tokio_postgres::Error;
+
+      async fn create(&self) -> Result<Self::Type, Self::Error> {
+        let client = self.inner.create().await?;
+        Ok(OrgClientWrapper::new(client).await)
+      }
+
+      async fn recycle(&self, conn: &mut OrgClientWrapper, metrics: &Metrics) -> deadpool::managed::RecycleResult<Self::Error> {
+        self.inner.recycle(&mut conn.client, metrics).await
+      }
+    }
 
     pub async fn add_database<L>(
         service_builder: ServiceBuilder<L>,
