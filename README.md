@@ -1,20 +1,7 @@
-# Intro
+# Organizator 3
 
-This is another rewrite of Organizator. Mainly moving from actix-web to hyper.
+Organizator is a privacy preserving data management system.
 
-Technologies in use:
+Currently it is being rewritten using newer technologies and a more modular approach.
 
-- Server
-  - Postgres
-  - Rust
-  - Hyper
-  - Tower
-  - Nginx
-
-- Client
-  - Browser
-  - TypeScript
-  - WebComponents
-  - WebAssembly
-  
-
+The documentation is [here](https://github.com/ovidiu-ionescu/organizator-3)
