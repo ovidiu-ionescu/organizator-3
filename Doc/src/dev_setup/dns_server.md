@@ -11,4 +11,8 @@ DNS Stub server.
 
 resolvectl is used split the DNS queries between the DNS Stub server and the regular
 DNS server. For the development servers, the suffix _.lab_ is used.
-So the Postgres server will be _orgdb.lab_.
+
+- Postgres server: _orgdb.lab_
+- identity server: _identity-organizator.lab_
+- application server: _hyper-organizator.lab_
+- Nginx server: _organizator.lab_

@@ -1,0 +1,8 @@
+
+# See the book in browser
+serve:
+  mdbook serve
+
+# Install mdbook
+install:
+  cargo install mdbook
