@@ -62,8 +62,16 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     };
     let new_token: String = jot.generate_token(&form.username)?;
     info!("User 「{}」 logged in", &form.username);
-
-    new_token.to_text_response()
+    let cookie = format!("__Host-jwt={}; HttpOnly; Secure; SameSite=Strict; Path=/;", new_token);
+    
+    Ok(Response::builder()
+        .status(StatusCode::NO_CONTENT)
+        .header("content-type", "text/plain; charset=utf-8")
+        .header("Set-Cookie", cookie)
+        .header("server", "hyper")
+        .body(Body::empty())
+        //.body(Body::from(new_token))
+        .unwrap())
 }
 
 pub fn verify_password(password: &str, login: &Login) -> bool {

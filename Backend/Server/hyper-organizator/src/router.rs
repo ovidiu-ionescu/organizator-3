@@ -1,7 +1,7 @@
 use crate::db;
 use crate::model::ExplicitPermission;
-use crate::model::GetMemo;
 use crate::model::Memo;
+use crate::model::MemoTitle;
 use crate::model::Named;
 use crate::model::Requester;
 use crate::model::User;
@@ -52,6 +52,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
     match (request.method(), request.uri().path()) {
         (&Method::GET, path) if MEMO_GET.is_match(path) => get_memo(&request).await,
         (&Method::GET, "/memogroup") => get_memogroups_for_user(&request).await,
+        (&Method::GET, "/memo/") => get_memo_titles(&request).await,
         (&Method::GET, path) if EXPLICIT_PERMISSIONS.is_match(path) => {
             get_explicit_permissions(&request).await
         }
@@ -61,7 +62,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
 
 #[utoipa::path(get, path="/memo/{id}",
     responses(
-        (status=200, description="Memo", body=GetMemo),
+        (status=200, description="Memo", body=Memo),
     ),
     params(
         ("id" = i32, Path, description="Memo id"),
@@ -112,6 +113,20 @@ async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Bo
     build_json_response(permissions, requester)
 }
 
+#[utoipa::path(get, path="/memo/",
+    responses(
+        (status=200, description="Memo titles for current logged in user", body=MemoTitleList),
+    ),
+)]
+async fn get_memo_titles(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, requester) = get_client_and_user(request).await?;
+
+    let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[]).await;
+
+    build_json_response(memo_titles, requester)
+}
+
+/// Fetch the database connection and the current user from the request.
 async fn get_client_and_user(
     request: &Request<Body>,
 ) -> Result<(deadpool_postgres::Client, Requester), GenericError> {
@@ -161,7 +176,7 @@ fn build_json_response<T: serde::Serialize + Named>(
 pub use swagger::swagger_json;
 mod swagger {
     use crate::model::{
-        ExplicitPermission, GetMemo, GetWriteMemo, Memo, MemoGroup, MemoGroupList, MemoTitle, MemoTitleList, MemoUser, Requester, User
+        ExplicitPermission, GetWriteMemo, Memo, MemoGroup, MemoGroupList, MemoTitle, MemoTitleList, MemoUser, Requester, User
     };
     use utoipa::{
         openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
@@ -174,7 +189,6 @@ mod swagger {
         components(
           schemas(
             ExplicitPermission,
-            GetMemo,
             GetWriteMemo,
             Memo,
             MemoGroup,

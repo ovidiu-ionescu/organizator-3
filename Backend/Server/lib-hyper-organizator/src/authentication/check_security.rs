@@ -115,7 +115,10 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
                 None
             }
         }
-        _ => None,
+        _ => {
+          trace!("No {} header found", AUTHORIZATION);
+          None
+        },
     }
 }
 

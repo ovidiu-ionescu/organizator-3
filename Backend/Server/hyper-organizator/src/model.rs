@@ -1,11 +1,15 @@
+use log::trace;
 use serde::Serialize;
 use tokio_postgres::row::Row;
 use utoipa::ToSchema;
 
+/// This trait is used to define the SQL query that is used to fetch the data from the database.
 pub trait DBPersistence {
     fn query() -> &'static str;
 }
 
+/// This trait is used to define the name in the JSON response of the type.
+/// "my_name": { ... }
 pub trait Named {
     fn name() -> &'static str {
         std::any::type_name::<Self>()
@@ -36,10 +40,33 @@ pub struct MemoTitle {
     pub savetime: Option<i64>,
 }
 
+impl DBPersistence for MemoTitle {
+    fn query() -> &'static str {
+        include_str!("sql/get_all_memo_titles.sql")
+    }
+}
+
+impl From<Row> for MemoTitle {
+    fn from(row: Row) -> Self {
+        Self {
+            id:       row.get("id"),
+            title:    row.get("title"),
+            user_id:  row.get("user_id"),
+            savetime: row.get("savetime"),
+        }
+    }
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct MemoTitleList {
     pub memos: Vec<MemoTitle>,
     pub user:  User,
+}
+
+impl Named for Vec<MemoTitle> {
+    fn name() -> &'static str {
+        "memos"
+    }
 }
 
 #[derive(Serialize, ToSchema)]
@@ -78,22 +105,22 @@ pub struct Memo {
     pub user:      MemoUser,
 }
 
+impl Named for Memo {
+  fn name() -> &'static str {
+     "memo" 
+  } 
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct MemoUser {
     pub id:   i32,
     pub name: Option<String>,
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct GetMemo<'a> {
-    memo: Memo,
-    requester: Option<Requester<'a>>,
-}
-
 impl From<Row> for Memo {
     fn from(row: Row) -> Self {
       // display all field names to make sure they are correct
-      println!("{:?}", row.columns());
+      //trace!("{:?}", row.columns());
         let group_id: Option<i32> = row.get("group_id");
         let memo_group = group_id.map(|id| MemoGroup {
             id,
@@ -118,9 +145,6 @@ impl DBPersistence for Memo {
     fn query() -> &'static str {
         include_str!("sql/get_memo.sql")
     }
-}
-
-impl Named for Memo {
 }
 
 #[derive(Serialize, ToSchema)]
@@ -204,3 +228,4 @@ impl Named for Vec<ExplicitPermission> {
     "ExplicitPermissionList"
   }
 }
+

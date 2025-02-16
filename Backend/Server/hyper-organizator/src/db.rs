@@ -2,6 +2,7 @@
 
 use crate::model::DBPersistence;
 use deadpool_postgres::Client;
+use log::trace;
 use tokio_postgres::{types::ToSql, Error, Row};
 
 pub async fn get_single<T>(client: &Client, params: &[&(dyn ToSql + Sync)]) -> Result<T, Error>
@@ -10,6 +11,7 @@ where
 {
     let stmt = client.prepare(T::query()).await?;
     let row = client.query_one(&stmt, params).await?;
+    trace!("Received one row from database");
     Ok(T::from(row))
 }
 
@@ -22,5 +24,6 @@ where
 {
     let stmt = client.prepare(T::query()).await?;
     let rows = client.query(&stmt, params).await?;
+    trace!("Received {} rows from database", rows.len());
     Ok(rows.into_iter().map(|row| T::from(row)).collect())
 }
