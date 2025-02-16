@@ -1,0 +1,31 @@
+image_name :='nginx-organizator:latest'
+container_name :='nginx-organizator'
+
+build-container: clean build-image
+  mkdir -p log-nginx
+  docker run -d --name {{container_name}} \
+    -v $(pwd)/../Memo/build/main:/usr/share/nginx/html \
+    -v $(pwd)/../organizator-wasm/pkg:/usr/share/nginx/html/pkg \
+    -v $(pwd)/log-nginx:/var/log/nginx \
+      {{image_name}}
+  @set_container_dns_name.sh {{container_name}} organizator.lab
+
+build-image: copy-certificates
+  docker build -t {{image_name}} .
+
+copy-certificates:
+  cp ../../DevEnvironment/Certificates/ca/organizator.lab.crt fullchain.pem
+  cp ../../DevEnvironment/Certificates/ca/organizator.lab.key.unsecure privkey.pem
+
+# will use the dns-stub to resolve dns names ending with .lab
+split-dns:
+  stub.sh
+
+clean:
+  rm -f fullchain.pem
+  rm -f privkey.pem
+  docker stop {{container_name}} || true
+  docker rm {{container_name}} || true
+  docker rmi -f {{image_name}}
+  rm -f log-nginx/*
+
