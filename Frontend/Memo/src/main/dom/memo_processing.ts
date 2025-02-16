@@ -79,7 +79,7 @@ export const server2local = (server_memo_reply: ServerMemoReply): Memo => {
   memo.memogroup = server_memo.memogroup;
   memo.timestamp = server_memo.savetime || undefined;
   memo.user = server_memo.user;
-  memo.readonly = server_memo.user.id !== server_memo_reply.user.id;
+  memo.readonly = server_memo.user.id !== server_memo_reply.requester.id;
 
   konsole.log(`OI: ${memo}`);
   return memo;

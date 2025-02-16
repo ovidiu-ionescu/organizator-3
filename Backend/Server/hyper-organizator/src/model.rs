@@ -90,9 +90,10 @@ impl From<Row> for MemoGroup {
     }
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct MemoGroupList {
-    pub memogroups: Vec<MemoGroup>,
+impl Named for MemoGroup {
+  fn name() -> &'static str {
+    "memogroups"
+  }
 }
 
 #[derive(Serialize, ToSchema)]
@@ -219,7 +220,7 @@ impl DBPersistence for ExplicitPermission {
 
 impl Named for Vec<MemoGroup> {
   fn name() -> &'static str {
-    "MemoGroupList"
+    "memogroups"
   }
 }
 

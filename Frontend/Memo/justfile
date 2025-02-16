@@ -1,3 +1,4 @@
 build:
   reset
   npm run build
+  cp favicon-green.ico build/main/favicon.ico

@@ -4,7 +4,6 @@ use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
 use crate::model::Requester;
-use crate::model::User;
 use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
@@ -42,18 +41,26 @@ kubernetes:
 */
 
 lazy_static! {
-    static ref MEMO_GET: Regex = Regex::new(r"^/memo/(\d+)$").unwrap();
-    static ref MEMO_GROUP_GET: Regex = Regex::new(r"^/memogroup/(\d+)$").unwrap();
-    static ref EXPLICIT_PERMISSIONS: Regex = Regex::new(r"^/explicit_permissions/(\d+)$").unwrap();
+    static ref MEMO_GET_REGEX: Regex = Regex::new(r"^/memo/(\d+)$").unwrap();
+    static ref MEMO_GROUP_GET_REGEX: Regex = Regex::new(r"^/memogroup/(\d+)$").unwrap();
+    static ref EXPLICIT_PERMISSIONS_REGEX: Regex = Regex::new(r"^/explicit_permissions/(\d+)$").unwrap();
+}
+
+fn trim_trailing_slash(path: &str) -> &str {
+    if path.ends_with('/') {
+        &path[..path.len() - 1]
+    } else {
+        path
+    }
 }
 
 /// All requests to the server are handled by this function.
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    match (request.method(), request.uri().path()) {
-        (&Method::GET, path) if MEMO_GET.is_match(path) => get_memo(&request).await,
+    match (request.method(), trim_trailing_slash(request.uri().path())) {
+        (&Method::GET, path) if MEMO_GET_REGEX.is_match(path) => get_memo(&request).await,
         (&Method::GET, "/memogroup") => get_memogroups_for_user(&request).await,
-        (&Method::GET, "/memo/") => get_memo_titles(&request).await,
-        (&Method::GET, path) if EXPLICIT_PERMISSIONS.is_match(path) => {
+        (&Method::GET, "/memo") => get_memo_titles(&request).await,
+        (&Method::GET, path) if EXPLICIT_PERMISSIONS_REGEX.is_match(path) => {
             get_explicit_permissions(&request).await
         }
         _ => default_response(request).await,
@@ -72,7 +79,7 @@ async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericErro
     let (client, requester) = get_client_and_user(request).await?;
 
     let path = request.uri().path();
-    let captures = MEMO_GET.captures(path).unwrap();
+    let captures = MEMO_GET_REGEX.captures(path).unwrap();
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
     let memo: Result<Memo, _> = db::get_single(&client, &[&memo_id]).await;
     
@@ -81,7 +88,7 @@ async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericErro
 
 #[utoipa::path(get, path="/memogroup",
     responses(
-        (status=200, description="MemoGroup for current logged in user", body=MemoGroupList),
+        (status=200, description="MemoGroup for current logged in user", body=Vec<MemoGroup>),
     ),
 )]
 async fn get_memogroups_for_user(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
@@ -105,7 +112,7 @@ async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Bo
     let (client, requester) = get_client_and_user(request).await?;
 
     let path = request.uri().path();
-    let captures = EXPLICIT_PERMISSIONS.captures(path).unwrap();
+    let captures = EXPLICIT_PERMISSIONS_REGEX.captures(path).unwrap();
     let memogroup_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
     let permissions: Result<Vec<ExplicitPermission>, _> =
         db::get_multiple(&client, &[&memogroup_id, &requester.username]).await;
@@ -176,7 +183,7 @@ fn build_json_response<T: serde::Serialize + Named>(
 pub use swagger::swagger_json;
 mod swagger {
     use crate::model::{
-        ExplicitPermission, GetWriteMemo, Memo, MemoGroup, MemoGroupList, MemoTitle, MemoTitleList, MemoUser, Requester, User
+        ExplicitPermission, GetWriteMemo, Memo, MemoGroup, MemoTitle, MemoTitleList, MemoUser, Requester, User
     };
     use utoipa::{
         openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
@@ -192,7 +199,6 @@ mod swagger {
             GetWriteMemo,
             Memo,
             MemoGroup,
-            MemoGroupList,
             MemoTitle,
             MemoTitleList,
             MemoUser,
