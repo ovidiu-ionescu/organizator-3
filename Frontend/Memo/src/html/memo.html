@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/images/ios/tulip-blue-touch-icon-ipad.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/ios/tulip-blue-touch-icon-ipad-retina.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/images/ios/tulip-blue-touch-icon-iphone-retina.png">
+    <link rel="manifest" href="/org-manifest.json">
+    <script type="module">
+      import "/worker/app.js";
+
+      import * as router from "/dom/memo-router.js";
+      window.load_route = router.load_route;
+      window.searchMemos = router.searchMemos;
+    </script>
+    <script type="module">
+      import "/dom/memo-editor.js";
+      import "/dom/journal.js";
+    </script>
+    <script type="text/javascript"></script>
+    <style type="text/css">
+      html {
+        height: 100%;
+        padding: 0;
+        margin: 0;
+        border: 0;
+      }
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 16px;
+        font-family: Roboto, sans-serif;
+        background-color: black;
+        color: white;
+      }
+      main {
+        height: 100%;
+        display: flex;
+        flex-flow: column;
+        padding: 0;
+      }
+      memo-editor {
+        flex: 1;
+      }
+
+      section {
+        flex: 1;
+        display: flex;
+        flex-flow: column;
+      }
+      #memoTitlesList a {
+        padding: 5px;
+      }
+      input[type='search'] {
+        font-size: 16px;
+      }
+      #search_button {
+        vertical-align: middle;
+      }
+      a {
+        color: steelblue;
+      }
+    </style>
+  </head>
+  <body onload="load_route()">
+    <main>
+      <section id="singleMemo" page><memo-editor id="editor"></memo-editor></section>
+      <section id="memoTitles" page>
+        <nav>
+            <input type="search" id="searchCriteria" autocorrect="off" autocapitalize="none" 
+              onkeyup="(e => {if(e.keyCode === 13) searchMemos()})(event)"/>
+            <img src="/images/ic_search_48px.svg"
+              id="search_button"
+              onclick="searchMemos()"
+            >
+            <span style="display:inline-block; width: 48px;">&nbsp;</span>
+            <a href="/memo/new">New</a>
+        </nav>
+        <side id="memoTitlesList"></side>
+        <footer style="text-align: right;"><a href="/journal">Journal</a></footer>
+      </section>
+      <log-journal id="journal" page></log-journal>
+    </main>
+  </body>
+</html>
+
+<!-- e => { console.log(e.keyCode); if(e.keyCode === 13) searchMemos() }-->

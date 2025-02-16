@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "sourceMap": true,
+    "outDir": "../build",
+    "rootDir": ".",
+    "module": "es2020",
+    "target": "es2020",
+    //"esModuleInterop": true,
+    "composite": true
+  },
+  "exclude": [
+    "node_modules"
+  ]
+}

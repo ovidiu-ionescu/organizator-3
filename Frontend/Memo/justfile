@@ -1,0 +1,3 @@
+build:
+  reset
+  npm run build

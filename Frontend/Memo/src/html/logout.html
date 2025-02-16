@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script type="text/javascript">
+      async function f() {
+        const response = await fetch("organizator/logout", {
+    "credentials": "include",
+    "headers": {
+        "Accept": "*/*",
+        "Accept-Language": "ro,en-US;q=0.7,en;q=0.3",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Pragma": "no-cache",
+        "Cache-Control": "no-cache",
+        "X-Requested-With": "XMLHttpRequest",
+        "x-organizator-client-version": "3"
+    },
+    "referrer": "https://ionescu.net/organizator/2/memo.html",
+    "method": "GET",
+    "mode": "cors"
+});
+
+    console.log(response);
+    const reader = response.body.getReader();
+    const chunk = await reader.read();
+    console.log(chunk);
+    const text = new TextDecoder("utf-8").decode(chunk.value);
+    console.log(text);
+}
+    </script>
+  </head>
+  <body onload="f()">
+    <p>Perform logout, see results in console</p>
+  </body>
+</html>
