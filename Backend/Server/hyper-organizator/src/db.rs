@@ -5,6 +5,11 @@ use deadpool_postgres::Client;
 use log::trace;
 use tokio_postgres::{types::ToSql, Error, Row};
 
+pub enum QueryType {
+  Select,
+  Search,
+}
+
 pub async fn get_single<T>(client: &Client, params: &[&(dyn ToSql + Sync)]) -> Result<T, Error>
 where
     T: DBPersistence + From<Row>,
@@ -18,12 +23,18 @@ where
 pub async fn get_multiple<T>(
     client: &Client,
     params: &[&(dyn ToSql + Sync)],
+    query_type: QueryType,
 ) -> Result<Vec<T>, Error>
 where
     T: DBPersistence + From<Row>,
 {
-    let stmt = client.prepare(T::query()).await?;
+    let stmt = client.prepare(
+      match query_type {
+        QueryType::Select => T::query(),
+        QueryType::Search => T::search(),
+      }).await?;
     let rows = client.query(&stmt, params).await?;
     trace!("Received {} rows from database", rows.len());
     Ok(rows.into_iter().map(|row| T::from(row)).collect())
 }
+

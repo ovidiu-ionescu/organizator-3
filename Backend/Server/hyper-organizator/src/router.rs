@@ -1,4 +1,5 @@
 use crate::db;
+use crate::db::QueryType::{ Select, Search };
 use crate::model::ExplicitPermission;
 use crate::model::Memo;
 use crate::model::MemoTitle;
@@ -10,6 +11,7 @@ use hyper::Body;
 use lazy_static::lazy_static;
 use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::postgres::get_connection;
+use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
@@ -57,9 +59,10 @@ fn trim_trailing_slash(path: &str) -> &str {
 /// All requests to the server are handled by this function.
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     match (request.method(), trim_trailing_slash(request.uri().path())) {
-        (&Method::GET, path) if MEMO_GET_REGEX.is_match(path) => get_memo(&request).await,
-        (&Method::GET, "/memogroup") => get_memogroups_for_user(&request).await,
-        (&Method::GET, "/memo") => get_memo_titles(&request).await,
+        (&Method::GET, path) if MEMO_GET_REGEX.is_match(path) => get_memo(request).await,
+        (&Method::GET, "/memogroup") => get_memogroups_for_user(request).await,
+        (&Method::GET, "/memo") => get_memo_titles(request).await,
+        (&Method::POST, "/memo/search") => memo_search(request).await,
         (&Method::GET, path) if EXPLICIT_PERMISSIONS_REGEX.is_match(path) => {
             get_explicit_permissions(&request).await
         }
@@ -75,8 +78,8 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         ("id" = i32, Path, description="Memo id"),
     ),
 )]
-async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(request).await?;
+async fn get_memo(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, requester) = get_client_and_user(&request).await?;
 
     let path = request.uri().path();
     let captures = MEMO_GET_REGEX.captures(path).unwrap();
@@ -91,11 +94,11 @@ async fn get_memo(request: &Request<Body>) -> Result<Response<Body>, GenericErro
         (status=200, description="MemoGroup for current logged in user", body=Vec<MemoGroup>),
     ),
 )]
-async fn get_memogroups_for_user(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(request).await?;
+async fn get_memogroups_for_user(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, requester) = get_client_and_user(&request).await?;
 
     let memo_group: Result<Vec<crate::model::MemoGroup>, _> =
-        db::get_multiple(&client, &[&requester.username]).await;
+        db::get_multiple(&client, &[&requester.username], Select).await;
 
     build_json_response(memo_group, requester)
 }
@@ -115,7 +118,7 @@ async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Bo
     let captures = EXPLICIT_PERMISSIONS_REGEX.captures(path).unwrap();
     let memogroup_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
     let permissions: Result<Vec<ExplicitPermission>, _> =
-        db::get_multiple(&client, &[&memogroup_id, &requester.username]).await;
+        db::get_multiple(&client, &[&memogroup_id, &requester.username], Select).await;
 
     build_json_response(permissions, requester)
 }
@@ -125,10 +128,23 @@ async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Bo
         (status=200, description="Memo titles for current logged in user", body=MemoTitleList),
     ),
 )]
-async fn get_memo_titles(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(request).await?;
+async fn get_memo_titles(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, requester) = get_client_and_user(&request).await?;
 
-    let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[]).await;
+    let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[], Select).await;
+
+    build_json_response(memo_titles, requester)
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct SearchMemoForm {
+  search: String,
+}
+
+async fn memo_search(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let form: SearchMemoForm = parse_body(&mut request).await?;
+    let (client, requester) = get_client_and_user(&request).await?;
+    let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[&form.search], Search).await;
 
     build_json_response(memo_titles, requester)
 }
@@ -181,6 +197,7 @@ fn build_json_response<T: serde::Serialize + Named>(
 }
 
 pub use swagger::swagger_json;
+use utoipa::ToSchema;
 mod swagger {
     use crate::model::{
         ExplicitPermission, GetWriteMemo, Memo, MemoGroup, MemoTitle, MemoTitleList, MemoUser, Requester, User

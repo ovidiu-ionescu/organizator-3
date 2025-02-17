@@ -1,4 +1,3 @@
-use log::trace;
 use serde::Serialize;
 use tokio_postgres::row::Row;
 use utoipa::ToSchema;
@@ -6,6 +5,9 @@ use utoipa::ToSchema;
 /// This trait is used to define the SQL query that is used to fetch the data from the database.
 pub trait DBPersistence {
     fn query() -> &'static str;
+    fn search() -> &'static str {
+        Self::query()
+    }
 }
 
 /// This trait is used to define the name in the JSON response of the type.
@@ -43,6 +45,10 @@ pub struct MemoTitle {
 impl DBPersistence for MemoTitle {
     fn query() -> &'static str {
         include_str!("sql/get_all_memo_titles.sql")
+    }
+
+    fn search() -> &'static str {
+        include_str!("sql/search_memo.sql")
     }
 }
 
@@ -121,7 +127,7 @@ pub struct MemoUser {
 impl From<Row> for Memo {
     fn from(row: Row) -> Self {
       // display all field names to make sure they are correct
-      //trace!("{:?}", row.columns());
+      //log::trace!("{:?}", row.columns());
         let group_id: Option<i32> = row.get("group_id");
         let memo_group = group_id.map(|id| MemoGroup {
             id,
