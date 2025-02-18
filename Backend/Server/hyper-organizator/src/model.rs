@@ -236,3 +236,34 @@ impl Named for Vec<ExplicitPermission> {
   }
 }
 
+#[derive(Serialize, Debug, ToSchema)]
+pub struct FilePermission {
+  user_id: i32,
+  username: String,
+  memo_group_id: Option<i32>,
+  access: i32,
+}
+
+impl From<Row> for FilePermission {
+  fn from(row: Row) -> Self {
+    Self {
+      user_id: row.get("o_user_id"),
+      username: row.get("o_username"),
+      memo_group_id: row.get("o_memo_group_id"),
+      access: row.get("o_access"),
+    }
+  }
+}
+
+impl DBPersistence for FilePermission {
+  fn query() -> &'static str {
+    include_str!("sql/get_file_security.sql")
+  }
+}
+
+impl Named for FilePermission {
+  fn name() -> &'static str {
+    "FilePermission"
+  }
+}
+

@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::QueryType::{ Select, Search };
-use crate::model::ExplicitPermission;
+use crate::model::{ExplicitPermission, FilePermission};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
@@ -15,7 +15,7 @@ use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
-use log::debug;
+use log::{debug, trace};
 use regex::Regex;
 use serde_json::json;
 use tokio_postgres::Error as PgError;
@@ -46,6 +46,7 @@ lazy_static! {
     static ref MEMO_GET_REGEX: Regex = Regex::new(r"^/memo/(\d+)$").unwrap();
     static ref MEMO_GROUP_GET_REGEX: Regex = Regex::new(r"^/memogroup/(\d+)$").unwrap();
     static ref EXPLICIT_PERMISSIONS_REGEX: Regex = Regex::new(r"^/explicit_permissions/(\d+)$").unwrap();
+    static ref FILE_UUID_REGEX: Regex = Regex::new(r"^/files/(?<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.").unwrap();
 }
 
 fn trim_trailing_slash(path: &str) -> &str {
@@ -63,6 +64,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::GET, "/memogroup") => get_memogroups_for_user(request).await,
         (&Method::GET, "/memo") => get_memo_titles(request).await,
         (&Method::POST, "/memo/search") => memo_search(request).await,
+        (&Method::GET, "/file_auth") => file_auth(request).await,
         (&Method::GET, path) if EXPLICIT_PERMISSIONS_REGEX.is_match(path) => {
             get_explicit_permissions(&request).await
         }
@@ -141,12 +143,27 @@ struct SearchMemoForm {
   search: String,
 }
 
+// TODO: Add swagger info
 async fn memo_search(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let form: SearchMemoForm = parse_body(&mut request).await?;
     let (client, requester) = get_client_and_user(&request).await?;
     let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[&form.search], Search).await;
 
     build_json_response(memo_titles, requester)
+}
+
+// TODO: Add swagger info
+async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, requester) = get_client_and_user(&request).await?;
+
+    let uri = request.headers().get("X-Original-URI").unwrap().to_str().unwrap();
+    debug!("Checking file auth for {uri}");
+    let uuid = FILE_UUID_REGEX.captures(uri).unwrap().name("uuid").unwrap().as_str().parse::<uuid::Uuid>()?;
+
+    let level: i32 = 1;
+    let file_auth: Result<FilePermission, _> = db::get_single(&client, &[&uuid, &requester.username, &level]).await;
+    trace!("File auth for {uri} is {:?}", file_auth);
+    build_json_response(file_auth, requester)
 }
 
 /// Fetch the database connection and the current user from the request.
