@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::QueryType::{ Select, Search };
-use crate::model::{ExplicitPermission, FilePermission};
+use crate::model::{ExplicitPermission, FilePermission, GetWriteMemo};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
@@ -61,6 +61,7 @@ fn trim_trailing_slash(path: &str) -> &str {
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     match (request.method(), trim_trailing_slash(request.uri().path())) {
         (&Method::GET, path) if MEMO_GET_REGEX.is_match(path) => get_memo(request).await,
+        (&Method::POST, path) if MEMO_GET_REGEX.is_match(path) => write_memo(request).await,
         (&Method::GET, "/memogroup") => get_memogroups_for_user(request).await,
         (&Method::GET, "/memo") => get_memo_titles(request).await,
         (&Method::POST, "/memo/search") => memo_search(request).await,
@@ -88,6 +89,45 @@ async fn get_memo(request: Request<Body>) -> Result<Response<Body>, GenericError
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
     let memo: Result<Memo, _> = db::get_single(&client, &[&memo_id]).await;
     
+    build_json_response(memo, requester)
+}
+
+
+fn split_and_trim(s: &str) -> (&str, &str) {
+    let trimmed = s.trim_start();
+    if let Some(pos) = trimmed.find('\n') {
+        let (first_part, _second_part) = if pos > 0 && &trimmed[pos - 1..pos] == "\r" {
+            trimmed.split_at(pos - 1)
+        } else {
+            trimmed.split_at(pos)
+        };
+        (first_part, &trimmed[pos..])
+    } else {
+        (trimmed, "")
+    }
+}
+
+fn millis_since_epoch() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct WriteMemoForm {
+    memo_id: i32,
+    group_id: Option<i32>,
+    text: String,
+}
+async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let form: WriteMemoForm = parse_body(&mut request).await?;
+    let (db_client, requester) = get_client_and_user(&request).await?;
+
+    let (title, body) = split_and_trim(&form.text);
+    let now = millis_since_epoch();
+
+    let memo: Result<GetWriteMemo, PgError> = db::get_single(&db_client, &[&form.memo_id, &title, &body, &form.group_id, &now]).await;
     build_json_response(memo, requester)
 }
 
@@ -167,6 +207,7 @@ async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericErro
 }
 
 /// Fetch the database connection and the current user from the request.
+/// We set the current user in the postgres session in the connection
 async fn get_client_and_user(
     request: &Request<Body>,
 ) -> Result<(deadpool_postgres::Client, Requester), GenericError> {
@@ -177,6 +218,7 @@ async fn get_client_and_user(
     };
     let username = &user_identification.0;
 
+    // place the current user in the PostgreSQL session
     let set_var = client.prepare_cached(include_str!("sql/set_current_user.sql")).await?;
     let result = client.query_one(&set_var, &[&username]).await?;
     let user_id = result.get::<_, i32>(0);

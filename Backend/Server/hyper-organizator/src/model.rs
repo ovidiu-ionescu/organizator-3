@@ -157,11 +157,10 @@ impl DBPersistence for Memo {
 #[derive(Serialize, ToSchema)]
 pub struct GetWriteMemo {
     memo: Option<Memo>,
-    user: MemoUser,
 }
 
-impl From<&Row> for GetWriteMemo {
-    fn from(row: &Row) -> Self {
+impl From<Row> for GetWriteMemo {
+    fn from(row: Row) -> Self {
         // not all memos are assigned to groups
         let group_id: Option<i32> = row.get("io_memo_group_id");
         let memo_group = group_id.map(|id| MemoGroup {
@@ -185,12 +184,20 @@ impl From<&Row> for GetWriteMemo {
 
         Self {
             memo,
-            user: MemoUser {
-                id:   row.get("o_requester_id"),
-                name: row.get("io_requester_name"),
-            },
         }
     }
+}
+
+impl DBPersistence for GetWriteMemo {
+    fn query() -> &'static str {
+        include_str!("sql/write_memo.sql")
+    }
+}
+
+impl Named for GetWriteMemo {
+  fn name() -> &'static str {
+    "memo"
+  }
 }
 
 #[derive(Serialize, ToSchema)]
@@ -232,7 +239,7 @@ impl Named for Vec<MemoGroup> {
 
 impl Named for Vec<ExplicitPermission> {
   fn name() -> &'static str {
-    "ExplicitPermissionList"
+    "permissions"
   }
 }
 

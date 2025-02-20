@@ -97,3 +97,8 @@ export interface PermissionDetailLine {
   username:        string;
   access:          number;
 }
+
+export interface ExplicitPermissions {
+  permissions: PermissionDetailLine[];
+  requester:   IdName;
+}

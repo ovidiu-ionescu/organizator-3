@@ -1,9 +1,11 @@
+# By default it will kill current, container, build a new one and start it
 image_name :='nginx-organizator:latest'
 container_name :='nginx-organizator'
 
 dns_stub_ip := `ip -4  addr show dns-stub | grep -oP '(?<=inet\s)\d+(\.\d+){3}'`
 card_ip := `ip route get 9.9.9.9 | grep dev | cut -d ' ' -f7`
 
+# redo everything
 build-container: clean build-image
   mkdir -p log-nginx
   docker run -d --name {{container_name}} \
@@ -37,3 +39,6 @@ clean:
   docker rmi -f {{image_name}}
   rm -f log-nginx/*
 
+# will teleport inside the container
+teleport:
+  docker exec -it {{container_name}} sh

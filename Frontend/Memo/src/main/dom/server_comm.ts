@@ -14,6 +14,7 @@ import {
   ServerMemoTitle,
   ServerMemoReply,
   PermissionDetailLine,
+  ExplicitPermissions,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
 import { merge } from "./diff_match_patch_uncompressed.js";
@@ -210,8 +211,8 @@ export const get_explicit_permission = async(memogroup_id: number): Promise<Perm
       get_options
     );
     if (server_response.status === 200) {
-      const explicit_permissions = await server_response.json();
-      return explicit_permissions;
+      const explicit_permissions: ExplicitPermissions = await server_response.json();
+      return explicit_permissions.permissions;
     }
   } catch(e) {
     konsole.log("Failed to fetch explicit permissions, error", e);
