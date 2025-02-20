@@ -33,7 +33,7 @@ import { MemoEditor } from "./memo-editor.js";
 export const save_to_server = async (memo: Memo): Promise<ServerMemoReply> => {
   konsole.log(`Saving to server memo ${memo.id}, size ${memo.text.length}, memo_group ${memo?.memogroup?.id}`);
   const memogroup = memo.memogroup ? `group_id=${memo.memogroup.id}&` : "";
-  const memoId = memo.id < 0 ? "" : `memoId=${memo.id}&`;
+  const memoId = memo.id < 0 ? "" : `memo_id=${memo.id}&`;
   const text = `text=${encodeURIComponent(memo.text)}&`;
   const body = `${memogroup}${memoId}${text}`;
 

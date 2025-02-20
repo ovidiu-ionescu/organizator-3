@@ -156,6 +156,7 @@ impl DBPersistence for Memo {
 
 #[derive(Serialize, ToSchema)]
 pub struct GetWriteMemo {
+    #[serde(flatten)]
     memo: Option<Memo>,
 }
 

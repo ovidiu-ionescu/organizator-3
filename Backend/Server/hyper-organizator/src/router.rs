@@ -27,7 +27,7 @@ use tokio_postgres::Error as PgError;
  get(/memo/)                     get_memo_titles
  post(/memo/search)              search_memo
 ✓get(/memo/{id})                 get_memo
- post(/memo/)                    memo_write
+ post(/memo/)                    write_memo
 ✓get(/memogroup)                 get_memo_group
  put(/upload)                    upload_file
  get(/file_auth)                 file_auth
@@ -61,7 +61,7 @@ fn trim_trailing_slash(path: &str) -> &str {
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     match (request.method(), trim_trailing_slash(request.uri().path())) {
         (&Method::GET, path) if MEMO_GET_REGEX.is_match(path) => get_memo(request).await,
-        (&Method::POST, path) if MEMO_GET_REGEX.is_match(path) => write_memo(request).await,
+        (&Method::POST, "/memo") => write_memo(request).await,
         (&Method::GET, "/memogroup") => get_memogroups_for_user(request).await,
         (&Method::GET, "/memo") => get_memo_titles(request).await,
         (&Method::POST, "/memo/search") => memo_search(request).await,
@@ -127,7 +127,8 @@ async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, Generi
     let (title, body) = split_and_trim(&form.text);
     let now = millis_since_epoch();
 
-    let memo: Result<GetWriteMemo, PgError> = db::get_single(&db_client, &[&form.memo_id, &title, &body, &form.group_id, &now]).await;
+    trace!("Writing memo with id {} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}", form.memo_id, requester.username, form.group_id);
+    let memo: Result<GetWriteMemo, PgError> = db::get_single(&db_client, &[&form.memo_id, &title, &body, &now, &form.group_id, &requester.username]).await;
     build_json_response(memo, requester)
 }
 
