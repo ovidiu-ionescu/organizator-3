@@ -16,3 +16,7 @@ ignore = [
 "/swagger",
 "/swagger/api-doc.json",
 ]
+
+[file_storage]
+# file storage directory
+path = "../../../Frontend/files"

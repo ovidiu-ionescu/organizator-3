@@ -58,6 +58,7 @@ deadpool = { version = "0", features = ["managed"] }
 deadpool-postgres = "0"
 tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
 uuid = "1"
+memchr = "2"
 
 lib-hyper-organizator = { path = "lib-hyper-organizator" }
 

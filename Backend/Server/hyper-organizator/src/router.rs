@@ -1,10 +1,11 @@
 use crate::db;
 use crate::db::QueryType::{ Select, Search };
-use crate::model::{ExplicitPermission, FilePermission, GetWriteMemo};
+use crate::model::{ExplicitPermission, FilePermission, FileUpload, GetWriteMemo};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
 use crate::model::Requester;
+use crate::multipart::{Field, FileField, RegularField};
 use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
@@ -13,6 +14,7 @@ use lib_hyper_organizator::authentication::check_security::UserId;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
+use lib_hyper_organizator::server::SETTINGS;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
 use log::{debug, trace};
@@ -69,6 +71,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::GET, path) if EXPLICIT_PERMISSIONS_REGEX.is_match(path) => {
             get_explicit_permissions(&request).await
         }
+        (&Method::PUT, "/upload") => upload_file(request).await,
         _ => default_response(request).await,
     }
 }
@@ -205,6 +208,50 @@ async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericErro
     let file_auth: Result<FilePermission, _> = db::get_single(&client, &[&uuid, &requester.username, &level]).await;
     trace!("File auth for {uri} is {:?}", file_auth);
     build_json_response(file_auth, requester)
+}
+
+#[derive(serde::Serialize, Debug)]
+struct UploadResponse {
+  filename: String,
+}
+
+impl Named for UploadResponse {
+  fn name() -> &'static str {
+    "file"
+  }
+}
+
+async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericError> {
+  let (client, requester) = get_client_and_user(&request).await?;
+  let requester_name = requester.username.to_string();
+  let requester = Requester { id: requester.id, username: &requester_name };
+
+  let settings = &*SETTINGS;
+  let fields = crate::multipart::handle_multipart(request, &settings.file_storage.path).await?;
+
+
+  debug!("Fields: {:?}", fields);
+
+  let mut group_id = None;
+  let mut generated_name = None;
+  fields.into_iter().for_each(|field| {
+    match field {
+      Field::Regular(RegularField{name, value}) if name == "group_id" => {
+        group_id = value.parse::<i32>().ok();
+      },
+      Field::File(FileField{ upload_name, file_name }) => {
+        generated_name = Some(file_name );
+      },
+      _ => (),
+    }
+  });
+  
+  if let Some(generated_name) = generated_name {
+    //let file_upload: Result<FileUpload, _> = db::get_single(&client, &[&generated_name, &group_id, &requester.username]).await;
+    build_json_response(Ok(UploadResponse { filename: generated_name }), requester)
+  } else {
+     "File uploaded".to_text_response()
+  }
 }
 
 /// Fetch the database connection and the current user from the request.

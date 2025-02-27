@@ -31,13 +31,19 @@ pub struct SecurityConfig {
     pub public_key_url:              Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
+pub struct FileStorage {
+    pub path: String,
+}
+
+#[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Settings {
     api_ip:           String,
     metrics_ip:       String,
     pub postgres:     PostgresConfig,
     pub security:     SecurityConfig,
+    pub file_storage: FileStorage,
     pub swagger_path: String,
 }
 
@@ -82,6 +88,7 @@ impl Default for Settings {
             metrics_ip:   "127.0.0.1:3001".to_string(),
             postgres:     PostgresConfig::default(),
             security:     SecurityConfig::default(),
+            file_storage: FileStorage { path: "/tmp".to_string() },
             swagger_path: "/swagger-ui".to_string(),
         }
     }

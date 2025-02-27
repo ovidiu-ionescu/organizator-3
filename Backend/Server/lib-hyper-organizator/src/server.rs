@@ -6,7 +6,7 @@ use http::{
     Request, Response,
 };
 use hyper::{server::Server, Body, Error};
-use std::{iter::once, sync::Arc};
+use std::{iter::once, sync::{Arc, LazyLock}};
 use tower::{make::Shared, ServiceBuilder};
 use tower_http::{
     add_extension::AddExtensionLayer, compression::CompressionLayer,
@@ -23,17 +23,18 @@ use crate::typedef::GenericError;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
+pub static SETTINGS: LazyLock<Settings> = LazyLock::new(|| Settings::new());
+
 pub async fn start_servers<H, R>(f: H, swagger_json: Option<String>) -> Result<(), Error>
 where
     H: FnMut(Request<Body>) -> R + Clone + Send + 'static,
     R: futures_util::Future<Output = Result<Response<Body>, GenericError>> + Send + 'static,
 {
-    let settings = Settings::new();
+    let settings = &*SETTINGS;
 
     let x_request_id = HeaderName::from_static("x-request-id");
 
     let metrics = Arc::new(PrometheusMetrics::new());
-
     let service_builder = ServiceBuilder::new()
         // set `x-request-id` header on all requests
         .layer(SetRequestIdLayer::new(

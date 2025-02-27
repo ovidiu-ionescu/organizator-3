@@ -28,7 +28,7 @@ pub struct User {
     pub username: Option<String>,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Clone)]
 pub struct Requester<'a> {
     pub id:       i32,
     pub username: &'a str,
@@ -273,5 +273,16 @@ impl Named for FilePermission {
   fn name() -> &'static str {
     "FilePermission"
   }
+}
+
+#[derive(Serialize, Debug)]
+pub struct FileUpload {
+    pub filename: String,
+}
+
+impl Named for FileUpload {
+    fn name() -> &'static str {
+        "FileUpload"
+    }
 }
 

@@ -240,7 +240,7 @@ export const upload_file = async(file_input: HTMLInputElement, memogroup_id: str
 
   if (server_response.status === 200) {
     const json = await server_response.json();
-    const filename = json.filename;
+    const filename = json.file.filename;
     konsole.log(`Uploaded ${file.name} to server, received new id ${filename ? filename : JSON.stringify(json)}`);
     // remove the selected file
     // file_input.value = "";

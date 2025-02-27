@@ -55,6 +55,7 @@ toml = { workspace = true }
 deadpool-postgres = { workspace = true }
 tokio-postgres = { workspace = true }
 uuid = { workspace = true }
+memchr = { workspace = true }
 
 lib-hyper-organizator = { workspace = true, features = ["security", "postgres", "swagger"] }
 
