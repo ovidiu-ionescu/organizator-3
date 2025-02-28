@@ -315,18 +315,41 @@ mod test1 {
     let mut offsets = Vec::<usize>::new();
     println!("Boundary delimiter len: {}", delimiter.len());
     let header_delimited = b"\r\n\r\n";
-    let chunk = include_bytes!("files/file.bin");
+    let multipart_unformatted = r#"-----------------------------25703068823031721183176707470
+      Content-Disposition: form-data; name="memo_group_id"
+      
+      -1
+      -----------------------------25703068823031721183176707470
+      Content-Disposition: form-data; name="myFile"; filename="payload.md"
+      Content-Type: text/markdown
+      
+      This is the payload file
+      
+      It has three lines
+      
+      -----------------------------25703068823031721183176707470
+      Content-Disposition: form-data; name="end_parameter"
+      
+      2
+      -----------------------------25703068823031721183176707470--"#;
+
+    let multipart = multipart_unformatted.lines().map(|line| line.trim()).collect::<Vec<&str>>().join("\r\n");
+    let chunk = multipart.as_bytes();
+    println!("chunk: \n「{}」", std::str::from_utf8(chunk).unwrap());
     let mut _file = File::create("/tmp/file.bin").await.unwrap();
     let mut buf = Vec::new();
 
-    println!("# read the first boundary");
-    let res = read_to_delimiter(chunk, &mut Destination::Buffer(&mut buf), delimiter, 0).await;
+    println!("# read the first line, i.e. the boundary");
+    let res = read_to_delimiter(chunk, &mut Destination::Buffer(&mut buf), b"\r\n", 0).await;
+    println!("Res after reading boundary: {:?}", res);
     let offset = match res {
       ReadResult::Done(offset) => offset,
       _ => panic!("Expected Done"),
     };
     offsets.push(offset);
     println!("Offsets: {:?}", offsets);
+    let delimiter_str = format!("\r\n{}", std::str::from_utf8(&buf).unwrap());
+    let delimiter = delimiter_str.as_bytes();
 
     assert_eq!(res, ReadResult::Done(delimiter.len()));
 
@@ -353,7 +376,7 @@ mod test1 {
       std::str::from_utf8(&buf).unwrap()
     );
     let field = parse_headers(&buf);
-    assert_eq!(field, HeaderResult::Field("id".to_string()));
+    assert_eq!(field, HeaderResult::Field("memo_group_id".to_string()));
     println!("{:?}", field);
     buf.clear();
 
@@ -401,6 +424,47 @@ mod test1 {
     );
     let file_destination = &mut Destination::new_file("/tmp/file.bin".to_string()).await;
     let res = read_to_delimiter(chunk, file_destination, delimiter, offset).await;
-    assert_eq!(res, ReadResult::Done(335));
+
+    let offset = match res {
+      ReadResult::Done(offset) => offset,
+      _ => panic!("Expected Done"),
+    };
+
+    buf.clear();
+
+    println!(
+      "\n\n# read the headers for the field, Offset: {}\n「{}」",
+      offset,
+      std::str::from_utf8(&chunk[offset..]).unwrap()
+    );
+    let res = read_to_delimiter(
+      chunk,
+      &mut Destination::Buffer(&mut buf),
+      header_delimited,
+      offset,
+    ).await;
+
+    let offset = match res {
+      ReadResult::Done(offset) => offset,
+      _ => panic!("Expected Done"),
+    };
+
+    println!(
+      "\n\n# Parse the field headers\n 「{}」",
+      std::str::from_utf8(&buf).unwrap()
+    );
+
+    let field = parse_headers(&buf);
+    assert_eq!(field, HeaderResult::Field("end_parameter".to_string()));
+
+    println!(
+      "\n\n# read the field content, Offset: {}\n{}",
+      offset,
+      std::str::from_utf8(&chunk[offset..]).unwrap()
+    );
+
+    let res = read_to_delimiter(chunk, &mut Destination::Buffer(&mut buf), delimiter, offset).await;
+
+    assert_eq!(res, ReadResult::End);
   }
 }
