@@ -219,7 +219,7 @@ export const get_explicit_permission = async(memogroup_id: number): Promise<Perm
   }
 }
 
-export const upload_file = async(file_input: HTMLInputElement, memogroup_id: string): Promise<String> => {
+export const upload_file = async(file_input: HTMLInputElement, memogroup_id: string): Promise<[String, String]> => {
   const formData = new FormData();
   const file = file_input.files[0];
   if(!file) {
@@ -248,7 +248,7 @@ export const upload_file = async(file_input: HTMLInputElement, memogroup_id: str
     //   konsole.error(`Failed to empty the file list`);
     // }
 
-    return filename;
+    return [filename, json.file.original_filename];
   } else {
     konsole.error(`Failed to upload file, server status: ${server_response.status}`);
     return;

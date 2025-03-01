@@ -433,19 +433,20 @@ export class MemoEditor extends HTMLElement {
     });
 
     this.$.file_upload.addEventListener('change', async (event) => {
-      let filename: String;
+      let filename, original_filename: String;
       for(let i = 0; i < 3 && !filename; i++) {
         if(i) {
           konsole.log(`Attempt ${i + 1} to upload file`);
         }
-        filename = await server_comm.upload_file(this.$.file_upload, this.$.edit_memogroup.value);
+       [filename, original_filename] = await server_comm.upload_file(this.$.file_upload, this.$.edit_memogroup.value);
       }
       if(!filename) {
         konsole.error(`will not create a link, upload did not succeed`);
         return;
       }
-    const editor = this.$.source;
-      editor.value = `${editor.value}\n![file](/files/${filename})`;
+      const editor = this.$.source;
+      // TODO: remove leading ! if file type can not be displayed by the browser
+      editor.value = `${editor.value}\n![${original_filename}](/files/${filename})`;
     });
 
     // listen to saving events

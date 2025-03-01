@@ -213,6 +213,7 @@ async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericErro
 #[derive(serde::Serialize, Debug)]
 struct UploadResponse {
   filename: String,
+  original_filename: String,
 }
 
 impl Named for UploadResponse {
@@ -255,7 +256,7 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
     match db::execute(&client, include_str!("sql/insert_filestore.sql"), &[&uuid, &requester.id, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
       Ok(rows_inserted) => { 
         debug!("Number of rows inserted into filestore table: {}", rows_inserted);
-        build_json_response(Ok(UploadResponse { filename: generated_name }), requester)
+        build_json_response(Ok(UploadResponse { filename: generated_name, original_filename }), requester)
       },
       Err(e) => { 
         error!("Something went wrong: {:?}", e); 
