@@ -8,6 +8,8 @@ card_ip := `ip route get 9.9.9.9 | grep dev | cut -d ' ' -f7`
 # redo everything
 build-container: clean build-image
   mkdir -p log-nginx
+  dig +noall +answer @{{dns_stub_ip}} identity.lab:{{card_ip}} -t TYPE23
+  dig +noall +answer @{{dns_stub_ip}} hyper-organizator.lab:{{card_ip}} -t TYPE23
   docker run -d --name {{container_name}} \
     -v $(pwd)/../Memo/build/main:/usr/share/nginx/html \
     -v $(pwd)/../Memo/src:/usr/share/nginx/html/src \
@@ -17,8 +19,6 @@ build-container: clean build-image
     --dns {{dns_stub_ip}} \
       {{image_name}}
   @set_container_dns_name.sh {{container_name}} organizator.lab
-  dig +noall +answer @{{dns_stub_ip}} identity.lab:{{card_ip}} -t TYPE23
-  dig +noall +answer @{{dns_stub_ip}} hyper-organizator.lab:{{card_ip}} -t TYPE23
 
 build-image: copy-certificates
   docker build -t {{image_name}} .

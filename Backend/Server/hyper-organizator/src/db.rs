@@ -1,6 +1,6 @@
 //! Converts the database rows into the model structs.
 
-use crate::model::{DBPersistence, FileUpload};
+use crate::model::DBPersistence;
 use deadpool_postgres::Client;
 use log::trace;
 use tokio_postgres::{types::ToSql, Error, Row};

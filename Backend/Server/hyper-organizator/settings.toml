@@ -19,4 +19,4 @@ ignore = [
 
 [file_storage]
 # file storage directory
-path = "../../../Frontend/files"
+path = "../../../Frontend/Nginx/files"

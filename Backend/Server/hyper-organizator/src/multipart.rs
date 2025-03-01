@@ -1,6 +1,6 @@
 use futures_util::stream::StreamExt;
 use hyper::{Body, Request};
-use log::{debug, trace};
+use log::{debug, log_enabled, trace};
 use memchr::memmem;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -45,8 +45,12 @@ pub enum Field {
 pub async fn handle_multipart(
   mut req: Request<Body>, file_dir: &str,
 ) -> Result<Vec<Field>, hyper::Error> {
-  // open dump file
-  let mut dump = File::create("/tmp/file.bin").await.unwrap();
+  // if we are on debug mode, dump the file to /tmp/file.bin
+  let mut dump = if log_enabled!(log::Level::Debug) {
+    Some(File::create("/tmp/file.bin").await.unwrap())
+  } else {
+    None
+  };
   // Get the boundary from the content type header
   let mut result = Vec::new();
   let content_type = req.headers().get("content-type").unwrap().to_str().unwrap();
@@ -63,7 +67,9 @@ pub async fn handle_multipart(
   let mut status = Status::Start;
   while let Some(chunk) = req.body_mut().next().await {
     let chunk = chunk.unwrap();
-    dump.write_all(&chunk).await.unwrap();
+    if let Some(ref mut dump_file) = dump {
+      dump_file.write_all(&chunk).await.unwrap();
+    }
     let mut offset = 0;
     loop {
       // loop inside the chunk until we reach the end of the chunk

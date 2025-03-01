@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::QueryType::{ Select, Search };
-use crate::model::{ExplicitPermission, FilePermission, FileUpload, GetWriteMemo};
+use crate::model::{ExplicitPermission, FilePermission, GetWriteMemo};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;

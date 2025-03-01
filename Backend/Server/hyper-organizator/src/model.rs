@@ -18,10 +18,6 @@ pub trait Named {
     }
 }
 
-pub trait HasRequester {
-    fn add_requester(&mut self, requester: Requester) -> Self;
-}
-
 #[derive(Serialize, ToSchema)]
 pub struct User {
     pub id:       i32,
@@ -274,19 +270,3 @@ impl Named for FilePermission {
     "FilePermission"
   }
 }
-
-#[derive(Serialize, Debug)]
-pub struct FileUpload {
-  pub count: usize,
-}
-
-impl Named for FileUpload {
-    fn name() -> &'static str {
-        "FileUpload"
-    }
-}
-
-impl DBPersistence for FileUpload {
-  fn query() -> &'static str { include_str!("sql/insert_filestore.sql") }
-}
-
