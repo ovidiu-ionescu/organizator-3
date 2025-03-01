@@ -277,12 +277,16 @@ impl Named for FilePermission {
 
 #[derive(Serialize, Debug)]
 pub struct FileUpload {
-    pub filename: String,
+  pub count: usize,
 }
 
 impl Named for FileUpload {
     fn name() -> &'static str {
         "FileUpload"
     }
+}
+
+impl DBPersistence for FileUpload {
+  fn query() -> &'static str { include_str!("sql/insert_filestore.sql") }
 }
 

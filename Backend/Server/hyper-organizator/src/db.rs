@@ -1,6 +1,6 @@
 //! Converts the database rows into the model structs.
 
-use crate::model::DBPersistence;
+use crate::model::{DBPersistence, FileUpload};
 use deadpool_postgres::Client;
 use log::trace;
 use tokio_postgres::{types::ToSql, Error, Row};
@@ -36,5 +36,16 @@ where
     let rows = client.query(&stmt, params).await?;
     trace!("Received {} rows from database", rows.len());
     Ok(rows.into_iter().map(|row| T::from(row)).collect())
+}
+
+pub async fn execute(
+  client: &Client,
+  query: &str,
+  params: &[&(dyn ToSql + Sync)],
+) -> Result<u64, Error>
+  {
+  let stmt = client.prepare(query).await?;
+  let rows_inserted = client.execute(&stmt, params).await?;
+  Ok(rows_inserted)
 }
 

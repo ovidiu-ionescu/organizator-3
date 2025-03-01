@@ -68,7 +68,7 @@ where
     let api_ip = settings.api_ip();
     info!("start server on {}", &api_ip);
     let main_server = Server::bind(&api_ip).serve(Shared::new(service));
-    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server(metrics, &settings);
+    let metrics_server = crate::metrics::metrics_endpoint::start_metrics_server(metrics, settings);
     futures::try_join!(main_server, metrics_server).expect("server error");
     Ok(())
 }

@@ -17,7 +17,7 @@ use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::server::SETTINGS;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
-use log::{debug, trace};
+use log::{error, debug, trace};
 use regex::Regex;
 use serde_json::json;
 use tokio_postgres::Error as PgError;
@@ -234,23 +234,34 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
 
   let mut group_id = None;
   let mut generated_name = None;
+  let mut original_filename = None;
   fields.into_iter().for_each(|field| {
     match field {
-      Field::Regular(RegularField{name, value}) if name == "group_id" => {
+      Field::Regular(RegularField{name, value}) if name == "memo_group_id" => {
         group_id = value.parse::<i32>().ok();
       },
       Field::File(FileField{ upload_name, file_name }) => {
         generated_name = Some(file_name );
+        original_filename = Some(upload_name);
       },
       _ => (),
     }
   });
-  
-  if let Some(generated_name) = generated_name {
-    //let file_upload: Result<FileUpload, _> = db::get_single(&client, &[&generated_name, &group_id, &requester.username]).await;
+
+  debug!("group_id: {:?}, generated_name: {:?}, original_filename: {:?}", group_id, generated_name, original_filename);
+  if let (Some(memo_group_id), Some(generated_name), Some(original_filename)) = (group_id, generated_name, original_filename) {
+    debug!("Save entry to filestore table");
+    let uuid = generated_name[..generated_name.rfind('.').unwrap()].parse::<uuid::Uuid>().unwrap();
+      match db::execute(&client, include_str!("sql/insert_filestore.sql"), &[&uuid, &requester.id, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
+      Ok(rows_inserted) => { debug!("Number of rows inserted into filestore table: {}", rows_inserted);
     build_json_response(Ok(UploadResponse { filename: generated_name }), requester)
+      },
+      Err(e) => { error!("Something went wrong: {:?}", e); 
+      "File not uploaded".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
+      },
+      }
   } else {
-     "File uploaded".to_text_response()
+     "File uploaded".to_text_response_with_status(StatusCode::BAD_REQUEST)
   }
 }
 
