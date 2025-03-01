@@ -252,14 +252,16 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
   if let (Some(memo_group_id), Some(generated_name), Some(original_filename)) = (group_id, generated_name, original_filename) {
     debug!("Save entry to filestore table");
     let uuid = generated_name[..generated_name.rfind('.').unwrap()].parse::<uuid::Uuid>().unwrap();
-      match db::execute(&client, include_str!("sql/insert_filestore.sql"), &[&uuid, &requester.id, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
-      Ok(rows_inserted) => { debug!("Number of rows inserted into filestore table: {}", rows_inserted);
-    build_json_response(Ok(UploadResponse { filename: generated_name }), requester)
+    match db::execute(&client, include_str!("sql/insert_filestore.sql"), &[&uuid, &requester.id, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
+      Ok(rows_inserted) => { 
+        debug!("Number of rows inserted into filestore table: {}", rows_inserted);
+        build_json_response(Ok(UploadResponse { filename: generated_name }), requester)
       },
-      Err(e) => { error!("Something went wrong: {:?}", e); 
-      "File not uploaded".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
+      Err(e) => { 
+        error!("Something went wrong: {:?}", e); 
+        "File not uploaded".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
       },
-      }
+    }
   } else {
      "File uploaded".to_text_response_with_status(StatusCode::BAD_REQUEST)
   }
