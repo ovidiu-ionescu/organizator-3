@@ -56,6 +56,8 @@ toml = { workspace = true }
 deadpool = { workspace = true }
 deadpool-postgres = { workspace = true }
 tokio-postgres = { workspace = true }
+memchr = { workspace = true }
+uuid = { workspace = true }
 
 utoipa = "3"
 utoipa-swagger-ui = "3"

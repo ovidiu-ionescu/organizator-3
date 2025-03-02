@@ -5,7 +5,7 @@ use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
 use crate::model::Requester;
-use crate::multipart::{Field, FileField, RegularField};
+use lib_hyper_organizator::multipart::{Field, FileField, RegularField, handle_multipart};
 use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
@@ -228,7 +228,7 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
   let requester = Requester { id: requester.id, username: &requester_name };
 
   let settings = &*SETTINGS;
-  let fields = crate::multipart::handle_multipart(request, &settings.file_storage.path).await?;
+  let fields = handle_multipart(request, &settings.file_storage.path).await?;
 
 
   debug!("Fields: {:?}", fields);

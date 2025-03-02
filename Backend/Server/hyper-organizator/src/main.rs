@@ -1,7 +1,6 @@
 mod db;
 mod model;
 mod router;
-mod multipart;
 
 use lib_hyper_organizator::server;
 use router::swagger_json;

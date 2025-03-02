@@ -23,3 +23,4 @@ mod settings;
 pub mod swagger;
 pub mod typedef;
 pub mod under_construction;
+pub mod multipart;
