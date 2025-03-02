@@ -445,8 +445,11 @@ export class MemoEditor extends HTMLElement {
         return;
       }
       const editor = this.$.source;
-      // TODO: remove leading ! if file type can not be displayed by the browser
-      editor.value = `${editor.value}\n![${original_filename}](/files/${filename})`;
+      // remove leading ! if file type can not be displayed by the browser
+      const fileExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']);
+      const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+      const prefix = fileExtensions.has(extension) ? '!' : '';
+      editor.value = `${editor.value}\n${prefix}[${original_filename}](/files/${filename})`;
     });
 
     // listen to saving events
