@@ -216,8 +216,8 @@ The certificates can be built</p>
 This is standard Nginx configuration and is not specific to this project.</p>
 <p>In case of successful client certificate authentication, the following headers are set:</p>
 <ul>
-<li><code>X-SSL-Client-Verify</code> is set to <code>SUCCESS</code></li>
-<li><code>X-SSL-Client-S-DN</code> is set to the subject DN of the client certificate, which is the username</li>
+<li><code>X-SSL-Client-Verify: SUCCESS</code></li>
+<li><code>X-SSL-Client-S-DN: CN=${USERNAME}</code></li>
 </ul>
 <p>In case the request contains a cookie with a JWT token, Nginx will copy the jwt cookie
 to the <code>Authorization</code> header prefixed with <code>Bearer </code>.</p>
