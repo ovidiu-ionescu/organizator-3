@@ -1,6 +1,7 @@
 use serde::Serialize;
 use tokio_postgres::row::Row;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// This trait is used to define the SQL query that is used to fetch the data from the database.
 pub trait DBPersistence {
@@ -268,5 +269,43 @@ impl DBPersistence for FilePermission {
 impl Named for FilePermission {
   fn name() -> &'static str {
     "FilePermission"
+  }
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct FilestoreFileDB {
+  pub id: Uuid,
+  pub user_id: i32,
+  pub filename: String,
+  pub memo_group_id: Option<i32>,
+  pub uploaded_on: i64,
+}
+
+#[derive(Serialize, ToSchema)]
+struct FilestoreFile {
+  filename: String,
+}
+
+impl Named for Vec<FilestoreFileDB> {
+  fn name() -> &'static str {
+    "db_file_entries"
+  }
+}
+
+impl From<Row> for FilestoreFileDB {
+  fn from(row: Row) -> Self {
+    Self {
+      id: row.get("id"),
+      user_id: row.get("user_id"),
+      filename: row.get("filename"),
+      memo_group_id: row.get("memo_group_id"),
+      uploaded_on: row.get("uploaded_on"),
+    }
+  }
+}
+
+impl DBPersistence for FilestoreFileDB {
+  fn query() -> &'static str {
+    include_str!("sql/admin/filestore.sql")
   }
 }

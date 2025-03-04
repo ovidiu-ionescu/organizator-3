@@ -8,8 +8,8 @@ Nginx handles the client certificate authentication and sets a couple of headers
 This is standard Nginx configuration and is not specific to this project.
 
 In case of successful client certificate authentication, the following headers are set:
-- `X-SSL-Client-Verify` is set to `SUCCESS`
-- `X-SSL-Client-S-DN` is set to the subject DN of the client certificate, which is the username
+- `X-SSL-Client-Verify: SUCCESS`
+- `X-SSL-Client-S-DN: CN=${USERNAME}`
 
 In case the request contains a cookie with a JWT token, Nginx will copy the jwt cookie 
 to the `Authorization` header prefixed with `Bearer `.

@@ -72,6 +72,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
             get_explicit_permissions(&request).await
         }
         (&Method::PUT, "/upload") => upload_file(request).await,
+        (&Method::GET, "/admin/files") => file_list(request).await,
         _ => default_response(request).await,
     }
 }
@@ -266,6 +267,14 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
   } else {
      "File uploaded".to_text_response_with_status(StatusCode::BAD_REQUEST)
   }
+}
+
+async fn file_list(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, requester) = get_client_and_user(&request).await?;
+
+    let files: Result<Vec<crate::model::FilestoreFileDB>, _> = db::get_multiple(&client, &[], Select).await;
+
+    build_json_response(files, requester)
 }
 
 /// Fetch the database connection and the current user from the request.
