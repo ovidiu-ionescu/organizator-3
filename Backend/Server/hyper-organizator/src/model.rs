@@ -282,8 +282,18 @@ pub struct FilestoreFileDB {
 }
 
 #[derive(Serialize, ToSchema)]
-struct FilestoreFile {
-  filename: String,
+pub struct FilestoreFile {
+  pub filename: String,
+}
+
+impl FilestoreFile {
+  pub fn filename_no_extension(&self) -> &str {
+    if let Some(pos) = self.filename.find('.') {
+      &self.filename[..pos]
+    } else {
+      &self.filename
+    }
+  }
 }
 
 impl Named for Vec<FilestoreFileDB> {

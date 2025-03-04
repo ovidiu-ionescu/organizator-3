@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use crate::db;
 use crate::db::QueryType::{ Select, Search };
-use crate::model::{ExplicitPermission, FilePermission, GetWriteMemo};
+use crate::model::{ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, GetWriteMemo};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
@@ -269,12 +271,51 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
   }
 }
 
+#[derive(serde::Serialize)]
+struct FilestoreResult<'a> {
+  db_only: Vec<&'a FilestoreFileDB>,
+  dir_only: Vec<FilestoreFile>,
+}
+
+impl Named for FilestoreResult<'_> {
+  fn name() -> &'static str {
+    "filestore"
+  }
+}
+
+// TODO add swagger info
 async fn file_list(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(&request).await?;
+  let (client, requester) = get_client_and_user(&request).await?;
 
-    let files: Result<Vec<crate::model::FilestoreFileDB>, _> = db::get_multiple(&client, &[], Select).await;
+  let files: Vec<FilestoreFileDB> = db::get_multiple(&client, &[], Select).await?;
+  let files_in_dir = ls()?;
+  let set: HashSet<&str> = files_in_dir.iter().map(|f| f.filename_no_extension()).collect();
+  let db_only: Vec<&FilestoreFileDB> = files.iter().filter(|f| !set.contains(f.id.to_string().as_str())).collect();
+  let db_set = files.iter().map(|f| f.id).collect::<HashSet<uuid::Uuid>>();
+  let dir_only: Vec<FilestoreFile> = files_in_dir.into_iter()
+    .filter(|f| 
+      if let Ok(uuid) = &f.filename_no_extension().parse::<uuid::Uuid>() {
+        !db_set.contains(uuid)
+      } else {
+        true
+      }
+      ).collect();
 
-    build_json_response(files, requester)
+    build_json_response(Ok(FilestoreResult {db_only, dir_only} ), requester)
+}
+
+fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
+  let mut result = Vec::<FilestoreFile>::new();
+  let settings = &*SETTINGS;
+    let path = &settings.file_storage.path;
+    let dir = std::fs::read_dir(path)?;
+    for entry in dir {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+          result.push(FilestoreFile { filename: entry.file_name().to_string_lossy().to_string() });
+        }
+    }
+    Ok(result)
 }
 
 /// Fetch the database connection and the current user from the request.
