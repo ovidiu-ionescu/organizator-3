@@ -18,6 +18,7 @@ import * as memo_processing from "./memo_processing.js";
 import konsole from "./console_log.js";
 import * as server_comm from "./server_comm.js";
 import * as events from "./events.js";
+import { create_synthetic_memo } from "./synthetic.js";
 
 const local_prefixes = ["/memo/", "/journal"];
 const routerInterceptor = (evt) => {
@@ -68,6 +69,13 @@ export const load_route = () => {
   if (window.location.pathname.match(/\/memo\/(-?\d+)/)) {
     activatePage("singleMemo");
     loadMemo();
+    return;
+  }
+  const synthetic_match = window.location.pathname.match(/\/memo\/(\${3}.+)/);
+  if (synthetic_match) {
+    const id = synthetic_match[1];
+    activatePage("singleMemo");
+    display_synthetic_memo(id);
     return;
   }
   if (window.location.pathname.match(/\/memo\/new/)) {
@@ -193,6 +201,13 @@ console.log(text);
 */
 }
 
+async function display_synthetic_memo(id: string) {
+  set_status_in_editor(`# Loading...`);
+  set_status_in_editor(await create_synthetic_memo(id));
+  //const memo = {text: `# This is a synthetic memo\nSynthetic body`} as Memo;
+  //set_memo_in_editor(memo);
+}
+
 async function set_memo_in_editor(memo: Memo) {
   const editor = <MemoEditor>document.getElementById("editor");
   editor.set_memo(memo);
@@ -274,7 +289,7 @@ const displayMemoTitles = async (
       const a = document.createElement("a");
       a.style.display = "block";
       a.href = `/memo/${memo.id}`;
-      if(extra_info) {
+      if (extra_info) {
         a.innerText = `${memo.title} #${memo.id} u:${memo.userId || ''} g:${memo.group_id || ''}`;
       } else {
         a.innerText = memo.title;
@@ -315,28 +330,28 @@ export async function searchMemos() {
     return loadMemoTitles(true);
   }
 
-  switch(criteria) {
+  switch (criteria) {
     case "$$$drop local cache":
       window.indexedDB.deleteDatabase(db.DBName);
       return;
 
     case "$$$show dirty memos":
-      displayMemoTitles({memo: null, memos: memo_processing.cache_memos_to_server_titles(await db.unsaved_memos())}, false, true);
+      displayMemoTitles({ memo: null, memos: memo_processing.cache_memos_to_server_titles(await db.unsaved_memos()) }, false, true);
       return;
 
     case "$$$show new memos":
-      displayMemoTitles({memo: null, memos: await db.get_new_memos()}, false, true);
+      displayMemoTitles({ memo: null, memos: await db.get_new_memos() }, false, true);
       return;
 
     case "$$$show cached memos":
-      displayMemoTitles({memo: null, memos: await db.get_all_memos()}, false, true);
+      displayMemoTitles({ memo: null, memos: await db.get_all_memos() }, false, true);
       return;
   }
 
   const p1 = criteria.match(/^\$\$\$drop memo (-?\d+)$/);
-  if(p1) {
+  if (p1) {
     db.delete_memo(parseInt(p1[1]));
-    displayMemoTitles({memo: null, memos: memo_processing.cache_memos_to_server_titles(await db.unsaved_memos())}, false, true);
+    displayMemoTitles({ memo: null, memos: memo_processing.cache_memos_to_server_titles(await db.unsaved_memos()) }, false, true);
     return;
   }
 

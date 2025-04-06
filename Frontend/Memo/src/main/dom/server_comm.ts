@@ -15,6 +15,7 @@ import {
   ServerMemoReply,
   PermissionDetailLine,
   ExplicitPermissions,
+  FileStoreDiagnostics,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
 import { merge } from "./diff_match_patch_uncompressed.js";
@@ -70,7 +71,7 @@ export const save_all = async () => {
   }
   // konsole.log({unsaved_memos});
   // save to server and get the server instance
-  for (let memo: CacheMemo; (memo = unsaved_memos.pop()); ) {
+  for (let memo: CacheMemo; (memo = unsaved_memos.pop());) {
     const id = memo.id;
     if (memo.id > -1) {
       // this is an existing memo, might have changed on the server since we got it
@@ -204,7 +205,8 @@ export const read_memo_groups = async (): Promise<IdName[]> => {
   };
 };
 
-export const get_explicit_permission = async(memogroup_id: number): Promise<PermissionDetailLine[]> => {
+// FIXME: there is no difference between no permissions found and error fetching permissions
+export const get_explicit_permission = async (memogroup_id: number): Promise<PermissionDetailLine[]> => {
   try {
     const server_response = await fetch(
       `/organizator/explicit_permissions/${memogroup_id}?request.preventCache=${+new Date()}`,
@@ -214,20 +216,20 @@ export const get_explicit_permission = async(memogroup_id: number): Promise<Perm
       const explicit_permissions: ExplicitPermissions = await server_response.json();
       return explicit_permissions.permissions;
     }
-  } catch(e) {
+  } catch (e) {
     konsole.log("Failed to fetch explicit permissions, error", e);
   }
 }
 
-export const upload_file = async(file_input: HTMLInputElement, memogroup_id: string): Promise<[String, String]> => {
+export const upload_file = async (file_input: HTMLInputElement, memogroup_id: string): Promise<[String, String]> => {
   const formData = new FormData();
   const file = file_input.files[0];
-  if(!file) {
+  if (!file) {
     konsole.error(`nothing to upload`);
     return;
   }
   konsole.log(`uploading ${file.name}`);
-  if(memogroup_id) {
+  if (memogroup_id) {
     formData.append('memo_group_id', `${memogroup_id}`);
   }
   formData.append('myFile', file);
@@ -254,3 +256,38 @@ export const upload_file = async(file_input: HTMLInputElement, memogroup_id: str
     return;
   }
 }
+
+const get_generic = async <T>(url: string, context: string): Promise<T> => {
+  let contextErrorMessage = `Failed to fetch ${context}`;
+  try {
+    const server_response = await fetch(
+      `${url}?request.preventCache=${+new Date()}`,
+      get_options
+    );
+    if (server_response.status === 200) {
+      const json: T = await server_response.json();
+      konsole.log(`Fetched ${context} from server`, json);
+      // The only sucessful exit
+      return json;
+    } else {
+      konsole.error(
+        `${contextErrorMessage}, server status`,
+        server_response.status
+      );
+      if (server_response.status >= 400) {
+          contextErrorMessage = `${contextErrorMessage}, server status ${server_response.status}`;
+      }
+    }
+  } catch (e) {
+    konsole.error(`${contextErrorMessage}, error`, e);
+  }
+  throw {
+    message: contextErrorMessage,
+  };
+}
+
+export const get_filestore_diagnostics = async (): Promise<FileStoreDiagnostics> => 
+  get_generic(
+    "/organizator/admin/files",
+    "filestore diagnostics",
+  );

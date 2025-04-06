@@ -14,6 +14,8 @@ export interface IdName {
   name:         string;
 }
 
+export type Requester = IdName;
+
 export interface ServerMemo {
   id:           number;
   memogroup?:   IdName;
@@ -25,7 +27,7 @@ export interface ServerMemo {
 
 export interface ServerMemoReply {
   memo:         ServerMemo;
-  requester:    IdName;
+  requester:    Requester;
 }
 
 export interface ServerMemoTitle {
@@ -87,6 +89,7 @@ export interface GroupList {
   memogroup: IdName;
 }
 
+// Example:
 // "memo_group_id":2,"memo_group_name":"Mihaela","user_group_id":1,"user_group_name":"Ionescu","user_id":1,"username":"ovidiu","access":2
 export interface PermissionDetailLine {
   memo_group_id:   number;
@@ -100,5 +103,34 @@ export interface PermissionDetailLine {
 
 export interface ExplicitPermissions {
   permissions: PermissionDetailLine[];
-  requester:   IdName;
+  requester:   Requester;
+}
+
+///////////////////////////////////////////////////////////////
+// filestore diagnostic, comes from the server
+
+// Type for the objects within the db_only array
+interface DbOnlyFile {
+  filename:      string;
+  id:            string; // It is a uuid
+  memo_group_id: number | null; // permissions
+  uploaded_on:   number; // Unix timestamp in milliseconds
+  user_id:       number;
+}
+
+// Type for the objects within the dir_only array
+interface DirOnlyFile {
+  filename: string;
+}
+
+// Type for the filestore object which contains arrays of the file types
+interface Filestore {
+  db_only:  DbOnlyFile[];
+  dir_only: DirOnlyFile[];
+}
+
+// The main type representing the entire JSON structure
+export interface FileStoreDiagnostics {
+  filestore: Filestore;
+  requester: Requester;
 }
