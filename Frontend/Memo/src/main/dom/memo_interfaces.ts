@@ -109,31 +109,21 @@ export interface ExplicitPermissions {
 ///////////////////////////////////////////////////////////////
 // filestore diagnostic, comes from the server
 
-// Type for the objects within the db_only array
-interface DbOnlyFile {
-  filename:      string;
-  id:            string; // It is a uuid
-  memo_group_id: number | null; // permissions
-  uploaded_on:   number; // Unix timestamp in milliseconds
-  user_id:       number;
-}
-
-// Type for the objects within the dir_only array
-interface DirOnlyFile {
-  filename: string;
-}
-
-// Type for the filestore object which contains arrays of the file types
-interface Filestore {
-  db_only:  DbOnlyFile[];
-  dir_only: DirOnlyFile[];
-}
-
-// The main type representing the entire JSON structure
 export interface FileStoreDiagnostics {
-  filestore: Filestore;
+  filestore: {
+    db_only: {
+      filename: string;
+      id: string;
+      memo_group_id: number | null; // Assuming it could be a number or null
+      uploaded_on: number;
+      user_id: number;
+    }[]; // Array of db_only objects
+    dir_only: {
+      filename: string;
+    }[]; // Array of dir_only objects
+  };
   requester: Requester;
-}
+};
 
 export interface MemoStats {
   data: {
