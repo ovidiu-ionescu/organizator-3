@@ -7,6 +7,7 @@ import konsole from "./console_log.js";
 import * as db from "./memo_db.js";
 import {
   Memo,
+  MemoStats,
   ServerMemo,
   CacheMemo,
   PasswordThen,
@@ -290,4 +291,10 @@ export const get_filestore_diagnostics = async (): Promise<FileStoreDiagnostics>
   get_generic(
     "/organizator/admin/files",
     "filestore diagnostics",
+  );
+
+export const get_memo_stats = async (): Promise<MemoStats> => 
+  get_generic(
+    "/organizator/admin/memo_stats",
+    "memo stats",
   );

@@ -134,3 +134,13 @@ export interface FileStoreDiagnostics {
   filestore: Filestore;
   requester: Requester;
 }
+
+export interface MemoStats {
+  data: {
+    username: string;
+    user_id: number;
+    total: number;
+    shared: number;
+  }[];
+  total: number;
+}
