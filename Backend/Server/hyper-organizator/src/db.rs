@@ -38,6 +38,17 @@ where
     Ok(rows.into_iter().map(|row| T::from(row)).collect())
 }
 
+pub async fn get_json(
+    client: &Client,
+    query: &str,
+    params: &[&(dyn ToSql + Sync)],
+) -> Result<String, Error> {
+    let stmt = client.prepare(query).await?;
+    let row = client.query_one(&stmt, params).await?;
+    let json: String = row.get(0);
+    Ok(json)
+}
+
 pub async fn execute(
   client: &Client,
   query: &str,

@@ -75,6 +75,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         }
         (&Method::PUT, "/upload") => upload_file(request).await,
         (&Method::GET, "/admin/files") => file_list(request).await,
+        (&Method::GET, "/admin/memo_stats") => get_memo_stats(request).await,
         _ => default_response(request).await,
     }
 }
@@ -318,6 +319,15 @@ fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
     Ok(result)
 }
 
+// TODO add swagger
+// TODO: add security
+async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let client = set_admin_user(&request).await?;
+
+    let json = db::get_json(&client, include_str!("sql/admin/memo_stats.sql"), &[]).await;
+    build_simple_json_response(json)
+}
+
 /// Fetch the database connection and the current user from the request.
 /// We set the current user in the postgres session in the connection
 async fn get_client_and_user(
@@ -339,31 +349,56 @@ async fn get_client_and_user(
     Ok((client, Requester { id: user_id, username }))
 }
 
+async fn set_admin_user(request: &Request<Body>) -> Result<deadpool_postgres::Client, GenericError> {
+    let client = get_connection(request).await?;
+    let stmt = client.prepare_cached(include_str!("sql/admin/set_admin_user.sql")).await?;
+    client.query_one(&stmt, &[]).await?;
+    Ok(client)
+}
+
 fn build_json_response<T: serde::Serialize + Named>(
     data_result: Result<T, PgError>,
     requester: Requester,
 ) -> Result<Response<Body>, GenericError> {
-    match data_result {
-        Ok(data) => {
-          let result = json!({
-            T::name(): data,
-            "requester": requester,
-          });
-          serde_json::to_string(&result)?.to_json_response()
-        },
-        Err(e) if e.code().is_some() => match e.code().unwrap().code() {
-            "2F004" => "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN),
-            "28000" => {
-                "Data access unauthorized".to_text_response_with_status(StatusCode::UNAUTHORIZED)
-            }
-            "02000" => "No data found".to_text_response_with_status(StatusCode::NOT_FOUND),
-            _ => e
-                .to_string()
-                .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
-        },
-        Err(x) => x
-            .to_string()
-            .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
+  match data_result {
+    Ok(data) => {
+      let result = json!({
+        T::name(): data,
+        "requester": requester,
+      });
+      serde_json::to_string(&result)?.to_json_response()
+    },
+    Err(e) => handle_pg_error_response(e),
+  }
+}
+
+fn build_simple_json_response( data_result: Result<String, PgError>) -> Result<Response<Body>, GenericError> {
+  match data_result {
+    Ok(data) => data.to_string().to_json_response(),
+    Err(e) => handle_pg_error_response(e),
+  }
+}
+
+fn handle_pg_error_response(e: PgError) -> Result<Response<Body>, GenericError> {
+    // Check if there's a SQLSTATE code
+    if let Some(code) = e.code() {
+        match code.code() {
+            // Forbidden (permission denied)
+            "2F004" | "42501" => // Added 42501 as another common permission code
+                "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN),
+            // Unauthorized (invalid credentials/authentication failure)
+            "28P01" | "28000" => // Added 28P01 (invalid_password)
+                "Data access unauthorized".to_text_response_with_status(StatusCode::UNAUTHORIZED),
+            // No data found (returned by FETCH, SELECT INTO, etc.)
+            "02000" =>
+                "No data found".to_text_response_with_status(StatusCode::NOT_FOUND),
+            // Default case for other known SQLSTATE codes - return generic server error
+            _ => e.to_string().to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    } else {
+        // Handle errors without a SQLSTATE code (e.g., connection errors)
+        // Treat these as internal server errors as well
+        e.to_string().to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
