@@ -5,6 +5,8 @@
  */
 import * as server_comm from "./server_comm.js";
 import { alignedText } from "./util.js"
+import * as db from "./memo_db.js";
+import { extract_title } from "./memo_processing.js";
 
 const create_filestore_diagnostics = async () => {
   const diagnostics = await server_comm.get_filestore_diagnostics();
@@ -39,12 +41,56 @@ const create_memo_stats = async () => {
     ## Total Memo Count: ${String(stats.total)}
     `;
 }
+
+const create_dirty_memos = async () => {
+  const memos = await db.unsaved_memos();
+  return alignedText`
+    # Dirty Memos
+    ## Memos with unsaved changes
+
+    |Id|Title|Last Modified|
+    |:---|:---|:---|
+    ${memos.map((memo) =>
+    `|[${memo.id}](/memo/${memo.id})|${extract_title(memo.local)}|${new Date(memo.local.timestamp)}|`
+    ).join('\n')}
+    `;
+}
+
+const create_new_memos = async () => {
+  const memos = await db.get_new_memos();
+  return alignedText`
+    # New Memos
+    ## Memos not yet uploaded
+
+    |Id|Title|Last Modified|
+    |:---|:---|:---|
+    ${memos.map((memo) =>
+    `|${memo.id}|${memo.title}|${new Date()}|`
+    ).join('\n')}
+    `;
+}
+
+const create_cached_memos = async () => {
+  const memos = await db.get_all_memos();
+  return alignedText`
+    # Cached Memos
+    ## Memos that are cached in the database
+    |Id|Title|Last Modified|
+    |:---|:---|:---|
+    ${memos.map((memo) =>
+    `|${memo.id}|${memo.title}|${new Date()}|`
+    ).join('\n')}
+    `;
+  }    
  
 export const create_synthetic_memo = async (id: string): Promise<string> => {
   try {
     switch (id) {
       case "$$$filestore": return await create_filestore_diagnostics();
       case "$$$memo_stats": return await create_memo_stats();
+      case "$$$dirty_memos": return await create_dirty_memos();
+      case "$$$new_memos": return await create_new_memos();
+      case "$$$cached_memos": return await create_cached_memos();
     }
   } catch (e) {
     return e.message;
