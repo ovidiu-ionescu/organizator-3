@@ -108,7 +108,7 @@ export const create_synthetic_memo = async (id: string): Promise<string> => {
       case "$$$dirty_memos": return await create_dirty_memos();
       case "$$$new_memos": return await create_new_memos();
       case "$$$cached_memos": return await create_cached_memos();
-      case "$$$user_groups": return await all_user_groups();
+      case "$$$all_user_groups": return await all_user_groups();
     }
   } catch (e) {
     return e.message;
