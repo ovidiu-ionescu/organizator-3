@@ -19,7 +19,7 @@ const create_filestore_diagnostics = async () => {
     |:---|:---|:---|
     ${diagnostics.filestore.db_only.map((entry) =>
     `|${entry.filename}|${entry.id}|${new Date(entry.uploaded_on)}|`
-    ).join('\n')}
+  ).join('\n')}
     
     ## File System Only
     File system entries with no corresponding database entry
@@ -36,7 +36,7 @@ const create_memo_stats = async () => {
     |:---|---:|---:|---:|
     ${stats.data.map((entry) =>
     `|${entry.username}|${entry.user_id}|${entry.total}|${entry.shared}|`
-    ).join('\n')}
+  ).join('\n')}
 
     ## Total Memo Count: ${String(stats.total)}
     `;
@@ -52,7 +52,7 @@ const create_dirty_memos = async () => {
     |:---|:---|:---|
     ${memos.map((memo) =>
     `|[${memo.id}](/memo/${memo.id})|${extract_title(memo.local)}|${new Date(memo.local.timestamp)}|`
-    ).join('\n')}
+  ).join('\n')}
     `;
 }
 
@@ -66,7 +66,7 @@ const create_new_memos = async () => {
     |:---|:---|:---|
     ${memos.map((memo) =>
     `|${memo.id}|${memo.title}|${new Date()}|`
-    ).join('\n')}
+  ).join('\n')}
     `;
 }
 
@@ -79,10 +79,27 @@ const create_cached_memos = async () => {
     |:---|:---|:---|
     ${memos.map((memo) =>
     `|${memo.id}|${memo.title}|${new Date()}|`
-    ).join('\n')}
+  ).join('\n')}
     `;
-  }    
- 
+}
+
+const all_user_groups = async () => {
+  const groups_per_users = await server_comm.get_all_user_groups();
+  
+  const result = [];
+  result.push("# All User Groups");
+  groups_per_users.map((groups_per_user) => {
+    result.push(`- ${groups_per_user.owner.name}`)
+    groups_per_user.groups.map((group) => {
+      result.push(`  - ${group.name}`);
+      group.users.map((user) => {
+        result.push(`    - ${user.name}`);
+      });
+    });
+  });
+  return result.join('\n');
+}
+
 export const create_synthetic_memo = async (id: string): Promise<string> => {
   try {
     switch (id) {
@@ -91,6 +108,7 @@ export const create_synthetic_memo = async (id: string): Promise<string> => {
       case "$$$dirty_memos": return await create_dirty_memos();
       case "$$$new_memos": return await create_new_memos();
       case "$$$cached_memos": return await create_cached_memos();
+      case "$$$user_groups": return await all_user_groups();
     }
   } catch (e) {
     return e.message;

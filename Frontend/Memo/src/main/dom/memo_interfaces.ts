@@ -134,3 +134,12 @@ export interface MemoStats {
   }[];
   total: number;
 }
+
+export interface UserGroupsPerUser {
+  owner: IdName;
+  groups: {
+    id: number;
+    name: string;
+    users: IdName[];
+  }[]
+}

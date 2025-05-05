@@ -76,6 +76,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         (&Method::PUT, "/upload") => upload_file(request).await,
         (&Method::GET, "/admin/files") => file_list(request).await,
         (&Method::GET, "/admin/memo_stats") => get_memo_stats(request).await,
+        (&Method::GET, "/admin/all_user_groups") => get_all_usergroups(request).await,
         _ => default_response(request).await,
     }
 }
@@ -327,6 +328,17 @@ async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, Generi
     let json = db::get_json(&client, include_str!("sql/admin/memo_stats.sql"), &[]).await;
     build_simple_json_response(json)
 }
+
+
+// TODO add swagger
+// TODO: add security
+async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let client = set_admin_user(&request).await?;
+
+    let json = db::get_json(&client, include_str!("sql/admin/all_user_groups.sql"), &[]).await;
+    build_simple_json_response(json)
+}
+
 
 /// Fetch the database connection and the current user from the request.
 /// We set the current user in the postgres session in the connection
