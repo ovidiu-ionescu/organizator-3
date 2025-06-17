@@ -14,7 +14,7 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 wasm-bindgen = "0.2.100"
-pulldown-cmark= { git = "https://github.com/ovidiu-ionescu/pulldown-cmark.git", branch = "master" }
+pulldown-cmark = { git = "https://github.com/ovidiu-ionescu/pulldown-cmark.git", branch = "master" }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

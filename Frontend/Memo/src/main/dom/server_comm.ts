@@ -18,6 +18,7 @@ import {
   ExplicitPermissions,
   FileStoreDiagnostics,
   UserGroupsPerUser,
+  UserGroups,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
 import { merge } from "./diff_match_patch_uncompressed.js";
@@ -304,4 +305,10 @@ export const get_all_user_groups = async (): Promise<UserGroupsPerUser[]> =>
   get_generic(
     "/organizator/admin/all_user_groups",
     "all user groups",
+  );
+
+export const get_user_groups = async (): Promise<UserGroups> =>
+  get_generic(
+    "/organizator/usergroups",
+    "user groups",
   );

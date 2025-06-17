@@ -143,3 +143,12 @@ export interface UserGroupsPerUser {
     users: IdName[];
   }[]
 }
+
+export interface UserGroups {
+  usergroups: {
+    id: number;
+    name: string;
+    users: IdName[];
+  }[];
+  requester: Requester;
+}

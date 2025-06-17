@@ -32,10 +32,10 @@ const create_memo_stats = async () => {
     # Memo Statistics
     ## Grouped per User
 
-    |User|User Id|Total|Shared|
-    |:---|---:|---:|---:|
+    |User Id|User|Total|Shared|
+    |---:|:---|---:|---:|
     ${stats.data.map((entry) =>
-    `|${entry.username}|${entry.user_id}|${entry.total}|${entry.shared}|`
+    `|${entry.user_id}|${entry.username}|${entry.total}|${entry.shared}|`
   ).join('\n')}
 
     ## Total Memo Count: ${String(stats.total)}
@@ -100,6 +100,20 @@ const all_user_groups = async () => {
   return result.join('\n');
 }
 
+const user_groups = async () => {
+  const usergroups = await server_comm.get_user_groups();
+  
+  const result = [];
+  result.push(`# User Groups of User ${usergroups.requester.name}`);
+  usergroups.usergroups.map((group) => {
+    result.push(`- ${group.name}`)
+    group.users.map((user) => {
+      result.push(`  - ${user.name}`);
+    });
+  });
+  return result.join('\n');
+}
+
 export const create_synthetic_memo = async (id: string): Promise<string> => {
   try {
     switch (id) {
@@ -109,6 +123,7 @@ export const create_synthetic_memo = async (id: string): Promise<string> => {
       case "$$$new_memos": return await create_new_memos();
       case "$$$cached_memos": return await create_cached_memos();
       case "$$$all_user_groups": return await all_user_groups();
+      case "$$$user_groups": return await user_groups();
     }
   } catch (e) {
     return e.message;

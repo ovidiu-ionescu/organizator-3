@@ -74,6 +74,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
             get_explicit_permissions(&request).await
         }
         (&Method::PUT, "/upload") => upload_file(request).await,
+        (&Method::GET, "/usergroups") => get_usergroups(request).await,
         (&Method::GET, "/admin/files") => file_list(request).await,
         (&Method::GET, "/admin/memo_stats") => get_memo_stats(request).await,
         (&Method::GET, "/admin/all_user_groups") => get_all_usergroups(request).await,
@@ -337,6 +338,13 @@ async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, Ge
 
     let json = db::get_json(&client, include_str!("sql/admin/all_user_groups.sql"), &[]).await;
     build_simple_json_response(json)
+}
+
+async fn get_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+  let (client, requester) = get_client_and_user(&request).await?;
+
+  let json = db::get_json(&client, include_str!("sql/user_groups.sql"), &[]).await;
+  build_simple_json_response(json)
 }
 
 
