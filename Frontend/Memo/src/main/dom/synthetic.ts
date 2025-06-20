@@ -100,7 +100,7 @@ const all_user_groups = async () => {
   return result.join('\n');
 }
 
-const user_groups = async () => {
+const create_user_groups = async () => {
   const usergroups = await server_comm.get_user_groups();
   
   const result = [];
@@ -109,6 +109,22 @@ const user_groups = async () => {
     result.push(`- ${group.name}`)
     group.users.map((user) => {
       result.push(`  - ${user.name}`);
+    });
+  });
+  return result.join('\n');
+}
+
+const create_memo_groups = async () => {
+  const memogroups = await server_comm.get_memo_groups();
+  const result = [];
+  result.push(`# Memo Groups of User ${memogroups.requester.name}`);
+  memogroups.memogroups.map((group) => {
+    result.push(`- ${group.name}`);
+    group.usergroups.map((usergroup) => {
+      result.push(`  - ${usergroup.name} (access: ${usergroup.access})`);
+      usergroup.users.map((user) => {
+        result.push(`    - ${user.name}`);
+      });
     });
   });
   return result.join('\n');
@@ -123,7 +139,8 @@ export const create_synthetic_memo = async (id: string): Promise<string> => {
       case "$$$new_memos": return await create_new_memos();
       case "$$$cached_memos": return await create_cached_memos();
       case "$$$all_user_groups": return await all_user_groups();
-      case "$$$user_groups": return await user_groups();
+      case "$$$user_groups": return await create_user_groups();
+      case "$$$memo_groups": return await create_memo_groups();
     }
   } catch (e) {
     return e.message;

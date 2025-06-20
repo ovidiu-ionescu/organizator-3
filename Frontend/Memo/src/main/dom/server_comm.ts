@@ -19,6 +19,7 @@ import {
   FileStoreDiagnostics,
   UserGroupsPerUser,
   UserGroups,
+  MemoGroups,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
 import { merge } from "./diff_match_patch_uncompressed.js";
@@ -311,4 +312,10 @@ export const get_user_groups = async (): Promise<UserGroups> =>
   get_generic(
     "/organizator/usergroups",
     "user groups",
+  );
+  
+export const get_memo_groups = async (): Promise<MemoGroups> =>
+  get_generic(
+    "/organizator/memogroups",
+    "memo groups",
   );

@@ -152,3 +152,18 @@ export interface UserGroups {
   }[];
   requester: Requester;
 }
+
+export interface MemoGroups {
+  memogroups: {
+    id: number;
+    name: string;
+    usergroups: {
+      id: number;
+      name: string;
+      access: number;
+      users: IdName[];
+    }[];
+    users: IdName[];
+  }[];
+  requester: Requester;
+}

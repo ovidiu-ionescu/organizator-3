@@ -75,6 +75,7 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
         }
         (&Method::PUT, "/upload") => upload_file(request).await,
         (&Method::GET, "/usergroups") => get_usergroups(request).await,
+        (&Method::GET, "/memogroups") => get_memogroups(request).await,
         (&Method::GET, "/admin/files") => file_list(request).await,
         (&Method::GET, "/admin/memo_stats") => get_memo_stats(request).await,
         (&Method::GET, "/admin/all_user_groups") => get_all_usergroups(request).await,
@@ -100,7 +101,6 @@ async fn get_memo(request: Request<Body>) -> Result<Response<Body>, GenericError
     
     build_json_response(memo, requester)
 }
-
 
 fn split_and_trim(s: &str) -> (&str, &str) {
     let trimmed = s.trim_start();
@@ -344,6 +344,13 @@ async fn get_usergroups(request: Request<Body>) -> Result<Response<Body>, Generi
   let (client, requester) = get_client_and_user(&request).await?;
 
   let json = db::get_json(&client, include_str!("sql/user_groups.sql"), &[]).await;
+  build_simple_json_response(json)
+}
+
+async fn get_memogroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+  let (client, requester) = get_client_and_user(&request).await?;
+
+  let json = db::get_json(&client, include_str!("sql/memo_groups.sql"), &[]).await;
   build_simple_json_response(json)
 }
 
