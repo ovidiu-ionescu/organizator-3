@@ -341,14 +341,14 @@ async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, Ge
 }
 
 async fn get_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, requester) = get_client_and_user(&request).await?;
+  let (client, _requester) = get_client_and_user(&request).await?;
 
   let json = db::get_json(&client, include_str!("sql/user_groups.sql"), &[]).await;
   build_simple_json_response(json)
 }
 
 async fn get_memogroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, requester) = get_client_and_user(&request).await?;
+  let (client, _requester) = get_client_and_user(&request).await?;
 
   let json = db::get_json(&client, include_str!("sql/memo_groups.sql"), &[]).await;
   build_simple_json_response(json)
@@ -359,7 +359,7 @@ async fn get_memogroups(request: Request<Body>) -> Result<Response<Body>, Generi
 /// We set the current user in the postgres session in the connection
 async fn get_client_and_user(
     request: &Request<Body>,
-) -> Result<(deadpool_postgres::Client, Requester), GenericError> {
+) -> Result<(deadpool_postgres::Client, Requester<'_>), GenericError> {
     let client = get_connection(request).await?;
     // get the current logged in user from the request
     let Some(user_identification) = request.extensions().get::<UserId>() else {

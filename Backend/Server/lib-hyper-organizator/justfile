@@ -1,0 +1,4 @@
+build:
+  reset && cargo build --features "security postgres swagger"
+
+

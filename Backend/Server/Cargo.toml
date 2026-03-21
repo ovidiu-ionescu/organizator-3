@@ -4,8 +4,12 @@ members = [
   "hyper-organizator",
   "lib-hyper-organizator",
   "identity",
+  "password_hash_generator",
 ]
-resolver = "2"
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
 
 # The docs on how to use a centralized set of dependency versions can be found here:
 # https://github.com/rust-lang/rfcs/blob/master/text/2906-cargo-workspace-deduplicate.md#workspace-level-dependencies
@@ -54,7 +58,6 @@ prometheus = "0.13"
 
 toml = "0.5"
 
-deadpool = { version = "0", features = ["managed"] }
 deadpool-postgres = "0"
 tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
 uuid = { version = "1", features = ["v4", "serde" ] }
@@ -64,6 +67,8 @@ lib-hyper-organizator = { path = "lib-hyper-organizator" }
 
 utoipa = "3"
 utoipa-swagger-ui = "3"
+
+rpassword = "7"
 
 [profile.release]
 lto = true

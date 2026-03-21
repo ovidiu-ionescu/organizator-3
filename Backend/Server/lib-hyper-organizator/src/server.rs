@@ -23,7 +23,7 @@ use crate::typedef::GenericError;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
-pub static SETTINGS: LazyLock<Settings> = LazyLock::new(|| Settings::new());
+pub static SETTINGS: LazyLock<Settings> = LazyLock::new(Settings::new);
 
 pub async fn start_servers<H, R>(f: H, swagger_json: Option<String>) -> Result<(), Error>
 where

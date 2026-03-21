@@ -31,7 +31,7 @@ mod submodule {
         service_builder: ServiceBuilder<L>,
         swagger_path: &str,
         swagger_json: Option<String>,
-    ) -> ServiceBuilder<Stack<SwaggerLayer, L>> {
+    ) -> ServiceBuilder<Stack<SwaggerLayer<'_>, L>> {
         info!("Swagger support enabled");
         service_builder.layer(SwaggerLayer::new(swagger_path, swagger_json))
     }

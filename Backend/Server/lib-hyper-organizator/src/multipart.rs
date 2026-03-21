@@ -106,7 +106,7 @@ pub async fn handle_multipart(
                   debug!("File: {}", file_name);
                   let random_file_name = uuid::Uuid::new_v4().to_string();
                   // get the extension from the file_name
-                  let ext = file_name.split('.').last().unwrap();
+                  let ext = file_name.split('.').next_back().unwrap();
                   file_dest =
                     Destination::new_file(format!("{file_dir}/{random_file_name}.{ext}")).await;
                   debug!("File destination: {:?}", file_dest);

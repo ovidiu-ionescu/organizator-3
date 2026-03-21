@@ -1,4 +1,4 @@
-api_ip = "0.0.0.0:8080"
+api_ip = "127.0.0.1:8080"
 swagger_path = "/swagger"
 
 [postgres]

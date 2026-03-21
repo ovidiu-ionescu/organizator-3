@@ -1,5 +1,6 @@
 use std::{fs::File, io::Read, net::SocketAddr};
 
+use log::trace;
 use serde::Deserialize;
 use tracing::{info, warn};
 
@@ -96,16 +97,11 @@ impl Default for Settings {
 
 impl Default for PostgresConfig {
     fn default() -> Self {
+      trace!("Get default settings for PostgresConfig");
         let pwd_env_var = "POSTGRES_PASSWORD";
         let postgres_password = match std::env::var(pwd_env_var) {
             Ok(password) => password,
-            Err(e) => {
-                warn!(
-                    "Could not read {pwd_env_var} while getting default settings: {}",
-                    e
-                );
-                "password".to_string()
-            }
+            Err(e) => panic!("Could not read {pwd_env_var} while getting default settings: {e}")
         };
         PostgresConfig {
             user:             "postgres".to_string(),
