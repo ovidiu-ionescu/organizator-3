@@ -6,6 +6,8 @@ log() {
   printf "\n%s\n" "$1"
 }
 
+COOKIE_FILE=$(mktemp)
+
 # By default read memo 1
 memo_id=${1:-1}
 
@@ -16,9 +18,10 @@ crl="curl --fail-with-body -s"
 # read the current password from stdin
 read -s -p "Current password for ${USERNAME}: " current_password
 
-JWT=$($crl "$host_identity/login" -d "username=${USERNAME}&password=$current_password")
+JWT=$($crl -c "$COOKIE_FILE" "$host_identity/login" -d "username=${USERNAME}&password=$current_password")
 log "Logged in as ${USERNAME}"
+log "JWT: $JWT"
 AUTH="Authorization: Bearer $JWT"
 
-$crl -v "${host}/memogroup" -H "$AUTH"
+$crl -v -b "$COOKIE_FILE" "${host}/memogroup" -H "$AUTH"
 

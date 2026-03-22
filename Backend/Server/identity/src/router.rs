@@ -8,7 +8,7 @@ use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
 use serde::Deserialize;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 use utoipa::ToSchema;
 use argon2::{
   password_hash::{
@@ -52,6 +52,10 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
 
     let client = get_connection(&request).await?;
 
+    if form.username.is_empty() {
+      error!("Username is empty");
+      return "Username is empty".to_text_response_with_status(StatusCode::UNAUTHORIZED);
+    }
     let login = fetch_login(&client, &form.username).await?;
     if !verify_password(&form.password, &login) {
         return "Bad password".to_text_response_with_status(StatusCode::UNAUTHORIZED);

@@ -1,6 +1,6 @@
 use crate::authentication::jot::{ExpiredToken, Jot};
 use crate::response_utils::IntoHyperResponse;
-use http::header::AUTHORIZATION;
+use http::header::{AUTHORIZATION, COOKIE};
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
 ///  - check the JWT token in the Authorization header
@@ -84,42 +84,97 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
 }
 
 fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
-    trace!("Checking for a JWT bearer token");
-    match request.headers().get(AUTHORIZATION).map(|s| s.to_str()) {
-        Some(Ok(bearer)) if bearer.len() > BEARER.len() => {
-            let jwt = &bearer[BEARER.len()..];
-            let jot = request.extensions().get::<Arc<Jot>>()?;
-            if let Ok(claims) = jot.validate_token(jwt) {
-                // verify the token has not expired
-                match jot.check_expiration(&claims) {
-                    ExpiredToken::Valid => Some(UserId(claims.sub)),
-                    ExpiredToken::GracePeriod => {
-                        // refresh the token
-                        if let Ok(new_token) = jot.generate_token(&claims.sub) {
-                            let header = String::from(BEARER) + &new_token;
-                            request
-                                .headers_mut()
-                                .insert(AUTHORIZATION, header.parse().unwrap());
-                            Some(UserId(claims.sub))
-                        } else {
-                            None
-                        }
-                    }
-                    ExpiredToken::Expired => {
-                        info!("Token expired");
-                        None
-                    }
-                }
-            } else {
-                trace!("Invalid token");
-                None
-            }
-        }
-        _ => {
-          trace!("No {} header found", AUTHORIZATION);
-          None
-        },
+  trace!("Checking the headers for a JWT bearer token");
+  let jwt = extract_jwt(request);
+  let jwt = match jwt {
+    Some(s) => s,
+    None => {
+      trace!("No jwt found in headers");
+      return None;
     }
+  };
+
+  let jot = request.extensions().get::<Arc<Jot>>()?;
+  if let Ok(claims) = jot.validate_token(jwt) {
+    // verify the token has not expired
+    match jot.check_expiration(&claims) {
+      ExpiredToken::Valid => Some(UserId(claims.sub)),
+      ExpiredToken::GracePeriod => {
+        // refresh the token
+        if let Ok(new_token) = jot.generate_token(&claims.sub) {
+          let header = String::from(BEARER) + &new_token;
+          let cookie = format!("__Host-jwt={}; HttpOnly; Secure; SameSite=Strict; Path=/;", new_token);
+
+          request
+              .headers_mut()
+              .insert(AUTHORIZATION, header.parse().unwrap());
+          
+          request
+              .headers_mut()
+              .insert("Set-Cookie", cookie.parse().unwrap())
+              ;
+          Some(UserId(claims.sub))
+        } else {
+          None
+        }
+      }
+      ExpiredToken::Expired => {
+        info!("Token expired");
+        None
+      }
+    }
+  } else {
+    trace!("Invalid token");
+    None
+  }
+}
+
+fn get_cookie_value<'a, B>(req: &'a Request<B>, cookie_name_prefix: &str) -> Option<&'a str> {
+req.headers()
+  .get_all(COOKIE)
+  .iter()
+  .filter_map(|h| h.to_str().ok())
+  .flat_map(|s| s.split(';'))
+  .find_map(|pair| {
+    let pair = pair.trim();
+    if let Some(value) = pair.strip_prefix(cookie_name_prefix) {
+      Some(value)
+    } else {
+      None
+    }
+  })
+}
+
+fn extract_bearer<'a, B>(req: &'a Request<B>) -> Option<&'a str> {
+  if let Some(auth_header) = req.headers().get(AUTHORIZATION) {
+    if let Ok(auth_str) = auth_header.to_str() {
+      if let Some(token) = auth_str.strip_prefix(BEARER) {
+        return Some(token.trim());
+      }
+    }
+  }
+  None
+}
+
+const COOKIE_NAME_PREFIX: &str = "__Host-jwt=";
+const COOKIE_NAME: &str =  "__Host-jwt";
+
+
+fn extract_jwt<'a, B>(req: &'a Request<B>) -> Option<&'a str> {
+  let bearer_token = extract_bearer(req);
+  if bearer_token.is_some() {
+    trace!("Found header {AUTHORIZATION} with bearer token");
+    return bearer_token;
+  } else {
+    trace!("Could not find header {AUTHORIZATION} with bearer token");
+  }
+  let cookie_token = get_cookie_value(req, COOKIE_NAME_PREFIX);
+  if cookie_token.is_some() {
+    trace!("Found cookie {COOKIE_NAME} with bearer token");
+  } else {
+    trace!("Cound not find cookie {COOKIE_NAME} with bearer token");
+  }
+  cookie_token
 }
 
 #[cfg(test)]
