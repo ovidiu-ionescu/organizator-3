@@ -141,21 +141,15 @@ req.headers()
   .flat_map(|s| s.split(';'))
   .find_map(|pair| {
     let pair = pair.trim();
-    if let Some(value) = pair.strip_prefix(cookie_name_prefix) {
-      Some(value)
-    } else {
-      None
-    }
+    pair.strip_prefix(cookie_name_prefix)
   })
 }
 
-fn extract_bearer<'a, B>(req: &'a Request<B>) -> Option<&'a str> {
-  if let Some(auth_header) = req.headers().get(AUTHORIZATION) {
-    if let Ok(auth_str) = auth_header.to_str() {
-      if let Some(token) = auth_str.strip_prefix(BEARER) {
+fn extract_bearer< B>(req: &Request<B>) -> Option<&str> {
+  if let Some(auth_header) = req.headers().get(AUTHORIZATION)
+    && let Ok(auth_str) = auth_header.to_str()
+      && let Some(token) = auth_str.strip_prefix(BEARER) {
         return Some(token.trim());
-      }
-    }
   }
   None
 }
@@ -164,7 +158,7 @@ const COOKIE_NAME_PREFIX: &str = "__Host-jwt=";
 const COOKIE_NAME: &str =  "__Host-jwt";
 
 
-fn extract_jwt<'a, B>(req: &'a Request<B>) -> Option<&'a str> {
+fn extract_jwt<B>(req: &Request<B>) -> Option<&str> {
   let bearer_token = extract_bearer(req);
   if bearer_token.is_some() {
     trace!("Found header {AUTHORIZATION} with bearer token");

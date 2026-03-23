@@ -54,11 +54,11 @@ lazy_static! {
 }
 
 fn trim_trailing_slash(path: &str) -> &str {
-    if path.ends_with('/') {
-        &path[..path.len() - 1]
-    } else {
-        path
-    }
+  if let Some(stripped) = path.strip_suffix('/') {
+    stripped
+  } else {
+    path
+  }
 }
 
 /// All requests to the server are handled by this function.
@@ -323,7 +323,7 @@ fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
 // TODO add swagger
 // TODO: add security
 async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let client = set_admin_user(&request).await?;
+    let client = get_connection(&request).await?;
 
     let json = db::get_json(&client, "admin", include_str!("sql/admin/memo_stats.sql"), &[]).await;
     build_simple_json_response(json.map(|(r, _)| r))
@@ -333,7 +333,7 @@ async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, Generi
 // TODO add swagger
 // TODO: add security
 async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let client = set_admin_user(&request).await?;
+    let client = get_connection(&request).await?;
 
     let json = db::get_json(&client, "admin", include_str!("sql/admin/all_user_groups.sql"), &[]).await;
     build_simple_json_response(json.map(|(r, _)| r))
@@ -366,13 +366,6 @@ async fn get_client_and_user(
     let username = &user_identification.0;
 
     Ok((client, username ))
-}
-
-async fn set_admin_user(request: &Request<Body>) -> Result<deadpool_postgres::Client, GenericError> {
-    let client = get_connection(request).await?;
-    let stmt = client.prepare_cached(include_str!("sql/admin/set_admin_user.sql")).await?;
-    client.query_one(&stmt, &[]).await?;
-    Ok(client)
 }
 
 fn build_json_response<T: serde::Serialize + Named>(
