@@ -1,8 +1,8 @@
 //! Converts the database rows into the model structs.
 
-use crate::model::DBPersistence;
+use crate::model::{DBPersistence, Requester};
 use deadpool_postgres::Client;
-use log::trace;
+use log::{trace, debug};
 use tokio_postgres::{types::ToSql, Error, Row};
 
 pub enum QueryType {
@@ -11,53 +11,101 @@ pub enum QueryType {
   Search,
 }
 
-pub async fn get_single<T>(client: &Client, params: &[&(dyn ToSql + Sync)]) -> Result<T, Error>
+pub async fn get_single<'a, T>(client: &Client, username: &'a str, params: &[&(dyn ToSql + Sync)]) -> Result<(T, Requester<'a>), Error>
 where
     T: DBPersistence + From<Row>,
 {
-    let stmt = client.prepare(T::query()).await?;
-    let row = client.query_one(&stmt, params).await?;
+    // place the current user in the PostgreSQL session
+    let set_user = client.prepare_cached(include_str!("sql/set_current_user.sql")).await?;
+    let stmt = client.prepare_cached(T::query()).await?;
+
+    let set_user_params: &[&(dyn ToSql + Sync)] = &[&username];
+    let set_user_future = client.query_one(&set_user, set_user_params);
+    let stmt_future= client.query_one(&stmt, params);
+    let (u, row) = tokio::try_join!(set_user_future, stmt_future)?;
+
+    let user_id = u.get::<_, i32>(0);
+    let requester = Requester::new(user_id, username);
+    debug!("Requester is {:?}", requester);
     trace!("Received one row from database");
-    Ok(T::from(row))
+    Ok((T::from(row), requester))
 }
 
-pub async fn get_multiple<T>(
+pub async fn get_multiple<'a, T>(
     client: &Client,
+    username: &'a str,
     params: &[&(dyn ToSql + Sync)],
     query_type: QueryType,
-) -> Result<Vec<T>, Error>
+) -> Result<(Vec<T>, Requester<'a>), Error>
 where
     T: DBPersistence + From<Row>,
 {
-    let stmt = client.prepare(
+    let set_user = client.prepare_cached(include_str!("sql/set_current_user.sql")).await?;
+    let stmt = client.prepare_cached(
       match query_type {
         QueryType::Select => T::query(),
         QueryType::Search => T::search(),
       }).await?;
-    let rows = client.query(&stmt, params).await?;
+
+    let set_user_params: &[&(dyn ToSql + Sync)] = &[&username];
+    let set_user_future = client.query_one(&set_user, set_user_params);
+    let stmt_future = client.query(&stmt, params);
+    let (u, rows) = tokio::try_join!(set_user_future, stmt_future)?;
+
+    let user_id = u.get::<_, i32>(0);
+    let requester = Requester::new(user_id, username);
+    debug!("Requester is {:?}", requester);
     trace!("Received {} rows from database", rows.len());
-    Ok(rows.into_iter().map(|row| T::from(row)).collect())
+    Ok((rows.into_iter().map(|row| T::from(row)).collect(), requester))
 }
 
-pub async fn get_json(
+pub async fn get_json<'a>(
     client: &Client,
     query: &str,
+    username: &'a str,
     params: &[&(dyn ToSql + Sync)],
-) -> Result<String, Error> {
+) -> Result<(String, Requester<'a>), Error> {
+    let set_user = client.prepare_cached(
+      if username == "admin" {
+        include_str!("sql/admin/set_admin_user.sql")
+      } else {
+        include_str!("sql/set_current_user.sql")
+      }
+      ).await?;
     let stmt = client.prepare(query).await?;
-    let row = client.query_one(&stmt, params).await?;
+
+    let set_user_params: &[&(dyn ToSql + Sync)] = &[&username];
+    let set_user_future = client.query_one(&set_user, set_user_params);
+    let stmt_future= client.query_one(&stmt, params);
+    let (u, row) = tokio::try_join!(set_user_future, stmt_future)?;
+
+    let user_id = if username == "admin" { 0 }  else { u.get::<_, i32>(0) };
+    let requester = Requester::new(user_id, username);
+    debug!("Requester is {:?}", requester);
+    trace!("Received one row from database");
+
     let json: String = row.get(0);
-    Ok(json)
+    Ok((json, requester))
 }
 
-pub async fn execute(
+pub async fn execute<'a>(
   client: &Client,
+  username: &'a str,
   query: &str,
   params: &[&(dyn ToSql + Sync)],
-) -> Result<u64, Error>
-  {
+) -> Result<(u64, Requester<'a>), Error> {
+  let set_user = client.prepare_cached(include_str!("sql/set_current_user.sql")).await?;
   let stmt = client.prepare(query).await?;
-  let rows_inserted = client.execute(&stmt, params).await?;
-  Ok(rows_inserted)
+
+    let set_user_params: &[&(dyn ToSql + Sync)] = &[&username];
+    let set_user_future = client.query_one(&set_user, set_user_params);
+    let stmt_future = client.execute(&stmt, params);
+    let (u, rows_affected) = tokio::try_join!(set_user_future, stmt_future)?;
+
+    let user_id = u.get::<_, i32>(0);
+    let requester = Requester::new(user_id, username);
+    debug!("Requester is {:?}", requester);
+    trace!("Affected {} rows in the database", rows_affected);
+  Ok((rows_affected, requester))
 }
 

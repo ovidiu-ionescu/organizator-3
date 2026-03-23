@@ -92,14 +92,14 @@ pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericErr
     ),
 )]
 async fn get_memo(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
     let path = request.uri().path();
     let captures = MEMO_GET_REGEX.captures(path).unwrap();
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
-    let memo: Result<Memo, _> = db::get_single(&client, &[&memo_id]).await;
+    let memo: Result<(Memo, Requester), _> = db::get_single(&client, username, &[&memo_id]).await;
     
-    build_json_response(memo, requester)
+    build_json_response(memo)
 }
 
 fn split_and_trim(s: &str) -> (&str, &str) {
@@ -131,14 +131,14 @@ struct WriteMemoForm {
 }
 async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let form: WriteMemoForm = parse_body(&mut request).await?;
-    let (db_client, requester) = get_client_and_user(&request).await?;
+    let (db_client, username) = get_client_and_user(&request).await?;
 
     let (title, body) = split_and_trim(&form.text);
     let now = millis_since_epoch();
 
-    trace!("Writing memo with id {} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}", form.memo_id, requester.username, form.group_id);
-    let memo: Result<GetWriteMemo, PgError> = db::get_single(&db_client, &[&form.memo_id, &title, &body, &now, &form.group_id, &requester.username]).await;
-    build_json_response(memo, requester)
+    trace!("Writing memo with id {} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}", form.memo_id, username, form.group_id);
+    let memo: Result<(GetWriteMemo, Requester), PgError> = db::get_single(&db_client, username, &[&form.memo_id, &title, &body, &now, &form.group_id, &username]).await;
+    build_json_response(memo)
 }
 
 #[utoipa::path(get, path="/memogroup",
@@ -147,12 +147,12 @@ async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, Generi
     ),
 )]
 async fn get_memogroups_for_user(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
-    let memo_group: Result<Vec<crate::model::MemoGroup>, _> =
-        db::get_multiple(&client, &[&requester.username], Select).await;
+    let memo_group: Result<(Vec<crate::model::MemoGroup>, Requester), _> =
+        db::get_multiple(&client, username, &[&username], Select).await;
 
-    build_json_response(memo_group, requester)
+    build_json_response(memo_group)
 }
 
 #[utoipa::path(get, path="/explicit_permissions/{id}",
@@ -164,15 +164,15 @@ async fn get_memogroups_for_user(request: Request<Body>) -> Result<Response<Body
     ),
 )]
 async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(request).await?;
+    let (client, username) = get_client_and_user(request).await?;
 
     let path = request.uri().path();
     let captures = EXPLICIT_PERMISSIONS_REGEX.captures(path).unwrap();
     let memogroup_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
-    let permissions: Result<Vec<ExplicitPermission>, _> =
-        db::get_multiple(&client, &[&memogroup_id, &requester.username], Select).await;
+    let permissions: Result<(Vec<ExplicitPermission>, Requester), _> =
+        db::get_multiple(&client, username, &[&memogroup_id, &username], Select).await;
 
-    build_json_response(permissions, requester)
+    build_json_response(permissions)
 }
 
 #[utoipa::path(get, path="/memo/",
@@ -181,11 +181,11 @@ async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Bo
     ),
 )]
 async fn get_memo_titles(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
-    let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[], Select).await;
+    let memo_titles: Result<(Vec<MemoTitle>, Requester), _> = db::get_multiple(&client, username, &[], Select).await;
 
-    build_json_response(memo_titles, requester)
+    build_json_response(memo_titles)
 }
 
 #[derive(serde::Deserialize, Debug, Clone, ToSchema)]
@@ -196,24 +196,24 @@ struct SearchMemoForm {
 // TODO: Add swagger info
 async fn memo_search(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let form: SearchMemoForm = parse_body(&mut request).await?;
-    let (client, requester) = get_client_and_user(&request).await?;
-    let memo_titles: Result<Vec<MemoTitle>, _> = db::get_multiple(&client, &[&form.search], Search).await;
+    let (client, username) = get_client_and_user(&request).await?;
+    let memo_titles: Result<(Vec<MemoTitle>, Requester), _> = db::get_multiple(&client, username, &[&form.search], Search).await;
 
-    build_json_response(memo_titles, requester)
+    build_json_response(memo_titles)
 }
 
 // TODO: Add swagger info
 async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-    let (client, requester) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
     let uri = request.headers().get("X-Original-URI").unwrap().to_str().unwrap();
     debug!("Checking file auth for {uri}");
     let uuid = FILE_UUID_REGEX.captures(uri).unwrap().name("uuid").unwrap().as_str().parse::<uuid::Uuid>()?;
 
     let level: i32 = 1;
-    let file_auth: Result<FilePermission, _> = db::get_single(&client, &[&uuid, &requester.username, &level]).await;
+    let file_auth: Result<(FilePermission, Requester), _> = db::get_single(&client, username, &[&uuid, &username, &level]).await;
     trace!("File auth for {uri} is {:?}", file_auth);
-    build_json_response(file_auth, requester)
+    build_json_response(file_auth)
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -229,9 +229,7 @@ impl Named for UploadResponse {
 }
 
 async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericError> {
-  let (client, requester) = get_client_and_user(&request).await?;
-  let requester_name = requester.username.to_string();
-  let requester = Requester { id: requester.id, username: &requester_name };
+  let (client, username) = get_client_and_user(&request).await.map(|(c, u)| (c, u.to_string()))?;
 
   let settings = &*SETTINGS;
   let fields = handle_multipart(request, &settings.file_storage.path).await?;
@@ -259,10 +257,11 @@ async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericErr
   if let (Some(memo_group_id), Some(generated_name), Some(original_filename)) = (group_id, generated_name, original_filename) {
     debug!("Save entry to filestore table");
     let uuid = generated_name[..generated_name.rfind('.').unwrap()].parse::<uuid::Uuid>().unwrap();
-    match db::execute(&client, include_str!("sql/insert_filestore.sql"), &[&uuid, &requester.id, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
-      Ok(rows_inserted) => { 
+    // FIXME the user id should come from the session, now hardcoded 1 to pass compilation
+    match db::execute(&client, &username, include_str!("sql/insert_filestore.sql"), &[&uuid, &1, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
+      Ok((rows_inserted, requester)) => { 
         debug!("Number of rows inserted into filestore table: {}", rows_inserted);
-        build_json_response(Ok(UploadResponse { filename: generated_name, original_filename }), requester)
+        build_json_response(Ok((UploadResponse { filename: generated_name, original_filename }, requester)))
       },
       Err(e) => { 
         error!("Something went wrong: {:?}", e); 
@@ -288,12 +287,12 @@ impl Named for FilestoreResult<'_> {
 
 // TODO add swagger info
 async fn file_list(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, requester) = get_client_and_user(&request).await?;
+  let (client, username) = get_client_and_user(&request).await?;
 
-  let files: Vec<FilestoreFileDB> = db::get_multiple(&client, &[], Select).await?;
+  let (files, requester) = db::get_multiple(&client, username, &[], Select).await?;
   let files_in_dir = ls()?;
   let set: HashSet<&str> = files_in_dir.iter().map(|f| f.filename_no_extension()).collect();
-  let db_only: Vec<&FilestoreFileDB> = files.iter().filter(|f| !set.contains(f.id.to_string().as_str())).collect();
+  let db_only: Vec<&FilestoreFileDB> = files.iter().filter(|f: &&FilestoreFileDB| !set.contains(f.id.to_string().as_str())).collect();
   let db_set = files.iter().map(|f| f.id).collect::<HashSet<uuid::Uuid>>();
   let dir_only: Vec<FilestoreFile> = files_in_dir.into_iter()
     .filter(|f| 
@@ -304,7 +303,7 @@ async fn file_list(request: Request<Body>) -> Result<Response<Body>, GenericErro
       }
       ).collect();
 
-    build_json_response(Ok(FilestoreResult {db_only, dir_only} ), requester)
+    build_json_response(Ok((FilestoreResult {db_only, dir_only}, requester)))
 }
 
 fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
@@ -326,8 +325,8 @@ fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
 async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let client = set_admin_user(&request).await?;
 
-    let json = db::get_json(&client, include_str!("sql/admin/memo_stats.sql"), &[]).await;
-    build_simple_json_response(json)
+    let json = db::get_json(&client, "admin", include_str!("sql/admin/memo_stats.sql"), &[]).await;
+    build_simple_json_response(json.map(|(r, _)| r))
 }
 
 
@@ -336,30 +335,29 @@ async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, Generi
 async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let client = set_admin_user(&request).await?;
 
-    let json = db::get_json(&client, include_str!("sql/admin/all_user_groups.sql"), &[]).await;
-    build_simple_json_response(json)
+    let json = db::get_json(&client, "admin", include_str!("sql/admin/all_user_groups.sql"), &[]).await;
+    build_simple_json_response(json.map(|(r, _)| r))
 }
 
 async fn get_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, _requester) = get_client_and_user(&request).await?;
+  let (client, username) = get_client_and_user(&request).await?;
 
-  let json = db::get_json(&client, include_str!("sql/user_groups.sql"), &[]).await;
-  build_simple_json_response(json)
+  let json = db::get_json(&client, username, include_str!("sql/user_groups.sql"), &[]).await;
+  build_simple_json_response(json.map(|(string, _requester)| string))
 }
 
 async fn get_memogroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, _requester) = get_client_and_user(&request).await?;
+  let (client, username) = get_client_and_user(&request).await?;
 
-  let json = db::get_json(&client, include_str!("sql/memo_groups.sql"), &[]).await;
-  build_simple_json_response(json)
+  let json = db::get_json(&client, username, include_str!("sql/memo_groups.sql"), &[]).await;
+  build_simple_json_response(json.map(|(string, _requester)| string))
 }
 
 
 /// Fetch the database connection and the current user from the request.
-/// We set the current user in the postgres session in the connection
 async fn get_client_and_user(
     request: &Request<Body>,
-) -> Result<(deadpool_postgres::Client, Requester<'_>), GenericError> {
+) -> Result<(deadpool_postgres::Client, &str), GenericError> {
     let client = get_connection(request).await?;
     // get the current logged in user from the request
     let Some(user_identification) = request.extensions().get::<UserId>() else {
@@ -367,13 +365,7 @@ async fn get_client_and_user(
     };
     let username = &user_identification.0;
 
-    // place the current user in the PostgreSQL session
-    let set_var = client.prepare_cached(include_str!("sql/set_current_user.sql")).await?;
-    let result = client.query_one(&set_var, &[&username]).await?;
-    let user_id = result.get::<_, i32>(0);
-    debug!("User id for {username} is {user_id}");
-
-    Ok((client, Requester { id: user_id, username }))
+    Ok((client, username ))
 }
 
 async fn set_admin_user(request: &Request<Body>) -> Result<deadpool_postgres::Client, GenericError> {
@@ -384,11 +376,10 @@ async fn set_admin_user(request: &Request<Body>) -> Result<deadpool_postgres::Cl
 }
 
 fn build_json_response<T: serde::Serialize + Named>(
-    data_result: Result<T, PgError>,
-    requester: Requester,
+    data_result: Result<(T, Requester), PgError>,
 ) -> Result<Response<Body>, GenericError> {
   match data_result {
-    Ok(data) => {
+    Ok((data, requester)) => {
       let result = json!({
         T::name(): data,
         "requester": requester,

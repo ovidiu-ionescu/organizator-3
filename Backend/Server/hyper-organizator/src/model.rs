@@ -25,10 +25,16 @@ pub struct User {
     pub username: Option<String>,
 }
 
-#[derive(Serialize, ToSchema, Clone)]
+#[derive(Serialize, ToSchema, Clone, Debug)]
 pub struct Requester<'a> {
     pub id:       i32,
     pub username: &'a str,
+}
+
+impl <'a>Requester<'a> {
+  pub fn new(id: i32, username: &'a str) -> Self {
+    Self {id, username }
+  }
 }
 
 #[derive(Serialize, ToSchema)]
