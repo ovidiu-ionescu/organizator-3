@@ -1,6 +1,6 @@
 use http::{Method, Request, Response, StatusCode};
 use hyper::Body;
-use lib_hyper_organizator::authentication::check_security::UserId;
+use lib_hyper_organizator::authentication::check_security::{UserId, create_security_cookie};
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{parse_body, IntoResultHyperResponse};
@@ -66,8 +66,8 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     };
     let new_token: String = jot.generate_token(&form.username)?;
     info!("User 「{}」 logged in", &form.username);
-    let cookie = format!("__Host-jwt={}; HttpOnly; Secure; SameSite=Strict; Path=/;", new_token);
-    
+    let cookie = create_security_cookie(&new_token);
+
     Ok(Response::builder()
         .status(StatusCode::NO_CONTENT)
         .header("content-type", "text/plain; charset=utf-8")

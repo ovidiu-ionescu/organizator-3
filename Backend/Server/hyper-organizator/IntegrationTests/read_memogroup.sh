@@ -6,6 +6,11 @@ log() {
   printf "\n%s\n" "$1"
 }
 
+if [ -z "${USERNAME}" ]; then
+  echo "USERNAME is not set, it is needed for login" >&2
+  exit 1
+fi
+
 COOKIE_FILE=$(mktemp)
 
 # By default read memo 1

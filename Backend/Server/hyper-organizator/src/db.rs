@@ -7,6 +7,7 @@ use tokio_postgres::{types::ToSql, Error, Row};
 
 pub enum QueryType {
   Select,
+  // For search we want a list of hits, not full objects
   Search,
 }
 

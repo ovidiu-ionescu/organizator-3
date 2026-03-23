@@ -103,7 +103,7 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
         // refresh the token
         if let Ok(new_token) = jot.generate_token(&claims.sub) {
           let header = String::from(BEARER) + &new_token;
-          let cookie = format!("__Host-jwt={}; HttpOnly; Secure; SameSite=Strict; Path=/;", new_token);
+          let cookie = create_security_cookie(&new_token);
 
           request
               .headers_mut()
@@ -127,6 +127,10 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
     trace!("Invalid token");
     None
   }
+}
+
+pub fn create_security_cookie(jwt: &str) -> String {
+  format!("__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Strict; Path=/;")
 }
 
 fn get_cookie_value<'a, B>(req: &'a Request<B>, cookie_name_prefix: &str) -> Option<&'a str> {
