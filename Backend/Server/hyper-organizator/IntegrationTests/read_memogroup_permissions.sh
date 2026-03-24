@@ -6,6 +6,8 @@ log() {
   printf "\n%s\n" "$1"
 }
 
+: ${USERNAME:?"is not set, it is needed for login"}
+
 # By default read memo 1
 memo_id=${1:-1}
 
@@ -15,8 +17,10 @@ crl="curl --fail-with-body -s"
 
 # read the current password from stdin
 read -s -p "Current password for ${USERNAME}: " current_password
+echo
 
 JWT=$($crl "$host_identity/login" -d "username=${USERNAME}&password=$current_password")
+: ${JWT:? "has not been fetched, cannot continue without it"}
 log "Logged in as ${USERNAME}"
 AUTH="Authorization: Bearer $JWT"
 

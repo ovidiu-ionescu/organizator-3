@@ -69,12 +69,13 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     let cookie = create_security_cookie(&new_token);
 
     Ok(Response::builder()
-        .status(StatusCode::NO_CONTENT)
+        //.status(StatusCode::NO_CONTENT)
+        .status(StatusCode::OK)
         .header("content-type", "text/plain; charset=utf-8")
         .header("Set-Cookie", cookie)
         .header("server", "hyper")
-        .body(Body::empty())
-        //.body(Body::from(new_token))
+        //.body(Body::empty())
+        .body(Body::from(new_token))
         .unwrap())
 }
 

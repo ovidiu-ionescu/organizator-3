@@ -6,10 +6,7 @@ log() {
   printf "\n%s\n" "$1"
 }
 
-if [ -z "${USERNAME}" ]; then
-  echo "USERNAME is not set, it is needed for login" >&2
-  exit 1
-fi
+: ${USERNAME:?"is not set, it is needed for login"}
 
 COOKIE_FILE=$(mktemp)
 
