@@ -61,9 +61,9 @@ export interface AccessTime {
 }
 
 export interface PasswordThen {
-  then: {
+  then?: {
     // resolve: <T>(value?: T | PromiseLike<T>) => void;
-    resolve: (value?: string | PromiseLike<string>) => void;
+    resolve: (value: string | PromiseLike<string>) => void;
     reject: (reason?: any) => void;
   }
 }
@@ -167,3 +167,5 @@ export interface MemoGroups {
   }[];
   requester: Requester;
 }
+
+export type Undef<T> = T | undefined;

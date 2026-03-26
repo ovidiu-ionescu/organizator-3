@@ -12,7 +12,7 @@ const template = `
 `;
 
 export class Journal extends HTMLElement {
-  private $: { [key: string]: HTMLElement };
+  private $: { [key: string]: HTMLElement } = {};
 
   constructor() {
     super();
@@ -23,9 +23,8 @@ export class Journal extends HTMLElement {
     const shadow = this.attachShadow({ mode: "open" });
     shadow.innerHTML = template;
     // build a cache of elements with an id
-    this.$ = {};
-    shadow.querySelectorAll("[id]").forEach((e: HTMLElement) => {
-      this.$[e.getAttribute("id")] = e;
+    shadow.querySelectorAll<HTMLElement>("[id]").forEach((e) => {
+      this.$[e.id] = e;
     });
   }
 

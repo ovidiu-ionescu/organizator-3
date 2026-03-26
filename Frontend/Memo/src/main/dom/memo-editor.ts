@@ -7,28 +7,14 @@
 import * as db from "./memo_db.js";
 import konsole from "./console_log.js";
 import * as server_comm from "./server_comm.js";
-import {
-  Memo,
-  ServerMemo,
-  CacheMemo,
-  PasswordThen,
-  IdName,
-  HasType,
-  GroupList,
-} from "./memo_interfaces.js";
+import {GroupList, HasType, IdName, Memo, PasswordThen, Undef} from "./memo_interfaces.js";
 import * as events from "./events.js";
 import "./img-inline-svg.js";
 import "./group-list.js";
 import * as memo_processing from "./memo_processing.js";
-import { alignedText, digestMessage } from "./util.js";
+import {alignedText, digestMessage} from "./util.js";
 
-import init, {
-  encrypt,
-  memo_decrypt,
-  memo_encrypt,
-  process_markdown,
-  truncate_base64,
-} from "../pkg/organizator_wasm.js";
+import init, {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
 
 let WASM_LOADED = false;
 let WASM_LOADING = undefined;
@@ -61,7 +47,7 @@ const template = `
         flex-flow: column;
         flex: 1;
       }
-      #source {
+      T extends <T>(value: T | PromiseLike<T>) => void#source {
         resize: none;
         width: 100%;
         min-height: 20px;
@@ -207,8 +193,8 @@ const template = `
       <input id="password" type="password">
       
       <footer>
-      <img id="done_password" src="/images/ic_done_48px.svg">
-      <img id="cancel_password" src="/images/ic_clear_48px.svg">
+      <img id="done_password" src="/images/ic_done_48px.svg" alt="Done">
+      <img id="cancel_password" src="/images/ic_clear_48px.svg" alt="Cancel">
       </footer>
     </div>
     </div>
@@ -245,22 +231,22 @@ Date.prototype.toIsoString = function () {
 
 type MyElement = HTMLElement & HTMLInputElement & PasswordThen;
 export class MemoEditor extends HTMLElement {
-  private $: { [key: string]: MyElement };
-  private _edit: boolean;
-  private _memoId: number;
-  private _memogroup: IdName;
-  private _user: IdName;
-  private _timestamp: number;
-  private _readonly: boolean;
-  private _uploading: boolean;
-  private _digest: string;
+  private $: { [key: string]: MyElement } = {};
+  private _edit: Undef<boolean>;
+  private _memoId: Undef<number>;
+  private _memogroup: Undef<IdName>;
+  private _user: Undef<IdName>;
+  private _timestamp: Undef<number>;
+  private _readonly: Undef<boolean>;
+  private _uploading: Undef<boolean>;
+  private _digest: Undef<string>;
 
   constructor() {
     super();
     this.initialize();
   }
 
-  get memoId() {
+  get memoId(): Undef<number> {
     return this._memoId;
   }
   async initialize() {
@@ -268,9 +254,8 @@ export class MemoEditor extends HTMLElement {
     shadow.innerHTML = template;
 
     // build a cache of elements with an id
-    this.$ = {};
-    shadow.querySelectorAll("[id]").forEach((e: MyElement) => {
-      this.$[e.getAttribute("id")] = e;
+    shadow.querySelectorAll<MyElement>("[id]").forEach((e) => {
+      this.$[e.id] = e;
     });
 
     // show the password dialog
@@ -316,8 +301,7 @@ export class MemoEditor extends HTMLElement {
     });
 
     this.$.encrypt_button.addEventListener("click", async () => {
-      const encrypted_source = await this._encrypt();
-      this.value = encrypted_source;
+      this.value = await this._encrypt();
       this.save_local_only({ type: "Encryption button" });
     });
 
@@ -344,8 +328,8 @@ export class MemoEditor extends HTMLElement {
       const start_quote = "\u300c";
       const end_quote = "\u300d";
 
-      const start_offset = this.$.source.selectionStart;
-      const end_offset = this.$.source.selectionEnd;
+      const start_offset = this.$.source.selectionStart ?? undefined;
+      const end_offset = this.$.source.selectionEnd ?? undefined;
       let s = this.$.source.value;
       s = s.slice(0, end_offset) + end_quote + s.slice(end_offset);
       s = s.slice(0, start_offset) + start_quote + s.slice(start_offset);
@@ -356,8 +340,11 @@ export class MemoEditor extends HTMLElement {
       const editor = this.$.source;
       const start_offset = editor.selectionStart;
       const end_offset = editor.selectionEnd;
+      if(! start_offset || !end_offset) {
+        return;
+      }
       const toInsert = (process instanceof Function) ?
-        process(editor.value.substring(editor.selectionStart, editor.selectionEnd))
+        process(editor.value.substring(start_offset, end_offset))
         : process;
       if(toInsert) {
         let s = editor.value;
@@ -402,8 +389,8 @@ export class MemoEditor extends HTMLElement {
 
     // pasting links
     this.$.source.addEventListener("paste", (event) => {
-      const text = event.clipboardData.getData("text/plain");
-      if (!text.startsWith("http://") && !text.startsWith("https://")) return;
+      const text = event.clipboardData?.getData("text/plain");
+      if (!text?.startsWith("http://") && !text?.startsWith("https://")) return;
       event.preventDefault();
       insertText(`[${new URL(text).hostname}](${text})`);
     });
@@ -433,7 +420,7 @@ export class MemoEditor extends HTMLElement {
     });
 
     this.$.file_upload.addEventListener('change', async (event) => {
-      let filename, original_filename: String;
+      let filename: Undef<String>, original_filename: String;
       for(let i = 0; i < 3 && !filename; i++) {
         if(i) {
           konsole.log(`Attempt ${i + 1} to upload file`);
@@ -529,7 +516,7 @@ export class MemoEditor extends HTMLElement {
     this._memoId = memoId;
   }
 
-  set memogroup(memogroup: IdName) {
+  set memogroup(memogroup: Undef<IdName>) {
     this._memogroup = memogroup;
   }
 
@@ -602,14 +589,14 @@ export class MemoEditor extends HTMLElement {
     this._memoId = -+new Date();
     konsole.log("New memo in editor", this._memoId);
     window.history.replaceState(null, "", `/memo/${this._memoId}`);
-    this.memogroup = null;
-    this._user = null;
+    this.memogroup = undefined;
+    this._user = undefined;
     this.$.edit_user.innerText = "";
     this._timestamp = 0;
     this.$.source.value = "";
     this.$.edit_memogroup.value = "-1";
     this._readonly = false;
-    this._digest = null;
+    this._digest = undefined;
     this._show_editor();
   }
 
@@ -618,7 +605,7 @@ export class MemoEditor extends HTMLElement {
    */
   async get_memo(): Promise<Memo> {
     const encrypted_source = await this._encrypt();
-    const result = {
+    return {
       id: this._memoId,
       memogroup: (this.$.edit_memogroup as unknown as GroupList).memogroup,
       text: encrypted_source,
@@ -626,7 +613,6 @@ export class MemoEditor extends HTMLElement {
       timestamp: this._timestamp,
       readonly: this._readonly,
     };
-    return result;
   }
 
   async set_memo(memo: Memo) {
@@ -659,13 +645,13 @@ export class MemoEditor extends HTMLElement {
    */
   show_status(text: string) {
     konsole.log("Display status in editor", text);
-    this._memoId = null;
-    this._memogroup = null;
-    this._user = null;
+    this._memoId = undefined;
+    this._memogroup = undefined;
+    this._user = undefined;
     this.value = text;
     this.$.edit_user.innerText = "";
     this.$.edit_memogroup.value = "-1";
-    this._timestamp = null;
+    this._timestamp = undefined;
     this._readonly = true;
     this._display_timestamp();
     this._show_presentation();
@@ -688,7 +674,7 @@ export class MemoEditor extends HTMLElement {
     let perm_div = this.$.presentation.querySelector(`#${DIVID}`);
     if(perm_div) {
       konsole.log(`Hide explicit permissions for memo ${this._memoId}`)
-      perm_div.parentNode.removeChild(perm_div);
+      perm_div.parentNode!.removeChild(perm_div);
       return;
     }
 
