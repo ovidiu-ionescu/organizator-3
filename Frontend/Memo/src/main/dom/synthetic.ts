@@ -86,7 +86,7 @@ const create_cached_memos = async () => {
 const all_user_groups = async () => {
   const groups_per_users = await server_comm.get_all_user_groups();
   
-  const result = [];
+  const result: string[] = [];
   result.push("# All User Groups");
   groups_per_users.map((groups_per_user) => {
     result.push(`- ${groups_per_user.owner.name}`)
@@ -103,7 +103,7 @@ const all_user_groups = async () => {
 const create_user_groups = async () => {
   const usergroups = await server_comm.get_user_groups();
   
-  const result = [];
+  const result: string[] = [];
   result.push(`# User Groups of User ${usergroups.requester.name}`);
   usergroups.usergroups.map((group) => {
     result.push(`- ${group.name}`)
@@ -116,7 +116,7 @@ const create_user_groups = async () => {
 
 const create_memo_groups = async () => {
   const memogroups = await server_comm.get_memo_groups();
-  const result = [];
+  const result: string[] = [];
   result.push(`# Memo Groups of User ${memogroups.requester.name}`);
   memogroups.memogroups.map((group) => {
     result.push(`- ${group.name}`);

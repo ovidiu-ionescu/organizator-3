@@ -2,3 +2,12 @@ build:
   reset
   npm run build
   cp favicon-green.ico build/main/favicon.ico
+
+install-dependencies:
+  npm update
+  npm install
+  npm install typescript --save-dev
+
+deploy:
+  cp -r build/main/dom/ /var/www/organizator.ro/
+

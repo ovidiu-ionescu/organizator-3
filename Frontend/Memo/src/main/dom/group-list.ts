@@ -9,19 +9,19 @@ import { read_memo_groups } from "./server_comm.js";
 import konsole from "./console_log.js";
 
 class GroupList extends HTMLElement {
-  private _groups: IdName[];
-  private _fetch_elements: () => Promise<IdName[]>;
+  private _groups: IdName[] = [];
+  private readonly _fetch_elements: () => Promise<IdName[]>;
   constructor(fetch_elements: () => Promise<IdName[]>) {
     super();
     this._fetch_elements = fetch_elements;
-    this.initialize();
+    this.initialize().catch(err => konsole.error("Failed to initialize GroupList", err));
   }
 
   async initialize() {
     const shadow = this.attachShadow({ mode: "open" });
 
     shadow.innerHTML = `
-      <style type="text/css">
+      <style>
         * {
           font-family: sans-serif;
           background: #1F1F1F;
@@ -45,7 +45,7 @@ class GroupList extends HTMLElement {
       this._groups = await this._fetch_elements();
     }
 
-    const sel = this.shadowRoot.querySelector("#main_select");
+    const sel = this.shadowRoot!.querySelector("#main_select") as HTMLSelectElement;
     this._groups
       .map((group) => {
         const opt = document.createElement("option");
@@ -74,7 +74,7 @@ class GroupList extends HTMLElement {
   }
 
   _getSelect() {
-    return this.shadowRoot.querySelector("#main_select") as HTMLInputElement;
+    return this.shadowRoot!.querySelector("#main_select") as HTMLInputElement;
   }
 }
 

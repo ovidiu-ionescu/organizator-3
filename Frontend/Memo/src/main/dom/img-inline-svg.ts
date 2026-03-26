@@ -3,11 +3,12 @@
  *
  * Inlines an SVG image so that it can be manipulated by CSS
  */
+import konsole from "./console_log.js";
 
 export class ImgInlineSvg extends HTMLElement {
   _color() {
     const fillColor = getComputedStyle(this).color || "white";
-    const svg = this.shadowRoot.querySelector("svg");
+    const svg = this.shadowRoot!.querySelector("svg");
     if (svg) {
       svg.style.fill = fillColor;
     }
@@ -16,11 +17,14 @@ export class ImgInlineSvg extends HTMLElement {
   constructor() {
     super();
     const imgSrc = this.getAttribute("src");
+    if(!imgSrc) {
+      konsole.error("ImgInlineSvg needs a src");
+      return
+    }
     const shadow = this.attachShadow({ mode: "open" });
     fetch(imgSrc)
       .then((response) => response.text())
-      .then((text) => {
-        const mySvg = text;
+      .then((svgText) => {
         shadow.innerHTML = `
         <style>
         :host {
@@ -31,7 +35,7 @@ export class ImgInlineSvg extends HTMLElement {
             height: 100%;
         }
         </style>        
-        ${mySvg}
+        ${svgText}
         `;
         this._color();
       });

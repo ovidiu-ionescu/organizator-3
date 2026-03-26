@@ -3,9 +3,9 @@
  *
  * Keep the last 100 log messages in an array. Useful for debugging on mobile
  */
-const journal = [];
+const journal: string[] = [];
 
-const add = (...args: any) => {
+const add = (...args: (string | number)[]) => {
   if (journal.length > 100) {
     journal.shift();
   }

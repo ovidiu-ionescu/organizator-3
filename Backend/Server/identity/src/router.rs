@@ -68,15 +68,24 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     info!("User 「{}」 logged in", &form.username);
     let cookie = create_security_cookie(&new_token);
 
-    Ok(Response::builder()
-        //.status(StatusCode::NO_CONTENT)
-        .status(StatusCode::OK)
-        .header("content-type", "text/plain; charset=utf-8")
-        .header("Set-Cookie", cookie)
-        .header("server", "hyper")
-        //.body(Body::empty())
-        .body(Body::from(new_token))
-        .unwrap())
+    // if it has the web client header, return just the cookie
+    if let Some(_) = request.headers().get("x-organizator-client-version") {
+      Ok(Response::builder()
+          .status(StatusCode::NO_CONTENT)
+          .header("content-type", "text/plain; charset=utf-8")
+          .header("Set-Cookie", cookie)
+          .header("server", "hyper")
+          .body(Body::empty())
+          .unwrap())
+    } else {
+      Ok(Response::builder()
+          .status(StatusCode::OK)
+          .header("content-type", "text/plain; charset=utf-8")
+          .header("Set-Cookie", cookie)
+          .header("server", "hyper")
+          .body(Body::from(new_token))
+          .unwrap())
+      }
 }
 
 pub fn verify_password(password: &str, login: &Login) -> bool {
