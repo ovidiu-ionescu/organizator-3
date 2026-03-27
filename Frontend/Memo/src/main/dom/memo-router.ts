@@ -17,8 +17,8 @@ import * as db from "./memo_db.js";
 import * as memo_processing from "./memo_processing.js";
 import konsole from "./console_log.js";
 import * as server_comm from "./server_comm.js";
-import * as events from "./events.js";
 import { create_synthetic_memo } from "./synthetic.js";
+import {raspandac} from "./events.js";
 
 const local_prefixes = ["/memo/", "/journal"];
 const routerInterceptor = (evt) => {
@@ -121,7 +121,7 @@ document.addEventListener("click", routerInterceptor);
 window.addEventListener("popstate", () => {
   load_route();
 });
-document.addEventListener(events.NAVIGATE, navigate);
+raspandac.on("navigate", navigate);
 
 const options: RequestInit = {
   credentials: "include",
@@ -308,15 +308,15 @@ const displayMemoTitles = async (
   }
 };
 
-document.addEventListener(events.MEMO_DELETED, (evt: CustomEvent) => {
+raspandac.on("memoDeleted", (evt: CustomEvent) => {
   // if the memo was deleted then remove it from the list
   const memo_link_id = make_memotitle_link_id(evt.detail);
   const link = document.getElementById(memo_link_id);
   if (link) {
     konsole.log(
-      `Got ${events.MEMO_DELETED} event, remove link ${memo_link_id}`
+      `Got "memoDeleted" event, remove link ${memo_link_id}`
     );
-    link.parentNode.removeChild(link);
+    link.parentNode?.removeChild(link);
   }
 });
 

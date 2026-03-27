@@ -8,6 +8,7 @@ import * as db from "./memo_db.js";
 import konsole from "./console_log.js";
 import * as server_comm from "./server_comm.js";
 import {GroupList, HasType, IdName, Memo, PasswordThen, Undef} from "./memo_interfaces.js";
+import {raspandac} from "./events.js";
 import * as events from "./events.js";
 import "./img-inline-svg.js";
 import "./group-list.js";
@@ -440,24 +441,22 @@ export class MemoEditor extends HTMLElement {
     });
 
     // listen to saving events
-    document.addEventListener(events.SAVING_EVENT, (event) => {
+    raspandac.on("savingEvent", (event) => {
       konsole.log("Received saving event", event);
-      this.$.status.innerText = (event as CustomEvent).detail;
+      this.$.status.innerText = event.detail;
     });
 
-    document.addEventListener(events.SAVE_ALL_STATUS, (event) => {
+    raspandac.on("saveAllStatus", event => {
       konsole.log(
-        `Received ${events.SAVE_ALL_STATUS} event, detail ${
-          (event as CustomEvent).detail
-        }`
+        `Received saveAllStatus event, detail ${event.detail}`
       );
       this.$.save_all_button.style.color = (event as CustomEvent).detail;
       konsole.log(`Button color is: [${this.$.save_all_button.style.color}]`);
     });
 
-    document.addEventListener(events.MEMO_CHANGE_ID, (event: CustomEvent) => {
+    raspandac.on("memoChangeId", (event: CustomEvent) => {
       konsole.log(
-        `Received ${events.MEMO_CHANGE_ID} event, detail ${event.detail}`
+        `Received memoChangeId event, detail ${event.detail}`
       );
       if (event.detail.old_id === this._memoId) {
         this._memoId = event.detail.new_id;
@@ -465,9 +464,9 @@ export class MemoEditor extends HTMLElement {
       }
     });
 
-    document.addEventListener(events.MEMO_DELETED, (event: CustomEvent) => {
+    raspandac.on("memoDeleted", (event: CustomEvent) => {
       konsole.log(
-        `Received ${events.MEMO_DELETED} event, detail ${event.detail}`
+        `Received memoDeleted event, detail ${event.detail}`
       );
       if (this.memoId === event.detail) {
         this.show_status(`# Memo ${this.memoId} has been deleted`);
@@ -481,7 +480,7 @@ export class MemoEditor extends HTMLElement {
     window.addEventListener("pagehide", save);
     window.addEventListener("pageshow", save);
     window.addEventListener("popstate", save);
-    document.addEventListener(events.NAVIGATE, save);
+    raspandac.on("navigate", save);
 
     this.$.journal_button.addEventListener("click", (evt) => {
       evt.stopPropagation();

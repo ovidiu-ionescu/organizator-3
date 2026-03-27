@@ -14,51 +14,41 @@ export enum SaveAllStatus {
   Success = "",
 }
 
-export const SAVE_ALL_STATUS = "saveAllStatus";
-export const SAVING_EVENT = "savingEvent";
-export const MEMO_CHANGE_ID = "memoChangeId";
-export const NAVIGATE = "navigate";
-export const MEMO_DELETED = "memoDeleted";
+export interface OrgEvents {
+  "savingEvent": CustomEvent<string>;
+  "saveAllStatus": CustomEvent<SaveAllStatus>;
+  "memoChangeId": CustomEvent<{old_id: number, new_id: number}>
+  "navigate": CustomEvent<string>;
+  "memoDeleted": CustomEvent<number>;
+}
+// export const SAVE_ALL_STATUS = "saveAllStatus";
+// export const SAVING_EVENT = "savingEvent";
+// export const MEMO_CHANGE_ID = "memoChangeId";
+// export const NAVIGATE = "navigate";
+// export const MEMO_DELETED = "memoDeleted";
 
-/**
- * Emit an event containing a message
- * @param {string} type
- * @param {string} message
- */
-export const sendMessageEvent = (type: string, message: string): void => {
-  const msg = `${new Date()} - ${message}`;
-  konsole.log(`Sending event: ${type}, detail: ${msg}`);
-  const event = new CustomEvent(type, { detail: msg });
-  document.dispatchEvent(event);
-};
+class Raspandac extends EventTarget {
+  emit<K extends keyof OrgEvents, T>(name: K, detail: T) {
+    this.dispatchEvent(new CustomEvent(name, {detail}));
+  }
+  on<K extends keyof OrgEvents>(type: K, callback: (event: OrgEvents[K]) => void, options?: boolean | AddEventListenerOptions) {
+    super.addEventListener(type, callback as EventListener, options);
+  }
+}
 
-/**
- * Emit an event containing a message for the status field
- * @param message
- */
-export const updateStatus = (message: string) => {
-  sendMessageEvent(SAVING_EVENT, message);
-};
+export const raspandac = new Raspandac();
 
-export const save_all_status = (status: SaveAllStatus) => {
-  document.dispatchEvent(new CustomEvent(SAVE_ALL_STATUS, { detail: status }));
-};
+export const updateStatus = (message: string) =>
+  raspandac.emit("savingEvent", message);
 
-export const memo_change_id = (old_id: number, new_id: number) => {
-  document.dispatchEvent(
-    new CustomEvent(MEMO_CHANGE_ID, {
-      detail: {
-        old_id,
-        new_id,
-      },
-    })
-  );
-};
+export const save_all_status = (status: SaveAllStatus) =>
+  raspandac.emit("saveAllStatus", status);
 
-export const navigate = (dest: string) => {
-  document.dispatchEvent(new CustomEvent(NAVIGATE, { detail: dest }));
-};
+export const memo_change_id = (old_id: number, new_id: number) =>
+  raspandac.emit("memoChangeId", { old_id, new_id });
 
-export const memo_deleted = (id: number) => {
-  document.dispatchEvent(new CustomEvent(MEMO_DELETED, { detail: id }));
-};
+export const navigate = (dest: string) =>
+  raspandac.emit("navigate", dest );
+
+export const memo_deleted = (id: number) =>
+  raspandac.emit("memoDeleted", id);
