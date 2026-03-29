@@ -11,8 +11,6 @@
     "copy:html": "rsync -r src/html/ build/main",
     "copy:images": "rsync -r images build/main/",
     "copy:worker": "rsync -r build_worker/ build",
-    "jasmine": "karma start karma.jasmine.conf.js",
-    "mocha": "karma start karma.mocha.conf.js",
     "worker:increment": "node src/build_tools/service_worker_versioner.js",
     "build": "run-s build:dom build:worker copy:worker worker:increment copy:js copy:html copy:images",
     "_test": "echo \"Error: no test specified\" && exit 1",
@@ -25,17 +23,11 @@
   "author": "Ovidiu Ionescu",
   "license": "GPL-3.0-or-later",
   "devDependencies": {
-    "@types/chai": "^5.0.1",
-    "@types/mocha": "^10.0.10",
-    "@types/sinon": "^17.0.3",
     "@vitest/browser": "^4.1.2",
     "@vitest/browser-playwright": "^4.1.2",
-    "chai": "^5.1.2",
-    "mocha": "^11.1.0",
     "npm-run-all": "^4.1.5",
     "playwright": "^1.58.2",
     "prettier": "^2.0.1",
-    "sinon": "^19.0.2",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   }
