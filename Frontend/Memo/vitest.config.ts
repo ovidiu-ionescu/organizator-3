@@ -3,8 +3,6 @@ import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
   test: {
-    diffConfig: { expand: true },
-    printDiffMaxStringLength: 10000,
     browser: {
       enabled: true,
       provider: playwright(),
