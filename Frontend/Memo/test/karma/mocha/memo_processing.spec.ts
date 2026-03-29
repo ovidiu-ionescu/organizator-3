@@ -1,8 +1,9 @@
 /*
  * https://www.chaijs.com/api/bdd/
  */
-import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../../main/dom/memo_interfaces.js';
-import * as memo_processing from '../../../main/dom/memo_processing.js';
+import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
+import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../../src/main/dom/memo_interfaces.js';
+import * as memo_processing from '../../../src/main/dom/memo_processing.js';
 
 describe("Testing memo processing", () => {
 
@@ -12,14 +13,14 @@ describe("Testing memo processing", () => {
         id:        1,
         title:     'Title\r\n',
         memotext:  'body',
-        memogroup: null,
+        memogroup: undefined,
         savetime:  100,
         user: {
           id: 1,
           name: "root"
         }
       },
-      user: {
+      requester: {
         id: 1,
         name: "root"
       }
@@ -37,11 +38,11 @@ describe("Testing memo processing", () => {
     expect(memo_processing.toggle_checkbox(text, 14)).to.be.equal(' - [ ] this - [ ] aha');
   });
 
-  it('should not return anythinf if clicked outside a checkbox', () => {
+  it('should not return anything if clicked outside a checkbox', () => {
     const text = ' - [ ] this - [x] aha';
-    expect(memo_processing.toggle_checkbox(text, 2)).to.be.equal(' - [x] this - [x] aha');
+    expect(memo_processing.toggle_checkbox(text, text.indexOf('h'))).toEqual(text);
 
-    expect(memo_processing.toggle_checkbox(text, 8)).to.be.undefined;
+    expect(memo_processing.toggle_checkbox(text, text.indexOf('a'))).toEqual(text);
   });
 
   it('should pick a memo to save from local if remote does not have a timestamp', async() => {

@@ -1,15 +1,14 @@
-import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../../main/dom/memo_interfaces.js';
+import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
+import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../../src/main/dom/memo_interfaces.js';
 
-import * as db from '../../../main/dom/memo_db.js';
-import { sendMessageEvent } from '../../../main/dom/events.js';
+import * as db from '../../../src/main/dom/memo_db.js';
 
 describe("Testing the database functions", () => {
-  before(() => {
-    return new Promise((resolve) => {
+  beforeAll(async () => {
+    await new Promise<void>((resolve, reject) => {
       const dbDeleteRequest = window.indexedDB.deleteDatabase(db.DBName);
-      dbDeleteRequest.onsuccess = event =>  {
-        resolve();
-      }
+      dbDeleteRequest.onsuccess = event => resolve();
+      dbDeleteRequest.onerror = () => reject(dbDeleteRequest.error);
     });
   });
 
@@ -21,23 +20,23 @@ describe("Testing the database functions", () => {
   // unsaved_memos V
   // access_times V
 
-  let clock: Sinon.SinonFakeTimers;
   let millis: number;
 
   beforeEach(() => {
-    millis = (+ new Date);
-    clock = sinon.useFakeTimers(millis);
+    millis = Date.now()
+    vi.useFakeTimers()
+    vi.setSystemTime(millis)
   });
 
   afterEach(() => {
-    clock.restore();
+    vi.useRealTimers();
   });
 
   it('Should save the server memo and access time should be read time', async () => {
     await db.save_memo_after_fetching_from_server({
       memo: {        
         id:        2,
-        memogroup: null,
+        memogroup: undefined,
         title:     'Title\r\n',
         memotext:  'Body',
         savetime:  100,
@@ -46,16 +45,15 @@ describe("Testing the database functions", () => {
           name:    'root'
         },
       },
-      user: {
+      requester: {
         id:   2,
         name: 'root'
       }
     });
-    clock.tick(10);
+    vi.advanceTimersByTime(10);
     let memo = await db.read_memo(2);
     expect(memo).to.deep.equal({
       id:        2,
-      memogroup: null,
       text:      'Title\nBody',
       timestamp: 100,
       user: {
@@ -73,7 +71,7 @@ describe("Testing the database functions", () => {
   it('should refuse to save if nothing changed', async () => {
     const saved = await db.save_local_only({
         id:         2,
-        memogroup:  null,
+        memogroup:  undefined,
         text:       'Title\nBody',
         timestamp:  100,
       });
@@ -81,10 +79,10 @@ describe("Testing the database functions", () => {
   });
 
   it('should appear as unsaved after a save local', async () => {
-    clock.tick(10);
+    vi.advanceTimersByTime(10)
     let saved = await db.save_local_only({
         id: 2,
-        memogroup: null,
+        memogroup: undefined,
         text: 'Title\nBody2',
     });
     expect(saved.timestamp).to.be.greaterThan(0);
@@ -107,7 +105,7 @@ describe("Testing the database functions", () => {
   // it('should not override the local if server is older', async () => {});
 
   it('should remove the old negative number entries when saving to server', async () => {
-    clock.tick(10);
+    vi.advanceTimersByTime(10);
     const memo = await db.save_memo_after_saving_to_server(-2, {
       memo: {
         id:       3,
@@ -123,12 +121,13 @@ describe("Testing the database functions", () => {
           name:   'username'
         },
       },
-      user: {
+      requester: {
         id: 1,
         name: 'root',
       }
     });
-    expect(memo).to.be.deep.equal({
+    //expect(memo).to.be.deep.equal({
+    expect(memo).toStrictEqual({
       id:       3,
       memogroup: {
         id:     2,
@@ -136,11 +135,11 @@ describe("Testing the database functions", () => {
       },
       user: {
         id:     5,
-        name:   'username'
+        name:   'username',
       },
       text:    'Title 3\nBody3',
       timestamp: 200,
-      readonly: true
+      readonly: true,
     });
   });
 

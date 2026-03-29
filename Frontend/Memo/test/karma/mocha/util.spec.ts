@@ -1,4 +1,5 @@
-import { alignedText } from "../../../main/dom/util.js";
+import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
+import { alignedText } from "../../../src/main/dom/util.js";
 
 describe("Testing template functions", () => {
   it("should remove spaces from the beginning of lines and the first empty line", () => {
