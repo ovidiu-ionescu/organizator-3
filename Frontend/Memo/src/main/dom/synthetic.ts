@@ -7,6 +7,7 @@ import * as server_comm from "./server_comm.js";
 import { alignedText } from "./util.js"
 import * as db from "./memo_db.js";
 import { extract_title } from "./memo_processing.js";
+import {Undef} from "./memo_interfaces";
 
 const create_filestore_diagnostics = async () => {
   const diagnostics = await server_comm.get_filestore_diagnostics();
@@ -51,7 +52,7 @@ const create_dirty_memos = async () => {
     |Id|Title|Last Modified|
     |:---|:---|:---|
     ${memos.map((memo) =>
-    `|[${memo.id}](/memo/${memo.id})|${extract_title(memo.local)}|${new Date(memo.local.timestamp)}|`
+    `|[${memo.id}](/memo/${memo.id})|${extract_title(memo.local)}|${memo.local.timestamp? new Date(memo.local.timestamp) : ""}|`
   ).join('\n')}
     `;
 }
@@ -130,7 +131,7 @@ const create_memo_groups = async () => {
   return result.join('\n');
 }
 
-export const create_synthetic_memo = async (id: string): Promise<string> => {
+export const create_synthetic_memo = async (id: string): Promise<Undef<string>> => {
   try {
     switch (id) {
       case "$$$filestore": return await create_filestore_diagnostics();
@@ -142,7 +143,7 @@ export const create_synthetic_memo = async (id: string): Promise<string> => {
       case "$$$user_groups": return await create_user_groups();
       case "$$$memo_groups": return await create_memo_groups();
     }
-  } catch (e) {
+  } catch (e: any) {
     return e.message;
   }
 }

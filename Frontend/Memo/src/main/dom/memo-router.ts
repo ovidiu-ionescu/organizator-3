@@ -33,7 +33,7 @@ const routerInterceptor = (evt) => {
     );
     if (match) {
       konsole.log(new Date().toIsoString(), `history pushstate ${target.href}`);
-      history.pushState(null, null, target.href);
+      history.pushState(null, "", target.href);
       konsole.log("<hr>");
       evt.preventDefault();
       evt.stopPropagation();
@@ -46,7 +46,7 @@ const routerInterceptor = (evt) => {
 export const navigate = (evt: CustomEvent) => {
   const dest = evt.detail;
   konsole.log(new Date().toIsoString(), "Received event to navigate to", dest);
-  history.pushState(null, null, `${dest}`);
+  history.pushState(null, "", `${dest}`);
   konsole.log("<hr>");
   load_route();
 };
@@ -106,8 +106,8 @@ export const load_route = () => {
  */
 const activatePage = (name: string) => {
   konsole.log("Activate page", name);
-  [...document.querySelectorAll("[page]")].forEach((art: HTMLElement) => {
-    art.style.display = art.id === name ? "" : "none";
+  [...document.querySelectorAll("[page]")].forEach((art: Element) => {
+    (art as HTMLElement).style.display = art.id === name ? "" : "none";
   });
 
   // tell the page to activate
@@ -158,6 +158,10 @@ async function loadMemo() {
   const path = window.location.pathname;
   //console.log(path);
   const m = path.match(/\/memo\/(-?\d+)/);
+  if(!m) {
+    konsole.log("No memo id in the path");
+    return;
+  }
   const id = m[1];
   konsole.log("check local storage for memo", id);
   const memo = await db.read_memo(parseInt(id));
@@ -203,7 +207,7 @@ console.log(text);
 
 async function display_synthetic_memo(id: string) {
   set_status_in_editor(`# Loading...`);
-  set_status_in_editor(await create_synthetic_memo(id));
+  set_status_in_editor(await create_synthetic_memo(id) ?? "# No synthetic content created");
   //const memo = {text: `# This is a synthetic memo\nSynthetic body`} as Memo;
   //set_memo_in_editor(memo);
 }
@@ -225,7 +229,7 @@ function set_status_in_editor(text: string) {
 async function loadMemoTitles(force_reload?: boolean) {
   if (!force_reload) {
     const dest = document.getElementById("memoTitlesList");
-    if (dest.firstChild) {
+    if (dest!.firstChild) {
       return;
     }
   }
@@ -274,6 +278,7 @@ const make_memotitle_link_id = (id: number): string => `memo_title_link_${id}`;
  * Renders the list of memo titles in the DOM
  * @param {ServerMemoList} responseJson
  * @param auto_open if the list has only one element then open it in the editor immediately
+ * @param extra_info if true show also the id, user id, group id
  */
 const displayMemoTitles = async (
   responseJson: ServerMemoList,
@@ -281,7 +286,7 @@ const displayMemoTitles = async (
   extra_info: boolean
 ) => {
   const dest = document.getElementById("memoTitlesList");
-  dest.innerText = "";
+  dest!.innerText = "";
 
   memo_processing
     .make_title_list(responseJson.memos, await db.access_times())
@@ -298,11 +303,11 @@ const displayMemoTitles = async (
       return a;
     })
     .forEach((memo) => {
-      dest.appendChild(memo);
+      dest!.appendChild(memo);
     });
 
-  if (dest.childElementCount === 1 && auto_open) {
-    dest.firstElementChild.dispatchEvent(
+  if (dest!.childElementCount === 1 && auto_open) {
+    dest!.firstElementChild!.dispatchEvent(
       new CustomEvent("click", { bubbles: true })
     );
   }

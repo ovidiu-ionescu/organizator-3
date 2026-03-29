@@ -5,6 +5,8 @@
  * https://developers.google.com/web/updates/2019/09/fresher-sw
  */
 
+const sw = self as unknown as ServiceWorkerGlobalScope;
+
 const staticCacheName = "site-static-v{AUTOINCREMENT_CACHE_VERSION}";
 const assets = [
   "/memo/",
@@ -15,7 +17,7 @@ const assets = [
 ];
 
 // install event
-self.addEventListener("install", (evt: ExtendableEvent) => {
+sw.addEventListener("install", (evt: ExtendableEvent) => {
   //console.log('service worker installed');
   evt.waitUntil(
     caches.open(staticCacheName).then((cache) => {
@@ -29,7 +31,7 @@ self.addEventListener("install", (evt: ExtendableEvent) => {
 });
 
 // activate event
-self.addEventListener("activate", (evt: ExtendableEvent) => {
+sw.addEventListener("activate", (evt: ExtendableEvent) => {
   //console.log('service worker activated');
   evt.waitUntil(
     caches.keys().then((keys) => {
@@ -44,7 +46,7 @@ self.addEventListener("activate", (evt: ExtendableEvent) => {
 });
 
 // fetch event
-self.addEventListener("fetch", (evt: FetchEvent) => {
+sw.addEventListener("fetch", (evt: FetchEvent) => {
   //console.log('fetch event', evt);
   evt.respondWith(
     caches.match(evt.request).then((cacheRes) => {

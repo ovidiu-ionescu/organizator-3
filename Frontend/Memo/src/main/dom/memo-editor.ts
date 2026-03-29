@@ -15,6 +15,7 @@ import "./group-list.js";
 import * as memo_processing from "./memo_processing.js";
 import {alignedText, digestMessage} from "./util.js";
 
+// @ts-ignore
 import init, {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
 
 let WASM_LOADED = false;
@@ -399,14 +400,16 @@ export class MemoEditor extends HTMLElement {
     this.$.source.addEventListener("click", (event) => {
       const editor = this.$.source;
       const interestPoint = editor.selectionStart;
-      const new_text = memo_processing.toggle_checkbox(
-        editor.value,
-        interestPoint
-      );
-      if (new_text) {
-        editor.value = new_text;
-        editor.selectionStart = interestPoint;
-        editor.selectionEnd = interestPoint;
+      if(interestPoint !== null) {
+        const new_text = memo_processing.toggle_checkbox(
+            editor.value,
+            interestPoint
+        );
+        if (new_text) {
+          editor.value = new_text;
+          editor.selectionStart = interestPoint;
+          editor.selectionEnd = interestPoint;
+        }
       }
     });
 
@@ -421,7 +424,8 @@ export class MemoEditor extends HTMLElement {
     });
 
     this.$.file_upload.addEventListener('change', async (event) => {
-      let filename: Undef<String>, original_filename: String;
+      let filename: Undef<string>;
+      let original_filename: Undef<string>;
       for(let i = 0; i < 3 && !filename; i++) {
         if(i) {
           konsole.log(`Attempt ${i + 1} to upload file`);
@@ -562,6 +566,10 @@ export class MemoEditor extends HTMLElement {
       return;
     }
     const current_memo = await this.get_memo();
+    if(current_memo === undefined) {
+      konsole.log("Current memo is undefined, probably has no id, not saving");
+      return
+    }
     const digest = await digestMessage(current_memo.text);
     if(this._digest === digest) {
       konsole.log("save_local_only, triggered by", cause, "; digest identical, no need to save");
@@ -569,9 +577,9 @@ export class MemoEditor extends HTMLElement {
     }
     konsole.log(`save_local_only ${this._memoId}, triggered by: ${cause}`);
     const saved_memo = await db.save_local_only(current_memo);
-    if (saved_memo.timestamp > this._timestamp) {
+    if (saved_memo.timestamp && this._timestamp && (saved_memo.timestamp > this._timestamp)) {
       konsole.log(
-        `save_local_only ${this._memoId}, save happened, trigger dirty green, current timestamp: ${new Date(this._timestamp).toIsoString()}, cache timestamp ${new Date(saved_memo.timestamp).toIsoString()}`
+        `save_local_only ${this._memoId}, save happened, trigger dirty green, current timestamp: ${this._timestamp ? new Date(this._timestamp).toIsoString(): "none"}, cache timestamp ${new Date(saved_memo.timestamp).toIsoString()}`
       );
       this._timestamp = saved_memo.timestamp;
       this._display_timestamp();
@@ -602,7 +610,12 @@ export class MemoEditor extends HTMLElement {
   /**
    * Extracts a full memo structure. It is always encrypted
    */
-  async get_memo(): Promise<Memo> {
+  async get_memo(): Promise<Undef<Memo>> {
+    // Every memo should have an id
+    // TODO investigate the case where it does not have one
+    if(this._memoId === undefined) {
+      return;
+    }
     const encrypted_source = await this._encrypt();
     return {
       id: this._memoId,
@@ -687,6 +700,7 @@ export class MemoEditor extends HTMLElement {
     const dl = perm_div.appendChild(document.createElement("dl"));
     let ug = "";
     const PERM = [' ', 'R', 'W'];
+    if(permission_lines)
     permission_lines.forEach(p => {
       if(p.user_group_name != ug) {
         ug = p.user_group_name;

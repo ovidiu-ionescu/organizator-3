@@ -169,13 +169,13 @@ export const save_memo_after_fetching_from_server = async (
   if (existing_db_memo) {
     // if the server memo is not newer than the memo last fetched then skip the server one and return local
     if (!memo_processing.first_more_recent(server_memo, existing_db_memo.server)) {
-      konsole.log(`server memo ${server_memo.id} timestamp ${server_memo.timestamp} is not more recent than cached memo ancestor ${existing_db_memo.server.timestamp}`);
+      konsole.log(`server memo ${server_memo.id} timestamp ${server_memo.timestamp} is not more recent than cached memo ancestor ${existing_db_memo.server?.timestamp}`);
       return existing_db_memo.local;
     } else {
       if (memo_processing.first_more_recent(existing_db_memo.local, existing_db_memo.server)) {
         konsole.log(`both local and remote have been modified, we need to merge`);
 
-        const text = merge(existing_db_memo.server.text, existing_db_memo.local.text, server_memo.text);
+        const text = merge(existing_db_memo.server?.text ?? "", existing_db_memo.local.text, server_memo.text);
         existing_db_memo.local.text = text;
         existing_db_memo.local.timestamp = (+ new Date);
         existing_db_memo.server = server_memo;
@@ -322,7 +322,7 @@ const get_memo_titles = async (
   const memo_store = transaction.objectStore("memo");
 
   return new Promise((resolve) => {
-    const result = [];
+    const result: ServerMemoTitle[] = [];
     memo_store.openCursor().onsuccess = (event) => {
       const cursor: IDBCursorWithValue = (event.target as IDBRequest).result;
       if (cursor) {

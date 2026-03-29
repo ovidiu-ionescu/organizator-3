@@ -19,7 +19,7 @@ import {
   FileStoreDiagnostics,
   UserGroupsPerUser,
   UserGroups,
-  MemoGroups,
+  MemoGroups, Undef,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
 import { merge } from "./diff_match_patch_uncompressed.js";
@@ -58,8 +58,7 @@ export const save_to_server = async (memo: Memo): Promise<ServerMemoReply> => {
   });
 
   if (response.status === 200) {
-    const responseJson = await response.json();
-    return responseJson;
+    return await response.json();
   } else {
     konsole.log(
       `Save to server failed for memo ${memoId} with status ${response.status}`
@@ -75,7 +74,7 @@ export const save_all = async () => {
   }
   // konsole.log({unsaved_memos});
   // save to server and get the server instance
-  for (let memo: CacheMemo; (memo = unsaved_memos.pop());) {
+  for (const memo of unsaved_memos) {
     const id = memo.id;
     if (memo.id > -1) {
       // this is an existing memo, might have changed on the server since we got it
@@ -210,7 +209,7 @@ export const read_memo_groups = async (): Promise<IdName[]> => {
 };
 
 // FIXME: there is no difference between no permissions found and error fetching permissions
-export const get_explicit_permission = async (memogroup_id: number): Promise<PermissionDetailLine[]> => {
+export const get_explicit_permission = async (memogroup_id: number): Promise<Undef<PermissionDetailLine[]>> => {
   try {
     const server_response = await fetch(
       `/organizator/explicit_permissions/${memogroup_id}?request.preventCache=${+new Date()}`,
@@ -225,12 +224,12 @@ export const get_explicit_permission = async (memogroup_id: number): Promise<Per
   }
 }
 
-export const upload_file = async (file_input: HTMLInputElement, memogroup_id: string): Promise<[String, String]> => {
+export const upload_file = async (file_input: HTMLInputElement, memogroup_id: string): Promise<[Undef<string>, Undef<string>]> => {
   const formData = new FormData();
-  const file = file_input.files[0];
+  const file = file_input.files?.[0]
   if (!file) {
     konsole.error(`nothing to upload`);
-    return;
+    return [undefined, undefined];
   }
   konsole.log(`uploading ${file.name}`);
   if (memogroup_id) {
@@ -257,7 +256,7 @@ export const upload_file = async (file_input: HTMLInputElement, memogroup_id: st
     return [filename, json.file.original_filename];
   } else {
     konsole.error(`Failed to upload file, server status: ${server_response.status}`);
-    return;
+    return [undefined, undefined];
   }
 }
 

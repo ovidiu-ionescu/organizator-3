@@ -32,13 +32,13 @@ export interface ServerMemoReply {
 
 export interface ServerMemoTitle {
   id:           number;
-  group_id:     number;
+  group_id:     number | null | undefined;
   title:        string;
   userId:       number;
 }
 
 export interface ServerMemoList {
-  memo:         ServerMemo;
+  memo:         Nullable<ServerMemo>;
   memos:        Array<ServerMemoTitle>;
 }
 
@@ -169,3 +169,4 @@ export interface MemoGroups {
 }
 
 export type Undef<T> = T | undefined;
+export type Nullable<T> = T | null;

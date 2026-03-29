@@ -18,6 +18,7 @@ import {
   ServerMemoTitle,
   AccessTime,
   IdName,
+  Nullable, Undef,
 } from "./memo_interfaces.js";
 
 function XOR(a: any, b: any) {
@@ -36,11 +37,11 @@ export const extract_title = (memo: Memo): string => {
     konsole.log("A degenerate memo", memo.id);
     return 'No title found';
   }
-  return memo.text.split(/\n|\r/)[0];
+  return memo.text.split(/[\n\r]/)[0];
 }
 
 const MEMO_PROTOTYPE = {
-  toString() {
+  toString(this:Memo) {
     return `「memo ${this.id}: ${extract_title(this)}」`;
   }
 }
@@ -50,21 +51,20 @@ export const make_server_memo_title = (
 ): ServerMemoTitle => {
   const memo_group = cache_memo.local.memogroup;
   const group_id = memo_group && memo_group.id;
-  const userId = cache_memo.local.user && cache_memo.local.user.id;
+  const userId = cache_memo.local.user!.id;
   const text = cache_memo.local.text;
   let title = extract_title(cache_memo.local);
-  const result = {
+  return {
     group_id,
     id: cache_memo.id,
     title,
     userId,
   };
-  return result;
 };
 
 /**
  * Change the structure returned by the server into the one used by the client
- * @param {ServerMemo} server_memo
+ * @param {ServerMemoReply} server_memo_reply
  */
 export const server2local = (server_memo_reply: ServerMemoReply): Memo => {
   // rename savetime to timestamp for consistency
@@ -138,12 +138,12 @@ export const memo_has_clear_secrets = (memo: Memo): boolean => {
 /**
  * Determines if the first argument is a memo more recent than the second one
  */
-export const first_more_recent = (first: Memo, second: Memo): boolean => {
-  if (!first) {
-    return false;
-  }
-  if (!second.timestamp) {
+export const first_more_recent = (first: Memo, second: Undef<Memo>): boolean => {
+  if (!second?.timestamp) {
     return true;
+  }
+  if (!first.timestamp) {
+    return false;
   }
   return first.timestamp > second.timestamp;
 };
@@ -211,8 +211,8 @@ export const make_title_list = (
 };
 
 export const toggle_checkbox = (text: string, index: number): string => {
-  const regex = /- \[(x| )\]/g;
-  let m: RegExpExecArray;
+  const regex = /- \[([x ])]/g;
+  let m: Nullable<RegExpExecArray>;
   while ((m = regex.exec(text))) {
     if (index >= m.index && index < m.index + m[0].length) {
       return (
@@ -222,6 +222,7 @@ export const toggle_checkbox = (text: string, index: number): string => {
       );
     }
   }
+  return text;
 };
 
 /**
@@ -237,8 +238,7 @@ export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
   if(!cache_memo.server) {
     return true;
   }
-  if(to_zero(cache_memo.local.timestamp) > to_zero(cache_memo.server.timestamp)) return true;
-  return false;
+  return to_zero(cache_memo.local.timestamp) > to_zero(cache_memo.server.timestamp);
 }
 
 /**
