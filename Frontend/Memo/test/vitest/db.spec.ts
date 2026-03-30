@@ -1,7 +1,7 @@
 import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
-import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../../src/main/dom/memo_interfaces.js';
+import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../src/main/dom/memo_interfaces.js';
 
-import * as db from '../../../src/main/dom/memo_db.js';
+import * as db from '../../src/main/dom/memo_db.js';
 
 describe("Testing the database functions", () => {
   beforeAll(async () => {
