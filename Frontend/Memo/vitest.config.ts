@@ -1,6 +1,18 @@
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 
+const wasmMimePlugin = {
+  name: 'wasm-mime-fix',
+  configureServer(server: any) {
+    server.middlewares.use((req: any, res:any, next:any) => {
+      if (req.url?.endsWith('.wasm')) {
+        res.setHeader('Content-Type', 'application/wasm');
+      }
+      next();
+    });
+  }
+};
+
 export default defineConfig({
   test: {
     browser: {
@@ -17,5 +29,16 @@ export default defineConfig({
       headless: false, 
     },
   },
+  assetsInclude: ['**/*.wasm'],
+  plugins: [wasmMimePlugin],
+  server: {
+    fs: {
+      allow: ['..']
+    }
+  },
+  resolve: {
+    alias: {
+      '@wasm': new URL('../organizator-wasm/pkg', import.meta.url).pathname,
+    },
+  },
 });
-
