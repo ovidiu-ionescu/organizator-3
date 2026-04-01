@@ -156,6 +156,9 @@ const template = `
         word-break: break-all;
 */
       }
+      #source {
+        flex: 1;
+      }
 
     </style>
     <div id="container">
@@ -447,7 +450,9 @@ export class MemoEditor extends HTMLElement {
     // listen to saving events
     raspandac.on("savingEvent", (event) => {
       konsole.log("Received saving event", event);
+      // FIXME: this could destroy the content, later on would save the message as the memo
       this.$.status.innerText = event.detail;
+      this._memoId = undefined;
     });
 
     raspandac.on("saveAllStatus", event => {
@@ -505,7 +510,7 @@ export class MemoEditor extends HTMLElement {
   }
 
   _resizeTextArea() {
-    //console.log(this.$.source.scrollHeight, this.$.source.style.height);
+    console.log('_resizeTextArea', this.$.source.scrollHeight, this.$.source.style.height);
     let scrollHeight = this.$.source.scrollHeight;
     if (scrollHeight > 400) scrollHeight = 400;
     this.$.source.style.height = scrollHeight + "px";

@@ -1,0 +1,6 @@
+edit-nginx:
+  nvim Nginx/nginx.conf /etc/nginx/sites-available/organizator
+
+restart:
+  sudo systemctl restart nginx.service
+

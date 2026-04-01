@@ -1,6 +1,9 @@
 build:
   wasm-pack build --target web
 
+deploy: build
+  rsync -av pkg/ /var/www/organizator.ro/pkg/
+
 install:
   cargo install wasm-pack
 

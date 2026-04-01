@@ -485,8 +485,8 @@ fn print_w(state: &[[u8; 4]; 60]) {
 /// * `password`   The password to generate the key from
 ///
 /// ```rust
-///  # use memo_rust::aes::aes_ctr_decrypt;
-///  # use memo_rust::aes::aes_ctr_encrypt;
+///  # use organizator_wasm::aes::aes_ctr_decrypt;
+///  # use organizator_wasm::aes::aes_ctr_encrypt;
 ///  # use std::time::SystemTime;
 ///
 ///    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();

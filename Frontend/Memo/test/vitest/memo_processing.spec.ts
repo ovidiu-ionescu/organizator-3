@@ -2,8 +2,8 @@
  * https://www.chaijs.com/api/bdd/
  */
 import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
-import { Memo, ServerMemo, CacheMemo, AccessTime } from '../../src/main/dom/memo_interfaces.js';
-import * as memo_processing from '../../src/main/dom/memo_processing.js';
+import { Memo, ServerMemo, CacheMemo, AccessTime } from '@dom/memo_interfaces.js';
+import * as memo_processing from '@dom/memo_processing.js';
 
 describe("Testing memo processing", () => {
 

@@ -1,8 +1,8 @@
 mod utils;
+mod markdown;
 pub mod aes;
 pub mod memo;
 
-use pulldown_cmark::{Parser, Options, html, RenderingOptions};
 use aes::{aes_ctr_encrypt, aes_ctr_decrypt};
 
 use wasm_bindgen::prelude::*;
@@ -68,22 +68,7 @@ pub fn process_markdown(markdown_input: &str, base_64_limit: usize) -> String {
 
 #[wasm_bindgen]
 pub fn transform_markdown(markdown_input: &str) -> String {
-
-    // Set up options and parser. Strikethroughs are not part of the CommonMark standard
-    // and we therefore must enable it explicitly.
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_TABLES);
-    options.insert(Options::ENABLE_FOOTNOTES);
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_TASKLISTS);
-    let parser = Parser::new_ext(markdown_input, options);
-
-    // Write to String buffer.
-    let mut html_output = String::new();
-    let mut rendering_options = RenderingOptions::empty();
-    rendering_options.insert(RenderingOptions::OPEN_LINK_IN_NEW_TAB);
-    html::push_html_ext(&mut html_output, parser, rendering_options);
-    html_output
+  markdown::process_markdown(markdown_input)
 }
 
 #[cfg(test)]
@@ -91,7 +76,7 @@ mod tests {
     #[test]
     fn test_transform_markdown() {
         assert_eq!(super::transform_markdown(r#"[my link](https://mydomain.net)"#),
-        r#"<p><a target="_blank" rel="noreferrer" href="https://mydomain.net">my link</a></p>
+        r#"<p><a href="https://mydomain.net" target="_blank" rel="noreferrer">my link</a></p>
 "#);
     }
 }

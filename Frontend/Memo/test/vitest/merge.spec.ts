@@ -1,7 +1,7 @@
 import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
 
-import { merge } from "../../src/main/dom/diff_match_patch_uncompressed.js";
-import { alignedText } from "../../src/main/dom/util.js";
+import { merge } from "@dom/diff_match_patch_uncompressed.js";
+import { alignedText } from "@dom/util.js";
 
 const base = alignedText`
   This is the main

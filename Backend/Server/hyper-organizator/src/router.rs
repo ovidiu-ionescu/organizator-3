@@ -125,7 +125,7 @@ fn millis_since_epoch() -> i64 {
 
 #[derive(serde::Deserialize, Debug, Clone, ToSchema)]
 struct WriteMemoForm {
-    memo_id: i32,
+    memo_id: Option<i32>,
     group_id: Option<i32>,
     text: String,
 }
@@ -136,7 +136,7 @@ async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, Generi
     let (title, body) = split_and_trim(&form.text);
     let now = millis_since_epoch();
 
-    trace!("Writing memo with id {} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}", form.memo_id, username, form.group_id);
+    trace!("Writing memo with id {:?} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}", form.memo_id, username, form.group_id);
     let memo: Result<(GetWriteMemo, Requester), PgError> = db::get_single(&db_client, username, &[&form.memo_id, &title, &body, &now, &form.group_id, &username]).await;
     build_json_response(memo)
 }

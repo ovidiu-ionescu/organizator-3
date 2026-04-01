@@ -39,6 +39,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@wasm': new URL('../organizator-wasm/pkg', import.meta.url).pathname,
+      '@dom': new URL('src/main/dom', import.meta.url).pathname,
     },
   },
 });

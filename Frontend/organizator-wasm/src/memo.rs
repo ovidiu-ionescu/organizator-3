@@ -287,7 +287,7 @@ aha
 ///
 /// ```rust
 /// use indoc::indoc;
-/// # use memo_rust::truncate_base64;
+/// # use organizator_wasm::truncate_base64;
 ///
 /// let mut s = String::from(indoc! {r#"
 ///     Third secret
@@ -303,7 +303,8 @@ aha
 ///          cXVpIGRvbG9yZW0…
 ///          aha
 ///          8xRyXaSkpKQGqlT…
-///          123   x"#},
+///          123   x
+///          "#},
 ///     truncate_base64(&mut s, 16)
 /// );
 /// ```
