@@ -349,6 +349,9 @@ impl Named for FilestoreResult<'_> {
 
 // TODO add swagger info
 async fn file_list(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    if !is_admin(&request) {
+        return "Reserved for administrators".to_text_response_with_status(StatusCode::FORBIDDEN);
+    }
     let (client, username) = get_client_and_user(&request).await?;
 
     let (files, requester) = db::get_multiple(&client, username, &[], Select).await?;
@@ -393,7 +396,6 @@ fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
 }
 
 // TODO add swagger
-// TODO: add security
 async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     if !is_admin(&request) {
         return "Reserved for administrators".to_text_response_with_status(StatusCode::FORBIDDEN);
@@ -411,8 +413,10 @@ async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, Generi
 }
 
 // TODO add swagger
-// TODO: add security
 async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    if !is_admin(&request) {
+        return "Reserved for administrators".to_text_response_with_status(StatusCode::FORBIDDEN);
+    }
     let client = get_connection(&request).await?;
 
     let json = db::get_json(
