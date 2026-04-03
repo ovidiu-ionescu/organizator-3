@@ -64,7 +64,8 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return "No Jot".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR);
     };
-    let new_token: String = jot.generate_token(&form.username)?;
+    let roles = if login.id == 1 { vec!["org", "orgadm", "photo"] } else { vec!["org", "photo"] }; 
+    let new_token: String = jot.generate_token(&form.username, &roles)?;
     info!("User 「{}」 logged in", &form.username);
     let cookie = create_security_cookie(&new_token);
 

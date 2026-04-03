@@ -1,25 +1,27 @@
 use std::collections::HashSet;
 
-use crate::db;
-use crate::db::QueryType::{ Select, Search };
-use crate::model::{ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, GetWriteMemo};
+use crate::db::{self, SQLstr};
+use crate::db::QueryType::{Search, Select};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
 use crate::model::Requester;
-use lib_hyper_organizator::multipart::{Field, FileField, RegularField, handle_multipart};
+use crate::model::{
+    ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, GetWriteMemo,
+};
 use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
 use lazy_static::lazy_static;
-use lib_hyper_organizator::authentication::check_security::UserId;
+use lib_hyper_organizator::authentication::check_security::{UserId, UserRoles};
+use lib_hyper_organizator::multipart::{Field, FileField, RegularField, handle_multipart};
 use lib_hyper_organizator::postgres::get_connection;
-use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
+use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::server::SETTINGS;
 use lib_hyper_organizator::typedef::GenericError;
 use lib_hyper_organizator::under_construction::default_response;
-use log::{error, debug, trace};
+use log::{debug, error, trace};
 use regex::Regex;
 use serde_json::json;
 use tokio_postgres::Error as PgError;
@@ -54,11 +56,11 @@ lazy_static! {
 }
 
 fn trim_trailing_slash(path: &str) -> &str {
-  if let Some(stripped) = path.strip_suffix('/') {
-    stripped
-  } else {
-    path
-  }
+    if let Some(stripped) = path.strip_suffix('/') {
+        stripped
+    } else {
+        path
+    }
 }
 
 /// All requests to the server are handled by this function.
@@ -98,7 +100,7 @@ async fn get_memo(request: Request<Body>) -> Result<Response<Body>, GenericError
     let captures = MEMO_GET_REGEX.captures(path).unwrap();
     let memo_id = captures.get(1).unwrap().as_str().parse::<i32>()?;
     let memo: Result<(Memo, Requester), _> = db::get_single(&client, username, &[&memo_id]).await;
-    
+
     build_json_response(memo)
 }
 
@@ -136,8 +138,23 @@ async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, Generi
     let (title, body) = split_and_trim(&form.text);
     let now = millis_since_epoch();
 
-    trace!("Writing memo with id {:?} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}", form.memo_id, username, form.group_id);
-    let memo: Result<(GetWriteMemo, Requester), PgError> = db::get_single(&db_client, username, &[&form.memo_id, &title, &body, &now, &form.group_id, &username]).await;
+    trace!(
+        "Writing memo with id {:?} for {}: title:「{title}」, body:「{body}」, group_id: {:?}, now: {now}",
+        form.memo_id, username, form.group_id
+    );
+    let memo: Result<(GetWriteMemo, Requester), PgError> = db::get_single(
+        &db_client,
+        username,
+        &[
+            &form.memo_id,
+            &title,
+            &body,
+            &now,
+            &form.group_id,
+            &username,
+        ],
+    )
+    .await;
     build_json_response(memo)
 }
 
@@ -183,21 +200,23 @@ async fn get_explicit_permissions(request: &Request<Body>) -> Result<Response<Bo
 async fn get_memo_titles(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let (client, username) = get_client_and_user(&request).await?;
 
-    let memo_titles: Result<(Vec<MemoTitle>, Requester), _> = db::get_multiple(&client, username, &[], Select).await;
+    let memo_titles: Result<(Vec<MemoTitle>, Requester), _> =
+        db::get_multiple(&client, username, &[], Select).await;
 
     build_json_response(memo_titles)
 }
 
 #[derive(serde::Deserialize, Debug, Clone, ToSchema)]
 struct SearchMemoForm {
-  search: String,
+    search: String,
 }
 
 // TODO: Add swagger info
 async fn memo_search(mut request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let form: SearchMemoForm = parse_body(&mut request).await?;
     let (client, username) = get_client_and_user(&request).await?;
-    let memo_titles: Result<(Vec<MemoTitle>, Requester), _> = db::get_multiple(&client, username, &[&form.search], Search).await;
+    let memo_titles: Result<(Vec<MemoTitle>, Requester), _> =
+        db::get_multiple(&client, username, &[&form.search], Search).await;
 
     build_json_response(memo_titles)
 }
@@ -206,115 +225,168 @@ async fn memo_search(mut request: Request<Body>) -> Result<Response<Body>, Gener
 async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let (client, username) = get_client_and_user(&request).await?;
 
-    let uri = request.headers().get("X-Original-URI").unwrap().to_str().unwrap();
+    let uri = request
+        .headers()
+        .get("X-Original-URI")
+        .unwrap()
+        .to_str()
+        .unwrap();
     debug!("Checking file auth for {uri}");
-    let uuid = FILE_UUID_REGEX.captures(uri).unwrap().name("uuid").unwrap().as_str().parse::<uuid::Uuid>()?;
+    let uuid = FILE_UUID_REGEX
+        .captures(uri)
+        .unwrap()
+        .name("uuid")
+        .unwrap()
+        .as_str()
+        .parse::<uuid::Uuid>()?;
 
     let level: i32 = 1;
-    let file_auth: Result<(FilePermission, Requester), _> = db::get_single(&client, username, &[&uuid, &username, &level]).await;
+    let file_auth: Result<(FilePermission, Requester), _> =
+        db::get_single(&client, username, &[&uuid, &username, &level]).await;
     trace!("File auth for {uri} is {:?}", file_auth);
     build_json_response(file_auth)
 }
 
 #[derive(serde::Serialize, Debug)]
 struct UploadResponse {
-  filename: String,
-  original_filename: String,
+    filename: String,
+    original_filename: String,
 }
 
 impl Named for UploadResponse {
-  fn name() -> &'static str {
-    "file"
-  }
+    fn name() -> &'static str {
+        "file"
+    }
 }
 
-async fn upload_file(request: Request<Body>) ->Result<Response<Body>, GenericError> {
-  let (client, username) = get_client_and_user(&request).await.map(|(c, u)| (c, u.to_string()))?;
+async fn upload_file(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    let (client, username) = get_client_and_user(&request)
+        .await
+        .map(|(c, u)| (c, u.to_string()))?;
 
-  let settings = &*SETTINGS;
-  let fields = handle_multipart(request, &settings.file_storage.path).await?;
+    let settings = &*SETTINGS;
+    let fields = handle_multipart(request, &settings.file_storage.path).await?;
 
+    debug!("Fields: {:?}", fields);
 
-  debug!("Fields: {:?}", fields);
+    let mut group_id = None;
+    let mut generated_name = None;
+    let mut original_filename = None;
+    fields.into_iter().for_each(|field| match field {
+        Field::Regular(RegularField { name, value }) if name == "memo_group_id" => {
+            group_id = value.parse::<i32>().ok();
+        }
+        Field::File(FileField {
+            upload_name,
+            file_name,
+        }) => {
+            generated_name = Some(file_name);
+            original_filename = Some(upload_name);
+        }
+        _ => (),
+    });
 
-  let mut group_id = None;
-  let mut generated_name = None;
-  let mut original_filename = None;
-  fields.into_iter().for_each(|field| {
-    match field {
-      Field::Regular(RegularField{name, value}) if name == "memo_group_id" => {
-        group_id = value.parse::<i32>().ok();
-      },
-      Field::File(FileField{ upload_name, file_name }) => {
-        generated_name = Some(file_name );
-        original_filename = Some(upload_name);
-      },
-      _ => (),
+    debug!(
+        "group_id: {:?}, generated_name: {:?}, original_filename: {:?}",
+        group_id, generated_name, original_filename
+    );
+    if let (Some(memo_group_id), Some(generated_name), Some(original_filename)) =
+        (group_id, generated_name, original_filename)
+    {
+        debug!("Save entry to filestore table");
+        let uuid = generated_name[..generated_name.rfind('.').unwrap()]
+            .parse::<uuid::Uuid>()
+            .unwrap();
+        // FIXME the user id should come from the session, now hardcoded 1 to pass compilation
+        match db::execute(
+            &client,
+            &username,
+            include_str!("sql/insert_filestore.sql"),
+            &[
+                &uuid,
+                &1,
+                &original_filename,
+                &memo_group_id,
+                &millis_since_epoch(),
+            ],
+        )
+        .await
+        {
+            Ok((rows_inserted, requester)) => {
+                debug!(
+                    "Number of rows inserted into filestore table: {}",
+                    rows_inserted
+                );
+                build_json_response(Ok((
+                    UploadResponse {
+                        filename: generated_name,
+                        original_filename,
+                    },
+                    requester,
+                )))
+            }
+            Err(e) => {
+                error!("Something went wrong: {:?}", e);
+                "File not uploaded".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    } else {
+        "File uploaded".to_text_response_with_status(StatusCode::BAD_REQUEST)
     }
-  });
-
-  debug!("group_id: {:?}, generated_name: {:?}, original_filename: {:?}", group_id, generated_name, original_filename);
-  if let (Some(memo_group_id), Some(generated_name), Some(original_filename)) = (group_id, generated_name, original_filename) {
-    debug!("Save entry to filestore table");
-    let uuid = generated_name[..generated_name.rfind('.').unwrap()].parse::<uuid::Uuid>().unwrap();
-    // FIXME the user id should come from the session, now hardcoded 1 to pass compilation
-    match db::execute(&client, &username, include_str!("sql/insert_filestore.sql"), &[&uuid, &1, &original_filename, &memo_group_id, &millis_since_epoch()]).await {
-      Ok((rows_inserted, requester)) => { 
-        debug!("Number of rows inserted into filestore table: {}", rows_inserted);
-        build_json_response(Ok((UploadResponse { filename: generated_name, original_filename }, requester)))
-      },
-      Err(e) => { 
-        error!("Something went wrong: {:?}", e); 
-        "File not uploaded".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
-      },
-    }
-  } else {
-     "File uploaded".to_text_response_with_status(StatusCode::BAD_REQUEST)
-  }
 }
 
 #[derive(serde::Serialize)]
 struct FilestoreResult<'a> {
-  db_only: Vec<&'a FilestoreFileDB>,
-  dir_only: Vec<FilestoreFile>,
+    db_only: Vec<&'a FilestoreFileDB>,
+    dir_only: Vec<FilestoreFile>,
 }
 
 impl Named for FilestoreResult<'_> {
-  fn name() -> &'static str {
-    "filestore"
-  }
+    fn name() -> &'static str {
+        "filestore"
+    }
 }
 
 // TODO add swagger info
 async fn file_list(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, username) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
-  let (files, requester) = db::get_multiple(&client, username, &[], Select).await?;
-  let files_in_dir = ls()?;
-  let set: HashSet<&str> = files_in_dir.iter().map(|f| f.filename_no_extension()).collect();
-  let db_only: Vec<&FilestoreFileDB> = files.iter().filter(|f: &&FilestoreFileDB| !set.contains(f.id.to_string().as_str())).collect();
-  let db_set = files.iter().map(|f| f.id).collect::<HashSet<uuid::Uuid>>();
-  let dir_only: Vec<FilestoreFile> = files_in_dir.into_iter()
-    .filter(|f| 
-      if let Ok(uuid) = &f.filename_no_extension().parse::<uuid::Uuid>() {
-        !db_set.contains(uuid)
-      } else {
-        true
-      }
-      ).collect();
+    let (files, requester) = db::get_multiple(&client, username, &[], Select).await?;
+    let files_in_dir = ls()?;
+    let set: HashSet<&str> = files_in_dir
+        .iter()
+        .map(|f| f.filename_no_extension())
+        .collect();
+    let db_only: Vec<&FilestoreFileDB> = files
+        .iter()
+        .filter(|f: &&FilestoreFileDB| !set.contains(f.id.to_string().as_str()))
+        .collect();
+    let db_set = files.iter().map(|f| f.id).collect::<HashSet<uuid::Uuid>>();
+    let dir_only: Vec<FilestoreFile> = files_in_dir
+        .into_iter()
+        .filter(|f| {
+            if let Ok(uuid) = &f.filename_no_extension().parse::<uuid::Uuid>() {
+                !db_set.contains(uuid)
+            } else {
+                true
+            }
+        })
+        .collect();
 
-    build_json_response(Ok((FilestoreResult {db_only, dir_only}, requester)))
+    build_json_response(Ok((FilestoreResult { db_only, dir_only }, requester)))
 }
 
 fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
-  let mut result = Vec::<FilestoreFile>::new();
-  let settings = &*SETTINGS;
+    let mut result = Vec::<FilestoreFile>::new();
+    let settings = &*SETTINGS;
     let path = &settings.file_storage.path;
     let dir = std::fs::read_dir(path)?;
     for entry in dir {
         let entry = entry?;
         if entry.file_type()?.is_file() {
-          result.push(FilestoreFile { filename: entry.file_name().to_string_lossy().to_string() });
+            result.push(FilestoreFile {
+                filename: entry.file_name().to_string_lossy().to_string(),
+            });
         }
     }
     Ok(result)
@@ -323,36 +395,59 @@ fn ls() -> Result<Vec<FilestoreFile>, GenericError> {
 // TODO add swagger
 // TODO: add security
 async fn get_memo_stats(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+    if !is_admin(&request) {
+        return "Reserved for administrators".to_text_response_with_status(StatusCode::FORBIDDEN);
+    }
     let client = get_connection(&request).await?;
 
-    let json = db::get_json(&client, "admin", include_str!("sql/admin/memo_stats.sql"), &[]).await;
+    let json = db::get_json(
+        &client,
+        "admin",
+        SQLstr(include_str!("sql/admin/memo_stats.sql")),
+        &[],
+    )
+    .await;
     build_simple_json_response(json.map(|(r, _)| r))
 }
-
 
 // TODO add swagger
 // TODO: add security
 async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let client = get_connection(&request).await?;
 
-    let json = db::get_json(&client, "admin", include_str!("sql/admin/all_user_groups.sql"), &[]).await;
+    let json = db::get_json(
+        &client,
+        "admin",
+        SQLstr(include_str!("sql/admin/all_user_groups.sql")),
+        &[],
+    )
+    .await;
     build_simple_json_response(json.map(|(r, _)| r))
 }
 
 async fn get_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, username) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
-  let json = db::get_json(&client, username, include_str!("sql/user_groups.sql"), &[]).await;
-  build_simple_json_response(json.map(|(string, _requester)| string))
+    let json = db::get_json(&client, username, SQLstr(include_str!("sql/user_groups.sql")), &[]).await;
+    build_simple_json_response(json.map(|(string, _requester)| string))
 }
 
 async fn get_memogroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
-  let (client, username) = get_client_and_user(&request).await?;
+    let (client, username) = get_client_and_user(&request).await?;
 
-  let json = db::get_json(&client, username, include_str!("sql/memo_groups.sql"), &[]).await;
-  build_simple_json_response(json.map(|(string, _requester)| string))
+    let json = db::get_json(&client, username, SQLstr(include_str!("sql/memo_groups.sql")), &[]).await;
+    build_simple_json_response(json.map(|(string, _requester)| string))
 }
 
+fn is_admin(request: &Request<Body>) -> bool {
+    if let Some(UserRoles(roles)) = request.extensions().get::<UserRoles>() {
+        let admin = roles.iter().any(|s| s == "orgadm");
+        debug!("User is admin: {admin}");
+        return admin;
+    }
+    debug!("No roles in request");
+    return false;
+}
 
 /// Fetch the database connection and the current user from the request.
 async fn get_client_and_user(
@@ -361,55 +456,67 @@ async fn get_client_and_user(
     let client = get_connection(request).await?;
     // get the current logged in user from the request
     let Some(user_identification) = request.extensions().get::<UserId>() else {
-        return Err(GenericError::from("No user found in request, this should not happen"));
+        return Err(GenericError::from(
+            "No user found in request, this should not happen",
+        ));
     };
     let username = &user_identification.0;
 
-    Ok((client, username ))
+    Ok((client, username))
 }
 
 fn build_json_response<T: serde::Serialize + Named>(
     data_result: Result<(T, Requester), PgError>,
 ) -> Result<Response<Body>, GenericError> {
-  match data_result {
-    Ok((data, requester)) => {
-      let result = json!({
-        T::name(): data,
-        "requester": requester,
-      });
-      serde_json::to_string(&result)?.to_json_response()
-    },
-    Err(e) => handle_pg_error_response(e),
-  }
+    match data_result {
+        Ok((data, requester)) => {
+            let result = json!({
+              T::name(): data,
+              "requester": requester,
+            });
+            serde_json::to_string(&result)?.to_json_response()
+        }
+        Err(e) => handle_pg_error_response(e),
+    }
 }
 
-fn build_simple_json_response( data_result: Result<String, PgError>) -> Result<Response<Body>, GenericError> {
-  match data_result {
-    Ok(data) => data.to_string().to_json_response(),
-    Err(e) => handle_pg_error_response(e),
-  }
+fn build_simple_json_response(
+    data_result: Result<String, PgError>,
+) -> Result<Response<Body>, GenericError> {
+    match data_result {
+        Ok(data) => data.to_string().to_json_response(),
+        Err(e) => handle_pg_error_response(e),
+    }
 }
 
 fn handle_pg_error_response(e: PgError) -> Result<Response<Body>, GenericError> {
-    // Check if there's a SQLSTATE code
+    debug!("check if there's an SQLSTATE code {:#?}", e);
     if let Some(code) = e.code() {
         match code.code() {
             // Forbidden (permission denied)
-            "2F004" | "42501" => // Added 42501 as another common permission code
-                "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN),
+            "2F004" | "42501" =>
+            // Added 42501 as another common permission code
+            {
+                "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN)
+            }
             // Unauthorized (invalid credentials/authentication failure)
-            "28P01" | "28000" => // Added 28P01 (invalid_password)
-                "Data access unauthorized".to_text_response_with_status(StatusCode::UNAUTHORIZED),
+            "28P01" | "28000" =>
+            // Added 28P01 (invalid_password)
+            {
+                "Data access unauthorized".to_text_response_with_status(StatusCode::UNAUTHORIZED)
+            }
             // No data found (returned by FETCH, SELECT INTO, etc.)
-            "02000" =>
-                "No data found".to_text_response_with_status(StatusCode::NOT_FOUND),
+            "02000" => "No data found".to_text_response_with_status(StatusCode::NOT_FOUND),
             // Default case for other known SQLSTATE codes - return generic server error
-            _ => e.to_string().to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
+            _ => e
+                .to_string()
+                .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
         }
     } else {
         // Handle errors without a SQLSTATE code (e.g., connection errors)
         // Treat these as internal server errors as well
-        e.to_string().to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
+        e.to_string()
+            .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
@@ -417,11 +524,12 @@ pub use swagger::swagger_json;
 use utoipa::ToSchema;
 mod swagger {
     use crate::model::{
-        ExplicitPermission, GetWriteMemo, Memo, MemoGroup, MemoTitle, MemoTitleList, MemoUser, Requester, User
+        ExplicitPermission, GetWriteMemo, Memo, MemoGroup, MemoTitle, MemoTitleList, MemoUser,
+        Requester, User,
     };
     use utoipa::{
-        openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
         Modify, OpenApi,
+        openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
     };
 
     #[derive(OpenApi)]

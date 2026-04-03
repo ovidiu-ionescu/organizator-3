@@ -15,8 +15,15 @@ use tracing::{debug, info, error};
 pub struct Claims {
     pub sub: String,
     pub exp: u64,
+    pub roles: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ClaimsView<'a> {
+    pub sub: &'a str,
+    pub exp: u64,
+    pub roles: &'a [&'a str],
+}
 // jot is the official pronunciation of JWT
 pub struct Jot {
     encoding_key: EncodingKey,
@@ -90,11 +97,12 @@ impl Jot {
         }
     }
 
-    pub fn generate_token(&self, user_id: &str) -> Result<String, GenericError> {
+    pub fn generate_token(&self, user_id: &str, roles: &[&str]) -> Result<String, GenericError> {
         let exp = get_current_timestamp() + self.session_expiry + self.session_expiry_grace_period;
-        let claims = Claims {
-            sub: user_id.to_string(),
+        let claims = ClaimsView {
+            sub: user_id,
             exp,
+            roles,
         };
         Ok(encode(
             &Header::new(Algorithm::EdDSA),
@@ -109,6 +117,7 @@ impl Jot {
         let claims = Claims {
             sub: claims.sub,
             exp,
+            roles: claims.roles,
         };
         Ok(encode(
             &Header::new(Algorithm::EdDSA),

@@ -4,11 +4,21 @@ use crate::model::{DBPersistence, Requester};
 use deadpool_postgres::Client;
 use log::{trace, debug};
 use tokio_postgres::{types::ToSql, Error, Row};
+use std::ops::Deref;
 
 pub enum QueryType {
   Select,
   // For search we want a list of hits, not full objects
   Search,
+}
+
+pub struct SQLstr<'a>(pub &'a str);
+impl<'a> Deref for SQLstr<'a> {
+  type Target = &'a str;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
 }
 
 pub async fn get_single<'a, T>(client: &Client, username: &'a str, params: &[&(dyn ToSql + Sync)]) -> Result<(T, Requester<'a>), Error>
@@ -61,8 +71,9 @@ where
 
 pub async fn get_json<'a>(
     client: &Client,
-    query: &str,
+    //query: SQLstr<'_>,
     username: &'a str,
+    SQLstr(query): SQLstr<'_>,
     params: &[&(dyn ToSql + Sync)],
 ) -> Result<(String, Requester<'a>), Error> {
     let set_user = client.prepare_cached(
@@ -74,7 +85,11 @@ pub async fn get_json<'a>(
       ).await?;
     let stmt = client.prepare(query).await?;
 
-    let set_user_params: &[&(dyn ToSql + Sync)] = &[&username];
+    let set_user_params: &[&(dyn ToSql + Sync)] = if username == "admin" {
+      &[]
+    } else  {
+      &[&username]
+    };
     let set_user_future = client.query_one(&set_user, set_user_params);
     let stmt_future= client.query_one(&stmt, params);
     let (u, row) = tokio::try_join!(set_user_future, stmt_future)?;

@@ -1,5 +1,6 @@
 use http::Response;
 use hyper::Body;
+use std::borrow::Cow;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub trait ServiceResult:
@@ -7,3 +8,5 @@ pub trait ServiceResult:
 {
 }
 pub trait ServiceFunction: FnMut(http::Request<hyper::Body>) -> dyn ServiceResult {}
+
+pub type VectorString<'a> = Cow<'a, [Cow<'a, str>]>;

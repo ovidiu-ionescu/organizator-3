@@ -30,6 +30,8 @@ impl Display for UserId {
     }
 }
 
+pub struct UserRoles(pub Vec<String>);
+
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
 
@@ -98,10 +100,14 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
   if let Ok(claims) = jot.validate_token(jwt) {
     // verify the token has not expired
     match jot.check_expiration(&claims) {
-      ExpiredToken::Valid => Some(UserId(claims.sub)),
+      ExpiredToken::Valid => {
+        request.extensions_mut().insert(UserRoles(claims.roles)); 
+        Some(UserId(claims.sub))
+      }
       ExpiredToken::GracePeriod => {
         // refresh the token
-        if let Ok(new_token) = jot.generate_token(&claims.sub) {
+        let temp: Vec<&str> = claims.roles.iter().map(|s| s.as_str()).collect();
+        if let Ok(new_token) = jot.generate_token(&claims.sub, &temp) {
           let header = String::from(BEARER) + &new_token;
           let cookie = create_security_cookie(&new_token);
 
@@ -113,6 +119,7 @@ fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
               .headers_mut()
               .insert("Set-Cookie", cookie.parse().unwrap())
               ;
+          request.extensions_mut().insert(UserRoles(claims.roles)); 
           Some(UserId(claims.sub))
         } else {
           None
