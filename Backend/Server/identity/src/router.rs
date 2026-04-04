@@ -40,7 +40,7 @@ struct LoginForm {
 }
 
 #[utoipa::path(post, path="/login", 
-    // the simple variant, commented out, will send json
+    // the simple variant, commented out, will send JSON
     //request_body=LoginForm,
     request_body(content = LoginForm, content_type = "application/x-www-form-urlencoded"),
     responses(
@@ -70,22 +70,20 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     let cookie = create_security_cookie(&new_token);
 
     // if it has the web client header, return just the cookie
-    if let Some(_) = request.headers().get("x-organizator-client-version") {
+    if request.headers().get("x-organizator-client-version").is_some() {
       Ok(Response::builder()
           .status(StatusCode::NO_CONTENT)
           .header("content-type", "text/plain; charset=utf-8")
           .header("Set-Cookie", cookie)
           .header("server", "hyper")
-          .body(Body::empty())
-          .unwrap())
+          .body(Body::empty())?)
     } else {
       Ok(Response::builder()
           .status(StatusCode::OK)
           .header("content-type", "text/plain; charset=utf-8")
           .header("Set-Cookie", cookie)
           .header("server", "hyper")
-          .body(Body::from(new_token))
-          .unwrap())
+          .body(Body::from(new_token))?)
       }
 }
 

@@ -4,7 +4,6 @@ use crate::model::{DBPersistence, Requester};
 use deadpool_postgres::Client;
 use log::{trace, debug};
 use tokio_postgres::{types::ToSql, Error, Row};
-use std::ops::Deref;
 use lib_hyper_organizator::typedef::SQLstr;
 
 pub enum QueryType {
