@@ -73,11 +73,11 @@ where
 
 pub trait IntoResultHyperResponse {
     fn to_json_response_with_status(self, code: StatusCode)
-        -> Result<Response<Body>, GenericError>;
+    -> Result<Response<Body>, GenericError>;
     fn to_json_response(self) -> Result<Response<Body>, GenericError>;
 
     fn to_text_response_with_status(self, code: StatusCode)
-        -> Result<Response<Body>, GenericError>;
+    -> Result<Response<Body>, GenericError>;
     fn to_text_response(self) -> Result<Response<Body>, GenericError>;
 }
 

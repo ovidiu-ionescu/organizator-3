@@ -6,7 +6,7 @@ use tracing::debug;
 
 #[derive(Serialize, Debug)]
 pub struct Login {
-    pub id:       i32,
+    pub id: i32,
     pub username: Option<String>,
     pub password_hash: Option<String>,
 }
@@ -14,7 +14,7 @@ pub struct Login {
 impl From<Row> for Login {
     fn from(row: Row) -> Self {
         Login {
-            id:       row.get("id"),
+            id: row.get("id"),
             username: row.get("username"),
             password_hash: row.get("password_hash"),
         }
@@ -34,7 +34,9 @@ pub async fn update_password(
     password_hash: &str,
 ) -> Result<(), GenericError> {
     debug!("Setting requester to {}", requester);
-    let set_requester = db_client.prepare_cached(include_str!("sql/set_requester.sql")).await?;
+    let set_requester = db_client
+        .prepare_cached(include_str!("sql/set_requester.sql"))
+        .await?;
     db_client.execute(&set_requester, &[&requester]).await?;
     debug!("Updating password for {}", username);
     let stmt = db_client
@@ -44,7 +46,10 @@ pub async fn update_password(
         .execute(&stmt, &[&password_hash, &username])
         .await?;
     if rows == 0 {
-      let err = format!("No rows updated when updating password for user 「{}」", username);
+        let err = format!(
+            "No rows updated when updating password for user 「{}」",
+            username
+        );
         return Err(GenericError::from(err));
     }
     Ok(())

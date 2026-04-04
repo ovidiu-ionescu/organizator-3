@@ -1,19 +1,18 @@
 use opentelemetry::{
-    global,
+    Context, global,
     metrics::{Counter, Histogram},
     sdk::{
         export::metrics::aggregation,
         metrics::{controllers, processors, selectors},
     },
-    Context,
 };
 use opentelemetry_prometheus::PrometheusExporter;
 
 pub struct PrometheusMetrics {
-    pub context:            Context,
-    pub exporter:           PrometheusExporter,
-    pub http_counter:       Counter<u64>,
-    pub http_body_gauge:    Histogram<u64>,
+    pub context: Context,
+    pub exporter: PrometheusExporter,
+    pub http_counter: Counter<u64>,
+    pub http_body_gauge: Histogram<u64>,
     pub http_req_histogram: Histogram<f64>,
 }
 

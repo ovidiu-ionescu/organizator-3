@@ -40,7 +40,7 @@ mod tests {
         println!("{}", sql);
     }
 
-    fn accept_dereference(sql : SQLstr) {
+    fn accept_dereference(sql: SQLstr) {
         println!("{}", &sql as &str);
     }
     #[test]

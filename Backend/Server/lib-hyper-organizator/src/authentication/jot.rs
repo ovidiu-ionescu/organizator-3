@@ -1,15 +1,15 @@
 use crate::settings::SecurityConfig;
 use crate::typedef::GenericError;
 use bytes::Buf as _;
-use hyper::client::HttpConnector;
 use hyper::Client;
+use hyper::client::HttpConnector;
 use jsonwebtoken::{
-    decode, encode, get_current_timestamp, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+    Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode, get_current_timestamp,
 };
 use ring::rand::SystemRandom;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, error};
+use tracing::{debug, error, info};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -43,7 +43,7 @@ pub enum ExpiredToken {
 /// Struct to transfer the public key among processes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PublicKey {
-    algorithm:  String,
+    algorithm: String,
     public_key: String,
 }
 
@@ -134,7 +134,7 @@ impl Jot {
 
     pub fn get_public_key(&self) -> String {
         serde_json::to_string(&PublicKey {
-            algorithm:  "EdDSA".to_string(),
+            algorithm: "EdDSA".to_string(),
             public_key: self.public_key.clone(),
         })
         .unwrap()
@@ -157,8 +157,10 @@ impl Jot {
         let response = match client.get(uri).await {
             Ok(response) => response,
             Err(e) => {
-              let msg = format!("Failed to get public key from identity service 「{public_key_url}」: {e}");
-              error!("{msg}");
+                let msg = format!(
+                    "Failed to get public key from identity service 「{public_key_url}」: {e}"
+                );
+                error!("{msg}");
                 return Err(GenericError::from(msg));
             }
         };

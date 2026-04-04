@@ -21,27 +21,27 @@ pub trait Named {
 
 #[derive(Serialize, ToSchema)]
 pub struct User {
-    pub id:       i32,
+    pub id: i32,
     pub username: Option<String>,
 }
 
 #[derive(Serialize, ToSchema, Clone, Debug)]
 pub struct Requester<'a> {
-    pub id:       i32,
+    pub id: i32,
     pub username: &'a str,
 }
 
-impl <'a>Requester<'a> {
-  pub fn new(id: i32, username: &'a str) -> Self {
-    Self {id, username }
-  }
+impl<'a> Requester<'a> {
+    pub fn new(id: i32, username: &'a str) -> Self {
+        Self { id, username }
+    }
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct MemoTitle {
-    pub id:       i32,
-    pub title:    Option<String>,
-    pub user_id:  i32,
+    pub id: i32,
+    pub title: Option<String>,
+    pub user_id: i32,
     pub savetime: Option<i64>,
 }
 
@@ -58,9 +58,9 @@ impl DBPersistence for MemoTitle {
 impl From<Row> for MemoTitle {
     fn from(row: Row) -> Self {
         Self {
-            id:       row.get("id"),
-            title:    row.get("title"),
-            user_id:  row.get("user_id"),
+            id: row.get("id"),
+            title: row.get("title"),
+            user_id: row.get("user_id"),
             savetime: row.get("savetime"),
         }
     }
@@ -69,7 +69,7 @@ impl From<Row> for MemoTitle {
 #[derive(Serialize, ToSchema)]
 pub struct MemoTitleList {
     pub memos: Vec<MemoTitle>,
-    pub user:  User,
+    pub user: User,
 }
 
 impl Named for Vec<MemoTitle> {
@@ -80,7 +80,7 @@ impl Named for Vec<MemoTitle> {
 
 #[derive(Serialize, ToSchema)]
 pub struct MemoGroup {
-    pub id:   i32,
+    pub id: i32,
     pub name: String,
 }
 
@@ -93,44 +93,44 @@ impl DBPersistence for MemoGroup {
 impl From<Row> for MemoGroup {
     fn from(row: Row) -> Self {
         Self {
-            id:   row.get("o_id"),
+            id: row.get("o_id"),
             name: row.get("o_name"),
         }
     }
 }
 
 impl Named for MemoGroup {
-  fn name() -> &'static str {
-    "memogroups"
-  }
+    fn name() -> &'static str {
+        "memogroups"
+    }
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct Memo {
-    pub id:        i32,
-    pub title:     Option<String>,
-    pub memotext:  Option<String>,
-    pub savetime:  Option<i64>,
+    pub id: i32,
+    pub title: Option<String>,
+    pub memotext: Option<String>,
+    pub savetime: Option<i64>,
     pub memogroup: Option<MemoGroup>,
-    pub user:      MemoUser,
+    pub user: MemoUser,
 }
 
 impl Named for Memo {
-  fn name() -> &'static str {
-     "memo" 
-  } 
+    fn name() -> &'static str {
+        "memo"
+    }
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct MemoUser {
-    pub id:   i32,
+    pub id: i32,
     pub name: Option<String>,
 }
 
 impl From<Row> for Memo {
     fn from(row: Row) -> Self {
-      // display all field names to make sure they are correct
-      //log::trace!("{:?}", row.columns());
+        // display all field names to make sure they are correct
+        //log::trace!("{:?}", row.columns());
         let group_id: Option<i32> = row.get("group_id");
         let memo_group = group_id.map(|id| MemoGroup {
             id,
@@ -138,15 +138,15 @@ impl From<Row> for Memo {
         });
 
         Self {
-                id:        row.get("id"),
-                title:     row.get("title"),
-                memotext:  row.get("memotext"),
-                savetime:  row.get("savetime"),
-                memogroup: memo_group,
-                user:      MemoUser {
-                    id:   row.get("user_id"),
-                    name: row.get("username"),
-                },
+            id: row.get("id"),
+            title: row.get("title"),
+            memotext: row.get("memotext"),
+            savetime: row.get("savetime"),
+            memogroup: memo_group,
+            user: MemoUser {
+                id: row.get("user_id"),
+                name: row.get("username"),
+            },
         }
     }
 }
@@ -181,14 +181,12 @@ impl From<Row> for GetWriteMemo {
             savetime: row.get("io_savetime"),
             memogroup: memo_group,
             user: MemoUser {
-                id:   row.get("o_user_id"),
+                id: row.get("o_user_id"),
                 name: row.get("o_username"),
             },
         });
 
-        Self {
-            memo,
-        }
+        Self { memo }
     }
 }
 
@@ -199,32 +197,32 @@ impl DBPersistence for GetWriteMemo {
 }
 
 impl Named for GetWriteMemo {
-  fn name() -> &'static str {
-    "memo"
-  }
+    fn name() -> &'static str {
+        "memo"
+    }
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct ExplicitPermission {
-    pub memo_group_id:   i32,
+    pub memo_group_id: i32,
     pub memo_group_name: Option<String>,
-    pub user_group_id:   i32,
+    pub user_group_id: i32,
     pub user_group_name: Option<String>,
-    pub user_id:         i32,
-    pub username:        Option<String>,
-    pub access:          i32,
+    pub user_id: i32,
+    pub username: Option<String>,
+    pub access: i32,
 }
 
 impl From<Row> for ExplicitPermission {
     fn from(row: Row) -> Self {
         Self {
-            memo_group_id:   row.get("memo_group_id"),
+            memo_group_id: row.get("memo_group_id"),
             memo_group_name: row.get("memo_group_name"),
-            user_group_id:   row.get("user_group_id"),
+            user_group_id: row.get("user_group_id"),
             user_group_name: row.get("user_group_name"),
-            user_id:         row.get("user_id"),
-            username:        row.get("username"),
-            access:          row.get("access"),
+            user_id: row.get("user_id"),
+            username: row.get("username"),
+            access: row.get("access"),
         }
     }
 }
@@ -236,92 +234,92 @@ impl DBPersistence for ExplicitPermission {
 }
 
 impl Named for Vec<MemoGroup> {
-  fn name() -> &'static str {
-    "memogroups"
-  }
+    fn name() -> &'static str {
+        "memogroups"
+    }
 }
 
 impl Named for Vec<ExplicitPermission> {
-  fn name() -> &'static str {
-    "permissions"
-  }
+    fn name() -> &'static str {
+        "permissions"
+    }
 }
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct FilePermission {
-  user_id: i32,
-  username: String,
-  memo_group_id: Option<i32>,
-  access: i32,
+    user_id: i32,
+    username: String,
+    memo_group_id: Option<i32>,
+    access: i32,
 }
 
 impl From<Row> for FilePermission {
-  fn from(row: Row) -> Self {
-    Self {
-      user_id: row.get("o_user_id"),
-      username: row.get("o_username"),
-      memo_group_id: row.get("o_memo_group_id"),
-      access: row.get("o_access"),
+    fn from(row: Row) -> Self {
+        Self {
+            user_id: row.get("o_user_id"),
+            username: row.get("o_username"),
+            memo_group_id: row.get("o_memo_group_id"),
+            access: row.get("o_access"),
+        }
     }
-  }
 }
 
 impl DBPersistence for FilePermission {
-  fn query() -> &'static str {
-    include_str!("sql/get_file_security.sql")
-  }
+    fn query() -> &'static str {
+        include_str!("sql/get_file_security.sql")
+    }
 }
 
 impl Named for FilePermission {
-  fn name() -> &'static str {
-    "FilePermission"
-  }
+    fn name() -> &'static str {
+        "FilePermission"
+    }
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct FilestoreFileDB {
-  pub id: Uuid,
-  pub user_id: i32,
-  pub filename: String,
-  pub memo_group_id: Option<i32>,
-  pub uploaded_on: i64,
+    pub id: Uuid,
+    pub user_id: i32,
+    pub filename: String,
+    pub memo_group_id: Option<i32>,
+    pub uploaded_on: i64,
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct FilestoreFile {
-  pub filename: String,
+    pub filename: String,
 }
 
 impl FilestoreFile {
-  pub fn filename_no_extension(&self) -> &str {
-    if let Some(pos) = self.filename.find('.') {
-      &self.filename[..pos]
-    } else {
-      &self.filename
+    pub fn filename_no_extension(&self) -> &str {
+        if let Some(pos) = self.filename.find('.') {
+            &self.filename[..pos]
+        } else {
+            &self.filename
+        }
     }
-  }
 }
 
 impl Named for Vec<FilestoreFileDB> {
-  fn name() -> &'static str {
-    "db_file_entries"
-  }
+    fn name() -> &'static str {
+        "db_file_entries"
+    }
 }
 
 impl From<Row> for FilestoreFileDB {
-  fn from(row: Row) -> Self {
-    Self {
-      id: row.get("id"),
-      user_id: row.get("user_id"),
-      filename: row.get("filename"),
-      memo_group_id: row.get("memo_group_id"),
-      uploaded_on: row.get("uploaded_on"),
+    fn from(row: Row) -> Self {
+        Self {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            filename: row.get("filename"),
+            memo_group_id: row.get("memo_group_id"),
+            uploaded_on: row.get("uploaded_on"),
+        }
     }
-  }
 }
 
 impl DBPersistence for FilestoreFileDB {
-  fn query() -> &'static str {
-    include_str!("sql/admin/filestore.sql")
-  }
+    fn query() -> &'static str {
+        include_str!("sql/admin/filestore.sql")
+    }
 }

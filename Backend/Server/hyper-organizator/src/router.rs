@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::db::{self};
 use crate::db::QueryType::{Search, Select};
+use crate::db::{self};
 use crate::model::Memo;
 use crate::model::MemoTitle;
 use crate::model::Named;
@@ -224,11 +224,7 @@ async fn memo_search(mut request: Request<Body>) -> Result<Response<Body>, Gener
 async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let (client, username) = get_client_and_user(&request).await?;
 
-    let uri = request
-        .headers()
-        .get("X-Original-URI")
-        .unwrap()
-        .to_str()?;
+    let uri = request.headers().get("X-Original-URI").unwrap().to_str()?;
     debug!("Checking file auth for {uri}");
     let uuid = FILE_UUID_REGEX
         .captures(uri)
@@ -292,8 +288,7 @@ async fn upload_file(request: Request<Body>) -> Result<Response<Body>, GenericEr
         (group_id, generated_name, original_filename)
     {
         debug!("Save entry to filestore table");
-        let uuid = generated_name[..generated_name.rfind('.').unwrap()]
-            .parse::<uuid::Uuid>()?;
+        let uuid = generated_name[..generated_name.rfind('.').unwrap()].parse::<uuid::Uuid>()?;
         // FIXME the user id should come from the session, now hardcoded 1 to pass compilation
         match db::execute(
             &client,
@@ -429,14 +424,26 @@ async fn get_all_usergroups(request: Request<Body>) -> Result<Response<Body>, Ge
 async fn get_usergroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let (client, username) = get_client_and_user(&request).await?;
 
-    let json = db::get_json(&client, username, SQLstr(include_str!("sql/user_groups.sql")), &[]).await;
+    let json = db::get_json(
+        &client,
+        username,
+        SQLstr(include_str!("sql/user_groups.sql")),
+        &[],
+    )
+    .await;
     build_simple_json_response(json.map(|(string, _requester)| string))
 }
 
 async fn get_memogroups(request: Request<Body>) -> Result<Response<Body>, GenericError> {
     let (client, username) = get_client_and_user(&request).await?;
 
-    let json = db::get_json(&client, username, SQLstr(include_str!("sql/memo_groups.sql")), &[]).await;
+    let json = db::get_json(
+        &client,
+        username,
+        SQLstr(include_str!("sql/memo_groups.sql")),
+        &[],
+    )
+    .await;
     build_simple_json_response(json.map(|(string, _requester)| string))
 }
 

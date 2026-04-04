@@ -2,12 +2,15 @@ use crate::{
     logging::logging_trace_span::TraceRequestMakeSpan, settings::Settings, swagger::add_swagger,
 };
 use http::{
-    header::{HeaderName, AUTHORIZATION},
     Request, Response,
+    header::{AUTHORIZATION, HeaderName},
 };
-use hyper::{server::Server, Body, Error};
-use std::{iter::once, sync::{Arc, LazyLock}};
-use tower::{make::Shared, ServiceBuilder};
+use hyper::{Body, Error, server::Server};
+use std::{
+    iter::once,
+    sync::{Arc, LazyLock},
+};
+use tower::{ServiceBuilder, make::Shared};
 use tower_http::{
     add_extension::AddExtensionLayer, compression::CompressionLayer,
     propagate_header::PropagateHeaderLayer, sensitive_headers::SetSensitiveRequestHeadersLayer,

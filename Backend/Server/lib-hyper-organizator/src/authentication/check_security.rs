@@ -1,16 +1,16 @@
 use crate::authentication::jot::{ExpiredToken, Jot};
 use crate::response_utils::IntoHyperResponse;
-use http::header::{AUTHORIZATION, COOKIE};
+use crate::typedef::{UserId, UserRoles};
 /// Authentication is checked in two steps:
 ///  - check a header filled in by Nginx from a client certificate
 ///  - check the JWT token in the Authorization header
 ///
 use http::StatusCode;
+use http::header::{AUTHORIZATION, COOKIE};
 use hyper::{Body, Request, Response};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
 use tracing::{info, trace};
-use crate::typedef::{UserId, UserRoles};
 
 const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
 const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
@@ -21,20 +21,17 @@ pub const BEARER: &str = "Bearer ";
 #[derive(Clone, Copy)]
 pub struct OrganizatorAuthorization;
 
-
-
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
 
     fn authorize(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
         trace!("Checking authorization");
         // check if the url is in the list of allowed urls (e.g. /login)
-        let Some(jot) = request
-            .extensions()
-            .get::<Arc<Jot>>()
-            else {
-                return Err("No Jot in the request".to_text_response_with_status(StatusCode::UNAUTHORIZED));
-            };
+        let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
+            return Err(
+                "No Jot in the request".to_text_response_with_status(StatusCode::UNAUTHORIZED)
+            );
+        };
         if jot.is_ignored_path(request.uri().path()) {
             return Ok(());
         }
@@ -57,7 +54,10 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
     match request.headers().get(SSL_HEADER_VERIFY) {
         Some(s) if s == "SUCCESS" => (),
         Some(s) => {
-            info!("Content of {SSL_HEADER_VERIFY} is {:?} instead of SUCCESS, SSL verification failed", s);
+            info!(
+                "Content of {SSL_HEADER_VERIFY} is {:?} instead of SUCCESS, SSL verification failed",
+                s
+            );
             return None;
         }
         None => {
@@ -77,100 +77,99 @@ fn check_ssl_header<B>(request: &Request<B>) -> Option<UserId> {
 }
 
 fn check_jwt_header<B>(request: &mut Request<B>) -> Option<UserId> {
-  trace!("Checking the headers for a JWT bearer token");
-  let jwt = extract_jwt(request);
-  let jwt = match jwt {
-    Some(s) => s,
-    None => {
-      trace!("No jwt found in headers");
-      return None;
-    }
-  };
-
-  let jot = request.extensions().get::<Arc<Jot>>()?;
-  if let Ok(claims) = jot.validate_token(jwt) {
-    // verify the token has not expired
-    match jot.check_expiration(&claims) {
-      ExpiredToken::Valid => {
-        request.extensions_mut().insert(UserRoles(claims.roles)); 
-        Some(UserId(claims.sub))
-      }
-      ExpiredToken::GracePeriod => {
-        // refresh the token
-        let temp: Vec<&str> = claims.roles.iter().map(|s| s.as_str()).collect();
-        if let Ok(new_token) = jot.generate_token(&claims.sub, &temp) {
-          let header = String::from(BEARER) + &new_token;
-          let cookie = create_security_cookie(&new_token);
-
-          request
-              .headers_mut()
-              .insert(AUTHORIZATION, header.parse().unwrap());
-          
-          request
-              .headers_mut()
-              .insert("Set-Cookie", cookie.parse().unwrap())
-              ;
-          request.extensions_mut().insert(UserRoles(claims.roles)); 
-          Some(UserId(claims.sub))
-        } else {
-          None
+    trace!("Checking the headers for a JWT bearer token");
+    let jwt = extract_jwt(request);
+    let jwt = match jwt {
+        Some(s) => s,
+        None => {
+            trace!("No jwt found in headers");
+            return None;
         }
-      }
-      ExpiredToken::Expired => {
-        info!("Token expired");
+    };
+
+    let jot = request.extensions().get::<Arc<Jot>>()?;
+    if let Ok(claims) = jot.validate_token(jwt) {
+        // verify the token has not expired
+        match jot.check_expiration(&claims) {
+            ExpiredToken::Valid => {
+                request.extensions_mut().insert(UserRoles(claims.roles));
+                Some(UserId(claims.sub))
+            }
+            ExpiredToken::GracePeriod => {
+                // refresh the token
+                let temp: Vec<&str> = claims.roles.iter().map(|s| s.as_str()).collect();
+                if let Ok(new_token) = jot.generate_token(&claims.sub, &temp) {
+                    let header = String::from(BEARER) + &new_token;
+                    let cookie = create_security_cookie(&new_token);
+
+                    request
+                        .headers_mut()
+                        .insert(AUTHORIZATION, header.parse().unwrap());
+
+                    request
+                        .headers_mut()
+                        .insert("Set-Cookie", cookie.parse().unwrap());
+                    request.extensions_mut().insert(UserRoles(claims.roles));
+                    Some(UserId(claims.sub))
+                } else {
+                    None
+                }
+            }
+            ExpiredToken::Expired => {
+                info!("Token expired");
+                None
+            }
+        }
+    } else {
+        trace!("Invalid token");
         None
-      }
     }
-  } else {
-    trace!("Invalid token");
-    None
-  }
 }
 
 pub fn create_security_cookie(jwt: &str) -> String {
-  format!("__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Strict; Path=/;")
+    format!("__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Strict; Path=/;")
 }
 
 fn get_cookie_value<'a, B>(req: &'a Request<B>, cookie_name_prefix: &str) -> Option<&'a str> {
-req.headers()
-  .get_all(COOKIE)
-  .iter()
-  .filter_map(|h| h.to_str().ok())
-  .flat_map(|s| s.split(';'))
-  .find_map(|pair| {
-    let pair = pair.trim();
-    pair.strip_prefix(cookie_name_prefix)
-  })
+    req.headers()
+        .get_all(COOKIE)
+        .iter()
+        .filter_map(|h| h.to_str().ok())
+        .flat_map(|s| s.split(';'))
+        .find_map(|pair| {
+            let pair = pair.trim();
+            pair.strip_prefix(cookie_name_prefix)
+        })
 }
 
-fn extract_bearer< B>(req: &Request<B>) -> Option<&str> {
-  if let Some(auth_header) = req.headers().get(AUTHORIZATION)
-    && let Ok(auth_str) = auth_header.to_str()
-      && let Some(token) = auth_str.strip_prefix(BEARER) {
+fn extract_bearer<B>(req: &Request<B>) -> Option<&str> {
+    if let Some(auth_header) = req.headers().get(AUTHORIZATION)
+        && let Ok(auth_str) = auth_header.to_str()
+        && let Some(token) = auth_str.strip_prefix(BEARER)
+    {
         return Some(token.trim());
-  }
-  None
+    }
+    None
 }
 
 const COOKIE_NAME_PREFIX: &str = "__Host-jwt=";
-const COOKIE_NAME: &str =  "__Host-jwt";
-
+const COOKIE_NAME: &str = "__Host-jwt";
 
 fn extract_jwt<B>(req: &Request<B>) -> Option<&str> {
-  let bearer_token = extract_bearer(req);
-  if bearer_token.is_some() {
-    trace!("Found header {AUTHORIZATION} with bearer token");
-    return bearer_token;
-  } else {
-    trace!("Could not find header {AUTHORIZATION} with bearer token");
-  }
-  let cookie_token = get_cookie_value(req, COOKIE_NAME_PREFIX);
-  if cookie_token.is_some() {
-    trace!("Found cookie {COOKIE_NAME} with bearer token");
-  } else {
-    trace!("Cound not find cookie {COOKIE_NAME} with bearer token");
-  }
-  cookie_token
+    let bearer_token = extract_bearer(req);
+    if bearer_token.is_some() {
+        trace!("Found header {AUTHORIZATION} with bearer token");
+        return bearer_token;
+    } else {
+        trace!("Could not find header {AUTHORIZATION} with bearer token");
+    }
+    let cookie_token = get_cookie_value(req, COOKIE_NAME_PREFIX);
+    if cookie_token.is_some() {
+        trace!("Found cookie {COOKIE_NAME} with bearer token");
+    } else {
+        trace!("Cound not find cookie {COOKIE_NAME} with bearer token");
+    }
+    cookie_token
 }
 
 #[cfg(test)]
@@ -250,10 +249,10 @@ mod tests {
     macro_rules! test_with_env {
         ($expiry: expr, $grace: expr, $response: ident) => {
             let security_config = SecurityConfig {
-                session_expiry:              $expiry,
+                session_expiry: $expiry,
                 session_expiry_grace_period: $grace,
-                ignore_paths:                vec![],
-                public_key_url:              None,
+                ignore_paths: vec![],
+                public_key_url: None,
             };
             let mut jot = Jot::new(&security_config).await.unwrap();
             jot.session_expiry = $expiry;

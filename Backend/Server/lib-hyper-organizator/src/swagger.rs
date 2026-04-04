@@ -84,7 +84,7 @@ mod submodule {
 
     pub struct SwaggerLayer<'a> {
         swagger_path: &'a str,
-        json:         Option<String>,
+        json: Option<String>,
     }
 
     impl<'a> SwaggerLayer<'a> {
@@ -122,11 +122,11 @@ mod submodule {
 
     #[derive(Clone)]
     pub struct SwaggerService<S> {
-        swagger_paths:  Vec<String>,
-        swagger_path:   String,
+        swagger_paths: Vec<String>,
+        swagger_path: String,
         swagger_config: Arc<Config<'static>>,
-        json:           String,
-        service:        S,
+        json: String,
+        service: S,
     }
 
     unsafe impl<S> Send for SwaggerService<S> {}

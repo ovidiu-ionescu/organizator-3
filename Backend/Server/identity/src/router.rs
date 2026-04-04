@@ -1,23 +1,21 @@
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+};
 use http::{Method, Request, Response, StatusCode};
 use hyper::Body;
 use lib_hyper_organizator::authentication::check_security::create_security_cookie;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
-use lib_hyper_organizator::response_utils::{parse_body, IntoResultHyperResponse};
+use lib_hyper_organizator::response_utils::{IntoResultHyperResponse, parse_body};
 use lib_hyper_organizator::typedef::{GenericError, UserId};
 use lib_hyper_organizator::under_construction::default_response;
 use serde::Deserialize;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use utoipa::ToSchema;
-use argon2::{
-  password_hash::{
-    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
-  },
-  Argon2,
-};
 
-use crate::db::{self, fetch_login, Login};
+use crate::db::{self, Login, fetch_login};
 
 /// All requests to the server are handled by this function.
 pub async fn router(request: Request<Body>) -> Result<Response<Body>, GenericError> {
@@ -53,8 +51,8 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     let client = get_connection(&request).await?;
 
     if form.username.is_empty() {
-      error!("Username is empty");
-      return "Username is empty".to_text_response_with_status(StatusCode::UNAUTHORIZED);
+        error!("Username is empty");
+        return "Username is empty".to_text_response_with_status(StatusCode::UNAUTHORIZED);
     }
     let login = fetch_login(&client, &form.username).await?;
     if !verify_password(&form.password, &login) {
@@ -64,48 +62,61 @@ async fn login(mut request: Request<Body>) -> Result<Response<Body>, GenericErro
     let Some(jot) = request.extensions().get::<Arc<Jot>>() else {
         return "No Jot".to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR);
     };
-    let roles = if login.id == 1 { vec!["org", "orgadm", "photo"] } else { vec!["org", "photo"] }; 
+    let roles = if login.id == 1 {
+        vec!["org", "orgadm", "photo"]
+    } else {
+        vec!["org", "photo"]
+    };
     let new_token: String = jot.generate_token(&form.username, &roles)?;
     info!("User 「{}」 logged in", &form.username);
     let cookie = create_security_cookie(&new_token);
 
     // if it has the web client header, return just the cookie
-    if request.headers().get("x-organizator-client-version").is_some() {
-      Ok(Response::builder()
-          .status(StatusCode::NO_CONTENT)
-          .header("content-type", "text/plain; charset=utf-8")
-          .header("Set-Cookie", cookie)
-          .header("server", "hyper")
-          .body(Body::empty())?)
+    if request
+        .headers()
+        .get("x-organizator-client-version")
+        .is_some()
+    {
+        Ok(Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .header("content-type", "text/plain; charset=utf-8")
+            .header("Set-Cookie", cookie)
+            .header("server", "hyper")
+            .body(Body::empty())?)
     } else {
-      Ok(Response::builder()
-          .status(StatusCode::OK)
-          .header("content-type", "text/plain; charset=utf-8")
-          .header("Set-Cookie", cookie)
-          .header("server", "hyper")
-          .body(Body::from(new_token))?)
-      }
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/plain; charset=utf-8")
+            .header("Set-Cookie", cookie)
+            .header("server", "hyper")
+            .body(Body::from(new_token))?)
+    }
 }
 
 pub fn verify_password(password: &str, login: &Login) -> bool {
-  if let Some(password_hash_string) = &login.password_hash {
-    let password_hash = PasswordHash::new(password_hash_string).unwrap();
-    let ok = Argon2::default().verify_password(password.as_bytes(), &password_hash).is_ok();
-    if ok {
-      info!("Password for user 「{:?}」is correct", login.username);
+    if let Some(password_hash_string) = &login.password_hash {
+        let password_hash = PasswordHash::new(password_hash_string).unwrap();
+        let ok = Argon2::default()
+            .verify_password(password.as_bytes(), &password_hash)
+            .is_ok();
+        if ok {
+            info!("Password for user 「{:?}」is correct", login.username);
+        } else {
+            warn!(
+                "Password hash found for user 「{:?}」 but password is incorrect",
+                login.username
+            );
+        }
+        ok
     } else {
-      warn!("Password hash found for user 「{:?}」 but password is incorrect", login.username);
+        warn!("No password hash found for user 「{:?}」", login.username);
+        false
     }
-    ok
-  } else {
-    warn!("No password hash found for user 「{:?}」", login.username);
-    false
-  }
 }
 
 #[derive(Deserialize, Debug, Clone, ToSchema)]
 struct ChangePasswordForm {
-    username:     Option<String>,
+    username: Option<String>,
     old_password: String,
     new_password: String,
 }
@@ -129,7 +140,9 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
     // compute the new password hash and salt
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    let password_hash = argon2.hash_password(form.new_password.as_bytes(), &salt)?.to_string();
+    let password_hash = argon2
+        .hash_password(form.new_password.as_bytes(), &salt)?
+        .to_string();
 
     // use the form username if supplied and not empty, otherwise use the requester
     let username = match form.username {

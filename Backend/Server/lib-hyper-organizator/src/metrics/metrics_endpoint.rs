@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use futures::Future;
-use http::{header::CONTENT_TYPE, Method, Request, Response, StatusCode};
+use http::{Method, Request, Response, StatusCode, header::CONTENT_TYPE};
 use hyper::{Body, Server};
 
-use tower::{make::Shared, ServiceBuilder};
+use tower::{ServiceBuilder, make::Shared};
 use tower_http::add_extension::AddExtensionLayer;
 use tracing::{info, trace};
 
