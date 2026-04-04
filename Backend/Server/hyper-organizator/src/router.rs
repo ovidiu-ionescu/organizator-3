@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::db::{self, SQLstr};
+use crate::db::{self};
 use crate::db::QueryType::{Search, Select};
 use crate::model::Memo;
 use crate::model::MemoTitle;
@@ -13,13 +13,12 @@ use http::StatusCode;
 use http::{Method, Request, Response};
 use hyper::Body;
 use lazy_static::lazy_static;
-use lib_hyper_organizator::authentication::check_security::{UserId, UserRoles};
 use lib_hyper_organizator::multipart::{Field, FileField, RegularField, handle_multipart};
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::IntoResultHyperResponse;
 use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::server::SETTINGS;
-use lib_hyper_organizator::typedef::GenericError;
+use lib_hyper_organizator::typedef::{GenericError, SQLstr, UserId, UserRoles};
 use lib_hyper_organizator::under_construction::default_response;
 use log::{debug, error, trace};
 use regex::Regex;
@@ -229,8 +228,7 @@ async fn file_auth(request: Request<Body>) -> Result<Response<Body>, GenericErro
         .headers()
         .get("X-Original-URI")
         .unwrap()
-        .to_str()
-        .unwrap();
+        .to_str()?;
     debug!("Checking file auth for {uri}");
     let uuid = FILE_UUID_REGEX
         .captures(uri)
@@ -295,8 +293,7 @@ async fn upload_file(request: Request<Body>) -> Result<Response<Body>, GenericEr
     {
         debug!("Save entry to filestore table");
         let uuid = generated_name[..generated_name.rfind('.').unwrap()]
-            .parse::<uuid::Uuid>()
-            .unwrap();
+            .parse::<uuid::Uuid>()?;
         // FIXME the user id should come from the session, now hardcoded 1 to pass compilation
         match db::execute(
             &client,
@@ -450,7 +447,7 @@ fn is_admin(request: &Request<Body>) -> bool {
         return admin;
     }
     debug!("No roles in request");
-    return false;
+    false
 }
 
 /// Fetch the database connection and the current user from the request.
@@ -458,7 +455,7 @@ async fn get_client_and_user(
     request: &Request<Body>,
 ) -> Result<(deadpool_postgres::Client, &str), GenericError> {
     let client = get_connection(request).await?;
-    // get the current logged in user from the request
+    // get the current logged-in user from the request
     let Some(user_identification) = request.extensions().get::<UserId>() else {
         return Err(GenericError::from(
             "No user found in request, this should not happen",

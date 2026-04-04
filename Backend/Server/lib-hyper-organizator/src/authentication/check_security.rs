@@ -7,10 +7,10 @@ use http::header::{AUTHORIZATION, COOKIE};
 ///
 use http::StatusCode;
 use hyper::{Body, Request, Response};
-use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tower_http::auth::AuthorizeRequest;
 use tracing::{info, trace};
+use crate::typedef::{UserId, UserRoles};
 
 const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
 const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
@@ -21,16 +21,7 @@ pub const BEARER: &str = "Bearer ";
 #[derive(Clone, Copy)]
 pub struct OrganizatorAuthorization;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct UserId(pub String);
 
-impl Display for UserId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-pub struct UserRoles(pub Vec<String>);
 
 impl<B> AuthorizeRequest<B> for OrganizatorAuthorization {
     type ResponseBody = Body;
@@ -211,7 +202,7 @@ mod tests {
     async fn test_check_jwt_header() {
         let mut request = Request::new(Body::empty());
         let jot = Jot::new(&SecurityConfig::default()).await.unwrap();
-        let token = jot.generate_token("admin").unwrap();
+        let token = jot.generate_token("admin", &[]).unwrap();
         let header = String::from(BEARER) + &token;
 
         request
@@ -267,7 +258,7 @@ mod tests {
             let mut jot = Jot::new(&security_config).await.unwrap();
             jot.session_expiry = $expiry;
             jot.session_expiry_grace_period = $grace;
-            let token = jot.generate_token("admin").unwrap();
+            let token = jot.generate_token("admin", &[]).unwrap();
             let mut service = ServiceBuilder::new()
                 .layer(AddExtensionLayer::new(Arc::new(jot)))
                 .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))

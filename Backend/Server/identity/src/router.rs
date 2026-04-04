@@ -1,10 +1,10 @@
 use http::{Method, Request, Response, StatusCode};
 use hyper::Body;
-use lib_hyper_organizator::authentication::check_security::{UserId, create_security_cookie};
+use lib_hyper_organizator::authentication::check_security::create_security_cookie;
 use lib_hyper_organizator::authentication::jot::Jot;
 use lib_hyper_organizator::postgres::get_connection;
 use lib_hyper_organizator::response_utils::{parse_body, IntoResultHyperResponse};
-use lib_hyper_organizator::typedef::GenericError;
+use lib_hyper_organizator::typedef::{GenericError, UserId};
 use lib_hyper_organizator::under_construction::default_response;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -116,10 +116,9 @@ async fn update_password(mut request: Request<Body>) -> Result<Response<Body>, G
     let form: ChangePasswordForm = parse_body(&mut request).await?;
 
     // get the current logged in user from the request
-    let Some(user_id) = request.extensions().get::<UserId>() else {
+    let Some(UserId(requester)) = request.extensions().get::<UserId>() else {
         return "User is not logged in".to_text_response_with_status(StatusCode::UNAUTHORIZED);
     };
-    let requester = &user_id.0;
 
     let client = get_connection(&request).await?;
 

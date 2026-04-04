@@ -189,7 +189,7 @@ mod tests {
     fn test_encoding() {
         let security_config = SecurityConfig::default();
         let jot = Jot::autogenerate(&security_config).unwrap();
-        let token = jot.generate_token("admin").unwrap();
+        let token = jot.generate_token("admin", &[]).unwrap();
         println!("{}", token);
 
         let user_id = jot.validate_token(&token).unwrap().sub;

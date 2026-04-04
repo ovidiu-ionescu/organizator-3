@@ -5,6 +5,7 @@ use deadpool_postgres::Client;
 use log::{trace, debug};
 use tokio_postgres::{types::ToSql, Error, Row};
 use std::ops::Deref;
+use lib_hyper_organizator::typedef::SQLstr;
 
 pub enum QueryType {
   Select,
@@ -12,14 +13,7 @@ pub enum QueryType {
   Search,
 }
 
-pub struct SQLstr<'a>(pub &'a str);
-impl<'a> Deref for SQLstr<'a> {
-  type Target = &'a str;
 
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
 
 pub async fn get_single<'a, T>(client: &Client, username: &'a str, params: &[&(dyn ToSql + Sync)]) -> Result<(T, Requester<'a>), Error>
 where
