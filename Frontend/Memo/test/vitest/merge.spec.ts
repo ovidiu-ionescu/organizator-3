@@ -28,7 +28,7 @@ describe("Testing text merging", () => {
     const remote = "ibkd";
 
     const merged = merge(base, local, remote);
-    console.log(merged);
+    console.log({merged});
   });
 
 
@@ -46,7 +46,7 @@ describe("Testing text merging", () => {
   
     console.log(`Prepending 1: [${add1}${base}]`)
     const merged = merge(base, `${add1}${base}`, `${add2}${base}`);
-    console.log(merged);
+    console.log({merged});
 
   });
 

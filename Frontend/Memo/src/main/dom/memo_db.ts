@@ -18,7 +18,8 @@ import {
 
 import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
-import { merge } from "./diff_match_patch_uncompressed.js";
+// @ts-ignore
+import {merge} from "../pkg/organizator_wasm.js";
 import konsole from "./console_log.js";
 
 export const DBName = "MemoDatabase";

@@ -2,6 +2,7 @@ mod utils;
 mod markdown;
 pub mod aes;
 pub mod memo;
+mod merge;
 
 use aes::{aes_ctr_encrypt, aes_ctr_decrypt};
 
@@ -69,6 +70,11 @@ pub fn process_markdown(markdown_input: &str, base_64_limit: usize) -> String {
 #[wasm_bindgen]
 pub fn transform_markdown(markdown_input: &str) -> String {
   markdown::process_markdown(markdown_input)
+}
+
+#[wasm_bindgen]
+pub fn merge(original: &str, ours: &str, theirs: &str) -> String {
+  merge::merge_with_options(original, ours, theirs)
 }
 
 #[cfg(test)]

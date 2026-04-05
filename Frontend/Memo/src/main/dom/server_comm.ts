@@ -22,9 +22,11 @@ import {
   MemoGroups, Undef,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
-import { merge } from "./diff_match_patch_uncompressed.js";
 import * as memo_processing from "./memo_processing.js";
 import { MemoEditor } from "./memo-editor.js";
+// @ts-ignore
+import {merge} from "../pkg/organizator_wasm.js";
+
 
 /**
  * The code communicating with the server
