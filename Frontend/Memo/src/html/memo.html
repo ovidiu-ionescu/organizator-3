@@ -7,7 +7,7 @@
     <link rel="apple-touch-icon" sizes="167x167" href="/images/ios/tulip-blue-touch-icon-iphone-retina.png">
     <link rel="manifest" href="/org-manifest.json">
     <script type="module">
-      import "/worker/app.js";
+      //import "/worker/app.js";
 
       import * as router from "/dom/memo-router.js";
       window.load_route = router.load_route;
@@ -62,6 +62,9 @@
       a {
         color: steelblue;
       }
+      footer a {
+        margin-left: 20px;
+      }
     </style>
   </head>
   <body onload="load_route()">
@@ -79,7 +82,7 @@
             <a href="/memo/new">New</a>
         </nav>
         <side id="memoTitlesList"></side>
-        <footer style="text-align: right;"><a href="/journal">Journal</a></footer>
+        <footer style="text-align: right;"><a href="/memo/$$$admin">Admin</a><a href="/journal">Journal</a></footer>
       </section>
       <log-journal id="journal" page></log-journal>
     </main>

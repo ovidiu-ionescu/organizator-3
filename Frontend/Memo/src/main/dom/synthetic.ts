@@ -79,7 +79,7 @@ const create_cached_memos = async () => {
     |Id|Title|Last Modified|
     |:---|:---|:---|
     ${memos.map((memo) =>
-    `|${memo.id}|${memo.title}|${new Date()}|`
+    `|[${memo.id}](/memo/${memo.id})|${memo.title}|${new Date()}|`
   ).join('\n')}
     `;
 }
@@ -131,6 +131,21 @@ const create_memo_groups = async () => {
   return result.join('\n');
 }
 
+const create_admin = () =>
+`# Memo Maintenance
+
+- [Filestore Diagnostics]($$$filestore)
+- [Memo Stats]($$$memo_stats) requires admin rights
+- [Dirty Memos]($$$dirty_memos)
+- [New Memos]($$$new_memos)
+- [Cached Memos]($$$cached_memos)
+- [All User Groups]($$$all_user_groups) requires admin rights
+- [Memo Groups]($$$memo_groups)
+
+`
+
+// when making a synthetic memo make sure there is no newline before the first #
+// otherwise it won't transform the Markdown
 export const create_synthetic_memo = async (id: string): Promise<Undef<string>> => {
   try {
     switch (id) {
@@ -142,6 +157,8 @@ export const create_synthetic_memo = async (id: string): Promise<Undef<string>> 
       case "$$$all_user_groups": return await all_user_groups();
       case "$$$user_groups": return await create_user_groups();
       case "$$$memo_groups": return await create_memo_groups();
+
+      case "$$$admin": return create_admin();
     }
   } catch (e: any) {
     return e.message;
