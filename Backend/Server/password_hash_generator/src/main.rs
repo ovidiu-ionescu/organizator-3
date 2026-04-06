@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_string();
     println!("Password hash: {password_hash}\n");
     println!(
-        "UPDATE users SET password_hash='$argon2id$v=19$m=19456,t=2,p=1$n6VXkP6364F+UtcNuifA4Q$s6WtbrAs/Vk4vwmJX12o4331hwQ6SoGgDjQyxxH8wNY' where username = 'user';"
+        "UPDATE users SET password_hash='{password_hash}' where username = 'user';"
     );
     Ok(())
 }
