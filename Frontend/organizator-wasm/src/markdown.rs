@@ -46,7 +46,7 @@ pub fn process_markdown(markdown: &str) -> String {
   });
   let mut html_output = String::new();
   pulldown_cmark::html::push_html(&mut html_output, transformed_stream);
-  html_output
+  ammonia::clean(&html_output)
 }
 fn process_link<'a>(dest_url: CowStr, title: CowStr) -> CowStr<'a> {
   let mut result = String::with_capacity(512);

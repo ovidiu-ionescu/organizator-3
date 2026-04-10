@@ -18,7 +18,7 @@ pub fn merge_with_options(original: &str, ours: &str, theirs: &str) -> String {
 
 use std::borrow::Cow;
 
-fn ensure_terminator(s: &str) -> Cow<str> {
+fn ensure_terminator(s: &str) -> Cow<'_, str> {
     if s.ends_with('\n') {
         Cow::Borrowed(s)
     } else {
