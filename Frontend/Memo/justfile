@@ -1,3 +1,5 @@
+www := "/var/www/organizator.ro"
+
 build:
   reset
   npm run build
@@ -9,5 +11,6 @@ install-dependencies:
   npm install typescript --save-dev
 
 deploy:
-  cp -r build/main/dom/ /var/www/organizator.ro/
+  cp src/html/* {{www}}
+  cp -r build/main/dom/ {{www}}
 
