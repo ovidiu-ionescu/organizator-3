@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+# $1 is the action. "remove" or "upgrade"
+if [ "$1" = "remove" ] || [ "$1" = "upgrade" ]; then
+    echo "Stopping services before removal/upgrade..."
+    systemctl stop hyper-organizator.service || true
+    systemctl stop identity-organizator.service || true
+fi
+
+if [ "$1" = "remove" ]; then
+    echo "Disabling services..."
+    systemctl disable hyper-organizator.service
+    systemctl disable identity-organizator.service
+fi
+
+exit 0

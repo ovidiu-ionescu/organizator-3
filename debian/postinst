@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+# Reload systemd to recognize new services
+systemctl daemon-reload
+
+# Enable the services so they start at boot
+systemctl enable identity-organizator.service
+systemctl enable hyper-organizator.service
+
+# Start them now
+systemctl start identity-organizator.service
+systemctl start hyper-organizator.service
+
+exit 0

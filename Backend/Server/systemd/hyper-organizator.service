@@ -1,0 +1,15 @@
+[Unit]
+Description=Hyper Organizator Service
+After=network.target identity-organizator.service
+BindsTo=identity-organizator.service
+
+[Service]
+Type=simple
+User=ovidiu
+Group=ovidiu
+ExecStart=/usr/bin/hyper-organizator
+Restart=always
+LoadCredential=db_password:/etc/opt/organizator/db_password.txt
+
+[Install]
+WantedBy=multi-user.target

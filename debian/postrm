@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then
+    # Final daemon reload to clean up the "not-found" unit states
+    systemctl daemon-reload
+fi
+
+exit 0

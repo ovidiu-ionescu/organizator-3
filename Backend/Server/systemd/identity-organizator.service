@@ -1,0 +1,16 @@
+[Unit]
+Description=Identity Service
+After=network.target postgresql.service
+Requires=postgres-db.service
+
+[Service]
+Type=simple
+User=ovidiu
+Group=ovidiu
+ExecStart=/usr/bin/identity-organizator
+Restart=always
+# Passes the password as a 'file' accessible at $CREDENTIALS_DIRECTORY/db_password
+LoadCredential=db_password:/etc/opt/organizator/db_password.txt
+
+[Install]
+WantedBy=multi-user.target
