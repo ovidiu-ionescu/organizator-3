@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, net::SocketAddr};
+use std::net::SocketAddr;
 
 use log::trace;
 use serde::Deserialize;
@@ -50,15 +50,11 @@ pub struct Settings {
 
 #[must_use]
 fn read_config() -> Settings {
-    let config_file_name = "settings.toml";
-    let Ok(mut config_file) = File::open(config_file_name) else {
+    let Some(config_string) = get_config_content() else {
         warn!("Could not open config file, using defaults");
         return Settings::default();
     };
-    info!("Reading config file {}", config_file_name);
-    let mut config_str = String::new();
-    config_file.read_to_string(&mut config_str).unwrap();
-    let config: Settings = parse_config(&config_str);
+    let config: Settings = parse_config(&config_string);
     info!("Config file read {:?}", config);
     config
 }
@@ -101,10 +97,9 @@ impl Default for PostgresConfig {
     fn default() -> Self {
         trace!("Get default settings for PostgresConfig");
         let pwd_env_var = "POSTGRES_PASSWORD";
-        let postgres_password = match std::env::var(pwd_env_var) {
-            Ok(password) => password,
-            Err(e) => panic!("Could not read {pwd_env_var} while getting default settings: {e}"),
-        };
+        let postgres_password = get_secret("postgres_password").unwrap_or_else(
+          |e| std::env::var(pwd_env_var).unwrap_or_else(|_| panic!("Could not get postgres password from secrets: 「{e}」 or from environment variable {pwd_env_var} while getting default settings")
+        ));
         PostgresConfig {
             user: "postgres".to_string(),
             password: postgres_password,
@@ -151,4 +146,65 @@ mod tests {
         "#});
         assert_eq!(config.postgres.user, "user");
     }
+}
+
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+fn get_secret(secret_name: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // 1. Priority: Manual override for local development
+    if let Ok(override_path) = env::var("SECRET_OVERRIDE_PATH") {
+        let path = Path::new(&override_path).join(secret_name);
+        return Ok(fs::read_to_string(path)?.trim().to_string());
+    }
+
+    // 2. systemd standard: $CREDENTIALS_DIRECTORY
+    // This works for both --system and --user services automatically
+    if let Ok(creds_dir) = env::var("CREDENTIALS_DIRECTORY") {
+        let path = PathBuf::from(creds_dir).join(secret_name);
+        if path.exists() {
+            log::info!("Reading secret from : {:?}", path);
+            return Ok(fs::read_to_string(path)?.trim().to_string());
+        }
+    }
+
+    Err("Secret not found in override or systemd credentials directory".into())
+}
+
+fn get_config_content() -> Option<String> {
+    let file_name = "settings.toml";
+    let app_name = get_app_name().to_lowercase().replace(" ", "_");
+    log::debug!("App name for config paths: {}", app_name);
+    // make  a list of possible config paths in order of priority
+    let possible_paths = [
+        env::var("CONFIG_PATH").ok().map(|s| PathBuf::from(&s)),
+        Some(PathBuf::from(file_name)),
+        dirs::config_local_dir()
+            .map(|p| p.join(&app_name))
+            .map(|p| p.join(file_name)),
+        Some(PathBuf::from("/etc"))
+            .map(|p| p.join(&app_name))
+            .map(|p| p.join(file_name)),
+    ];
+
+    log::debug!("Possible config paths: {:?}", possible_paths);
+    possible_paths
+        .iter()
+        .flatten() // get content out, skip nones
+        .find(|p| p.exists())?
+        .to_str()
+        .and_then(|p| {
+            log::info!("Trying to read config from: {:?}", p);
+            fs::read_to_string(p).ok()
+        })
+}
+
+fn get_app_name() -> String {
+    let exe = env::current_exe()
+        .ok()
+        .and_then(|p| p.file_stem()?.to_str().map(|s| s.to_string()));
+
+    env::var("APP_NAME")
+        .unwrap_or_else(|_| exe.unwrap_or_else(|| "organizator_unknown_app".to_string()))
 }
