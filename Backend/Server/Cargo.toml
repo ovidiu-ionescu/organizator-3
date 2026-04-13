@@ -3,7 +3,7 @@
 members = [
   "hyper-organizator",
   "lib-hyper-organizator",
-  "identity",
+  "identity-organizator",
   "password_hash_generator",
 ]
 resolver = "3"
