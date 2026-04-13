@@ -1,0 +1,8 @@
+Backend/Server/target/release/identity-organizator /usr/bin
+Backend/Server/target/release/hyper-organizator /usr/bin
+Frontend/organizator-wasm/pkg /var/www/organizator.ro/
+Frontend/Memo/build/main/* /var/www/organizator.ro/
+Frontend/Memo/build_worker/main/* var/www/organizator.ro/
+Backend/Server/identity-organizator/settings.toml /etc/identity-organizator
+Backend/Server/hyper-organizator/settings.toml /etc/hyper-organizator
+

@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+export RUSTFLAGS=-C debuginfo=0
+DESTDIR ?= $(CURDIR)/debian/organizator
+CARGO = $${HOME}/.cargo/bin/cargo
+WASM_PACKAGER = $${HOME}/.cargo/bin/wasm-pack
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cd Backend/Server && $(CARGO) build --release --workspace
+	cd Frontend/organizator-wasm && $(WASM_PACKAGER) build --release --target web
+	cd Frontend/Memo && npm run build
+
+_override_dh_auto_install:
+	mkdir -p $(DESTDIR)/usr/bin
+	install -m755 Backend/Server/target/release/identity-organizator $(DESTDIR)/usr/bin
+	install -m755 Backend/Server/target/release/hyper-organizator $(DESTDIR)/usr/bin
+	rsync -av --chmod=755 --mkpath Frontend/organizator-wasm/pkg $(DESTDIR)/var/www/organizator.ro/
+	rsync -av --chmod=755 Frontend/Memo/build/main/ $(DESTDIR)/var/www/organizator.ro/
+	rsync -av --chmod=755 Frontend/Memo/build_worker/main/ $(DESTDIR)/var/www/organizator.ro/
+	mkdir -p $(DESTDIR)/etc/identity-organizator
+	mkdir -p $(DESTDIR)/etc/hyper-organizator
+	install -m755 Backend/Server/identity-organizator/settings.toml $(DESTDIR)/etc/identity-organizator
+	install -m755 Backend/Server/hyper-organizator/settings.toml $(DESTDIR)/etc/hyper-organizator
+
+override_dh_auto_clean:
+	#$(CARGO) clean
+
