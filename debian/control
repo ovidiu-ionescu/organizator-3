@@ -12,6 +12,6 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, libc6, nginx
 Description: The Organizator server
  Includes:
- - identity
+ - identity-organizator
  - hyper-organizator
 
