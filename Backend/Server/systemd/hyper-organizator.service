@@ -16,4 +16,4 @@ ProtectSystem=strict
 ProtectHome=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target identity-organizator.service

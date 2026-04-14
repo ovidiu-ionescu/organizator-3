@@ -7,7 +7,6 @@ Type=simple
 User=ovidiu
 Group=ovidiu
 ExecStart=/usr/bin/identity-organizator
-ExecStartPre=/usr/bin/bash -c 'until systemctl --user is-active postgres-db.service; do sleep 1; done'
 Restart=always
 # Passes the password as a 'file' accessible at $CREDENTIALS_DIRECTORY/postgres_password
 LoadCredentialEncrypted=postgres_password:/etc/credstore/postgres_password

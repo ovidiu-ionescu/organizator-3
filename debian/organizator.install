@@ -6,3 +6,4 @@ Frontend/Memo/build_worker/main/* var/www/organizator.ro/
 Backend/Server/identity-organizator/settings.toml /etc/identity-organizator
 Backend/Server/hyper-organizator/settings.toml /etc/hyper-organizator
 Backend/Server/systemd/* /usr/lib/systemd/system
+Frontend/Nginx/snippets/organizator /etc/nginx/snippets
