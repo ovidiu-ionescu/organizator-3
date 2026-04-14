@@ -2,5 +2,5 @@ organizator
 debhelper-build-stamp
 organizator.substvars
 organizator.postrm.debhelper
-
+files
 

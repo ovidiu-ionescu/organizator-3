@@ -1,9 +1,11 @@
 #!/usr/bin/make -f
 
 export RUSTFLAGS=-C debuginfo=0
+export PATH := $(HOME)/.cargo/bin:$(PATH)
 DESTDIR ?= $(CURDIR)/debian/organizator
-CARGO = $${HOME}/.cargo/bin/cargo
-WASM_PACKAGER = $${HOME}/.cargo/bin/wasm-pack
+CARGO = cargo
+WASM_PACKAGER = wasm-pack
+NVM_DIR := $(HOME)/.nvm
 
 %:
 	dh $@
@@ -11,10 +13,14 @@ WASM_PACKAGER = $${HOME}/.cargo/bin/wasm-pack
 override_dh_auto_build:
 	cd Backend/Server && $(CARGO) build --release --workspace
 	cd Frontend/organizator-wasm && $(WASM_PACKAGER) build --release --target web
-	cd Frontend/Memo && npm run build
+	cd Frontend/Memo && \
+	/bin/bash -c 'export NVM_DIR="$(NVM_DIR)"; \
+	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
+	nvm use default; \
+	npm run build'
 
 override_dh_auto_install:
 
 override_dh_auto_clean:
-	#cd Backend/server && $(CARGO) clean
+	#cd Backend/Server && $(CARGO) clean
 

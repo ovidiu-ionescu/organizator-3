@@ -9,7 +9,11 @@ User=ovidiu
 Group=ovidiu
 ExecStart=/usr/bin/hyper-organizator
 Restart=always
-LoadCredential=db_password:/etc/opt/organizator/db_password.txt
+LoadCredentialEncrypted=postgres_password:/etc/credstore/postgres_password
+# Optional: Enable sandboxing for better security
+PrivateMounts=yes
+ProtectSystem=strict
+ProtectHome=yes
 
 [Install]
 WantedBy=multi-user.target
