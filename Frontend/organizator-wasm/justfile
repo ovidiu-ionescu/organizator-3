@@ -7,3 +7,6 @@ deploy: build
 install:
   cargo install wasm-pack
 
+test:
+  cargo test test_process_markdown -- --nocapture
+  #cargo test markdown::test::test_process_markdown -- --nocapture

@@ -159,6 +159,13 @@ const template = `
       #source {
         flex: 1;
       }
+      
+      div[data-gen="barcode"] {
+        width: 8cm;
+        margin: auto;
+        background-color: white;
+        padding: 30px;
+      }
 
     </style>
     <div id="container">
