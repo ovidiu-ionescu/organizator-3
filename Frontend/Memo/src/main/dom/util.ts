@@ -17,7 +17,7 @@ export function alignedText(strings: TemplateStringsArray, ...values: string[]) 
     // https://stackoverflow.com/questions/25823914/javascript-count-spaces-before-first-character-of-a-string
     indent = lines[0].search(/\S|$/);
   }
-  const align_regex = new RegExp(`^\\s\{0,${indent}\}`, 'gm');
+  const align_regex = new RegExp(`^\\s{0,${indent}}`, 'gm');
 
   // Rip out the leading whitespace.
   return lines.map(line => line.replace(align_regex, '')).join('\n');
