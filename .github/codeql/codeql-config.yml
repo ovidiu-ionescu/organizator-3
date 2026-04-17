@@ -1,0 +1,9 @@
+query-filters:
+  - exclude:
+      id: hardcoded-credentials
+      where:
+        kind: test
+test-extraction:
+  include:
+    - "**/*.rs"
+
