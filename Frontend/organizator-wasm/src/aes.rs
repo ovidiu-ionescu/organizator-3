@@ -455,7 +455,9 @@ pub fn aes_ctr_encrypt(plain_text: &str, password: &str, nonce: u64) -> String {
 mod test_encryption {
     #[test]
     fn encrypt() {
-        let s = super::aes_ctr_encrypt("aha", "secret", 0 as u64);
+        let test_password = "secret";
+        let test_nonce = 0 as u64;
+        let s = super::aes_ctr_encrypt("aha", test_password, test_nonce);
         assert_eq!(s, "AAAAAAAAAACTrCPYN+ib5rRz+0RQx0qD");
     }
 }
