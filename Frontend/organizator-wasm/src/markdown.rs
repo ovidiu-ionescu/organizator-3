@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use ammonia::Builder;
 use barcoders::{
-    generators::svg::SVG,
     sym::{code128::Code128, ean13::EAN13},
 };
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Parser, Tag, TagEnd, TextMergeStream};
@@ -79,9 +78,9 @@ fn process_link<'a>(dest_url: CowStr, title: CowStr) -> CowStr<'a> {
 }
 
 fn barcode2svg<'a>(encoded: &[u8], text: CowStr) -> CowStr<'a> {
-    let svg_gen = SVG::new(50);
-    let svg_string = svg_gen.generate(encoded).unwrap_or_else(|_| "".into());
-    format!("<div data-gen=\"barcode\" class=\"barcode\">{}</div><div style=\"text-align:center;\">{}</div>", svg_string, text).into()
+    let svg_gen = crate::barcode_svg::SVG::new(50);
+    
+    svg_gen.generate(encoded, text).unwrap_or_else(|_| "".into()).into()
 }
 
 fn process_barcode128<'a>(text: CowStr) -> CowStr<'a> {
@@ -156,6 +155,7 @@ fn ammonia_clean(html: &str) -> String {
         "points",
         "offset",
         "stop-color",
+        "style",
     ]
     .iter()
     .cloned()

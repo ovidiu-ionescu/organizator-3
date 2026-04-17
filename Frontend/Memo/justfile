@@ -10,7 +10,7 @@ install-dependencies:
   npm install
   npm install typescript --save-dev
 
-deploy:
+deploy: build
   cp src/html/* {{www}}
   cp -r build/main/dom/ {{www}}
 

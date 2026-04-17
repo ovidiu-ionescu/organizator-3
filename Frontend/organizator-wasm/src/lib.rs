@@ -1,5 +1,6 @@
 mod utils;
 mod markdown;
+mod barcode_svg;
 pub mod aes;
 pub mod memo;
 mod merge;

@@ -161,10 +161,10 @@ const template = `
       }
       
       div[data-gen="barcode"] {
-        width: 8cm;
-        margin: auto;
-        background-color: white;
-        padding: 30px;
+        text-align: center;
+      }
+      div[data-gen="barcode-text"] {
+        text-align: center;
       }
 
     </style>
