@@ -1,3 +1,0 @@
-query-filters:
-  - exclude:
-      id: rust/hard-coded-cryptographic-value
