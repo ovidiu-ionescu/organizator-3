@@ -1,4 +1,3 @@
 query-filters:
   - exclude:
-      id: hardcoded-credentials
-      languages: [rust]
+      id: rust/hardcoded-credentials
