@@ -11,6 +11,8 @@ use pulldown_cmark_escape::{escape_href, escape_html};
 enum CustomBlocks {
     Code128,
     EAN13,
+    Code128SVG,
+    EAN13SVG,
     None,
 }
 
@@ -41,12 +43,28 @@ pub fn process_markdown(markdown: &str) -> String {
                 in_custom_block = CustomBlocks::EAN13;
                 Event::Text("".into())
             }
+            "barcode128svg" => {
+                in_custom_block = CustomBlocks::Code128SVG;
+                Event::Text("".into())
+            }
+            "barcode13svg" => {
+                in_custom_block = CustomBlocks::EAN13SVG;
+                Event::Text("".into())
+            }
             _ => event,
         },
         Event::Text(text) if in_custom_block == CustomBlocks::Code128 => {
-            Event::Html(process_barcode128(text))
+            //Event::Html(process_barcode128(text))
+            Event::Html(process_barcode128_libre(text))
         }
         Event::Text(text) if in_custom_block == CustomBlocks::EAN13 => {
+            //Event::Html(process_barcode13(text))
+            Event::Html(process_barcode13_libre(text))
+        }
+        Event::Text(text) if in_custom_block == CustomBlocks::Code128SVG => {
+            Event::Html(process_barcode128(text))
+        }
+        Event::Text(text) if in_custom_block == CustomBlocks::EAN13SVG => {
             Event::Html(process_barcode13(text))
         }
         Event::End(TagEnd::CodeBlock) if CustomBlocks::None != in_custom_block => {
@@ -101,6 +119,46 @@ fn process_barcode13(text: CowStr) -> CowStr {
         }
         Err(_) => "<p style='color:red;'>Invalid Barcode Data</p>".into(),
     }
+}
+
+fn process_barcode13_libre(text: CowStr) -> CowStr {
+    format!(r#"<div data-gen="barcode13"><span>{}</span></div>"#, text).into()
+}
+
+fn process_barcode128_libre(text: CowStr) -> CowStr {
+    let encoded = encode_libre_barcode_128(&text.trim());
+    format!(r#"<div data-gen="barcode128"><span>{}</span></div>"#, encoded).into()
+}
+
+fn encode_libre_barcode_128(data: &str) -> String {
+    let mut encoded = String::new();
+    
+    // 1. Start Character for Subset B is ASCII 204 (Ì)
+    let start_char = 'Ì';
+    encoded.push(start_char);
+
+    let mut checksum: usize = 104; // Start value for Subset B
+
+    for (i, c) in data.chars().enumerate() {
+        let val = c as usize - 32;
+        checksum += val * (i + 1);
+        encoded.push(c);
+    }
+
+    // 2. Calculate Checksum Character
+    let check_digit = (checksum % 103) as u8;
+    
+    // Map the check digit to the correct Libre Barcode character
+    let check_char = match check_digit {
+        0..=94 => (check_digit + 32) as char,
+        _ => (check_digit + 100) as char, // Handles special shifts/stops
+    };
+    encoded.push(check_char);
+
+    // 3. Stop Character is ASCII 206 (Î)
+    encoded.push('Î');
+
+    encoded
 }
 
 fn ammonia_clean(html: &str) -> String {

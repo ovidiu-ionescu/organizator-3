@@ -38,7 +38,7 @@ const loadWasm = async () => {
 //loadWasm();
 
 const template = `
-    <style type="text/css">
+    <style>
       :host {
         height: 100%;
         display: flex;
@@ -166,6 +166,28 @@ const template = `
       div[data-gen="barcode-text"] {
         text-align: center;
       }
+      
+      div[data-gen="barcode128"], div[data-gen="barcode13"] {
+        text-align: center;
+      }
+      div[data-gen="barcode128"] span, div[data-gen="barcode13"] span  {
+        border-width: 10px 40px 10px 40px;
+        border-style: solid;
+        border-color: white;
+        color: black;
+        background-color: white;
+        margin: 10px;
+        display: inline-block;
+      }
+      div[data-gen="barcode128"] span {
+        font-family: "Libre Barcode 128 Text", system-ui;
+        font-size: 65px;
+      }
+      div[data-gen="barcode13"] span {
+        font-family: "Libre Barcode EAN13 Text", system-ui;
+        font-size: 200px;
+      }
+      
 
     </style>
     <div id="container">
@@ -380,7 +402,7 @@ export class MemoEditor extends HTMLElement {
         let text = "";
         try {
           text = new URL(s).hostname;
-        } catch (error) {};
+        } catch (error) {}
         return `[${text}](${s})`;
       });
     });
