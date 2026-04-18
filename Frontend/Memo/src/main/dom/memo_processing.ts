@@ -211,7 +211,7 @@ export const make_title_list = (
 };
 
 // Clicking anywhere from the minus to the end square bracket toggles the checkbox
-export const toggle_checkbox = (text: string, index: number): string => {
+export const toggle_checkbox = (text: string, index: number): string | null => {
   const regex = /- \[([x ])]/g;
   let m: Nullable<RegExpExecArray>;
   while ((m = regex.exec(text))) {
@@ -223,7 +223,7 @@ export const toggle_checkbox = (text: string, index: number): string => {
       );
     }
   }
-  return text;
+  return null;
 };
 
 /**
