@@ -9,7 +9,7 @@ import { read_memo_groups } from "./server_comm.js";
 import konsole from "./console_log.js";
 
 class GroupList extends HTMLElement {
-  private _groups: IdName[] = [];
+  private _groups: IdName[] | undefined;
   private readonly _fetch_elements: () => Promise<IdName[]>;
   constructor(fetch_elements: () => Promise<IdName[]>) {
     super();
@@ -62,7 +62,7 @@ class GroupList extends HTMLElement {
     const id = this._getSelect().value;
     konsole.log(`group-list return memogroup for memogroup_id ${id}`);
     const sel = parseInt(id);
-    return this._groups.find((e) => e.id === sel);
+    return this._groups?.find((e) => e.id === sel);
   }
 
   set value(v: string) {
