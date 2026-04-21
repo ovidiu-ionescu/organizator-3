@@ -370,6 +370,12 @@ export class MemoEditor extends HTMLElement {
       this.$.source.value = s;
     });
 
+    /**
+     * It will insert the text into the memo.
+     * If the parameter is a function, will insert into the memo the processing
+     * of the selection
+     * @param process
+     */
     const insertText = (process) => {
       const editor = this.$.source;
       const start_offset = editor.selectionStart;
@@ -473,7 +479,9 @@ export class MemoEditor extends HTMLElement {
       const fileExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']);
       const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
       const prefix = fileExtensions.has(extension) ? '!' : '';
-      editor.value = `${editor.value}\n${prefix}[${original_filename}](/files/${filename})`;
+      const fileLink= `\n${prefix}[${original_filename}](/files/${filename})\n`;
+      //editor.value = `${editor.value}\n`;
+      insertText(fileLink);
     });
 
     // listen to saving events

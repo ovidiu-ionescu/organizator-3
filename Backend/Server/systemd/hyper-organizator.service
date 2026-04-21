@@ -14,6 +14,7 @@ LoadCredentialEncrypted=postgres_password:/etc/credstore/postgres_password
 PrivateMounts=yes
 ProtectSystem=strict
 ProtectHome=yes
+ReadWritePaths=/var/www/organizator.ro/files
 
 [Install]
 WantedBy=multi-user.target identity-organizator.service
