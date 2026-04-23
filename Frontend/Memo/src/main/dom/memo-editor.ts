@@ -14,6 +14,7 @@ import "./img-inline-svg.js";
 import "./group-list.js";
 import * as memo_processing from "./memo_processing.js";
 import {alignedText, digestMessage} from "./util.js";
+import { promptPassword} from "./password.js";
 
 // @ts-ignore
 import init, {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
@@ -221,17 +222,6 @@ const template = `
     </div>
     <footer id="status"></footer>
     </div>
-    <div id="modal_password">
-    <div id="password_dialog">
-      <p>Enter password</p>
-      <input id="password" type="password">
-      
-      <footer>
-      <img id="done_password" src="/images/ic_done_48px.svg" alt="Done">
-      <img id="cancel_password" src="/images/ic_clear_48px.svg" alt="Cancel">
-      </footer>
-    </div>
-    </div>
 `;
 
 declare global {
@@ -274,6 +264,7 @@ export class MemoEditor extends HTMLElement {
   private _readonly: Undef<boolean>;
   private _uploading: Undef<boolean>;
   private _digest: Undef<string>;
+  private _password: Undef<string>;
 
   constructor() {
     super();
@@ -293,34 +284,9 @@ export class MemoEditor extends HTMLElement {
     });
 
     // show the password dialog
-    this.$.password_button.addEventListener("click", () => {
-      //this.$.password_dialog.style.display = this.$.password_dialog.style.display === 'none' ? 'table' : 'none';
-      this.$.modal_password.style.display = "flex";
-    });
-
-    // collect the password
-    this.$.done_password.addEventListener("click", () => {
-      this.$.modal_password.style.display = "none";
-      const then = this.$.password.then;
-      this.$.password.then = undefined;
-      if (then) {
-        const pwd = this.$.password.value;
-        if (pwd) {
-          then.resolve(pwd);
-        } else {
-          then.reject("Empty password");
-        }
-      }
-    });
-
-    this.$.cancel_password.addEventListener("click", () => {
-      this.$.modal_password.style.display = "none";
-      const then = this.$.password.then;
-      this.$.password.then = undefined;
-
-      if (then) {
-        then.reject("Refused to give password");
-      }
+    this.$.password_button.addEventListener("click", async () => {
+      const pwd = await promptPassword(this._password);
+      this._password = pwd ? pwd : this._password;
     });
 
     this.$.decrypt_button.addEventListener("click", async () => {
@@ -487,7 +453,6 @@ export class MemoEditor extends HTMLElement {
     // listen to saving events
     raspandac.on("savingEvent", (event) => {
       konsole.log("Received saving event", event);
-      // FIXME: this could destroy the content, later on would save the message as the memo
       this.$.status.innerText = event.detail;
       this._memoId = undefined;
     });
@@ -581,7 +546,15 @@ export class MemoEditor extends HTMLElement {
     if (this.isConnected) this._resizeTextArea();
   }
 
-  _get_password() {
+  async _get_password() {
+    if (this._password) {
+      return Promise.resolve<string>(this._password);
+    }
+    const pwd = await promptPassword(this._password);
+    this._password = pwd ? pwd : this._password;
+    return pwd;
+  }
+  __get_password() {
     if (this.$.password.value) {
       return Promise.resolve<string>(this.$.password.value);
     }
