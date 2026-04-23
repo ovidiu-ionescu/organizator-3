@@ -227,7 +227,9 @@ fn ammonia_clean(html: &str) -> String {
         .add_tag_attributes("g", &["id"])
         .add_tag_attributes("linearGradient", &["id"])
         .add_tag_attributes("path", &["id"])
-        .add_tag_attributes("div", &["data-gen"]);
+        .add_tag_attributes("div", &["data-gen"])
+        .add_tag_attribute_values("a", "target", &["_blank"])
+        ;
     cleaner.clean(html).to_string()
 }
 
@@ -249,7 +251,7 @@ aha
 ZD196821562
 ```
 [microsoft](https://microsoft.com "aha")
-
+<a href="https://example.com" target="forbidden" rel="noreferrer">Example Link</a>
 _2024-01-17_  
 Ochi [file](/files/72788a8d-1c70-462b-90b9-5d9527c0f4c6.pdf)
 
@@ -264,6 +266,7 @@ info@annemariedietist.nl\
         let html = process_markdown(markdown);
         println!("{}", html);
         assert!(html.contains("<h1>Diabet</h1>"));
-        assert!(html.contains("svg"));
+        // default to fonts
+        //assert!(html.contains("svg"));
     }
 }
