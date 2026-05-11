@@ -10,3 +10,7 @@ install:
 test:
   cargo test test_process_markdown -- --nocapture
   #cargo test markdown::test::test_process_markdown -- --nocapture
+
+test-checkbox:
+  cargo test test_process_checkbox -- --nocapture
+

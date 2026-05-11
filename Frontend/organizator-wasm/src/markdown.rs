@@ -229,6 +229,10 @@ fn ammonia_clean(html: &str) -> String {
         .add_tag_attributes("path", &["id"])
         .add_tag_attributes("div", &["data-gen"])
         .add_tag_attribute_values("a", "target", &["_blank"])
+        .add_tags(&["input"])
+        .add_tag_attribute_values("input", "type", &["checkbox"])
+        .add_tag_attribute_values("input", "checked", &[""])
+        .add_tag_attribute_values("input", "disabled", &[""])
         ;
     cleaner.clean(html).to_string()
 }
@@ -268,5 +272,13 @@ info@annemariedietist.nl\
         assert!(html.contains("<h1>Diabet</h1>"));
         // default to fonts
         //assert!(html.contains("svg"));
+    }
+
+    #[test]
+    fn test_process_checkbox() {
+        let markdown = r#"- [x] Task 1"#;
+        let html = process_markdown(markdown);
+        println!("{}", html);
+        assert!(html.contains(r#"<input disabled="" type="checkbox" checked="""#));
     }
 }
