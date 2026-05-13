@@ -4,20 +4,14 @@
  * Implements the router for the OPA
  */
 
-import {
-  Memo,
-  ServerMemo,
-  CacheMemo,
-  PasswordThen,
-  ServerMemoTitle,
-  ServerMemoList,
-} from "./memo_interfaces.js";
-import { MemoEditor } from "./memo-editor.js";
+import {Memo, MemoStatus, MemoTitle, MemoTitleListDTO,} from "./memo_interfaces.js";
+import {MemoEditor} from "./memo-editor.js";
 import * as db from "./memo_db.js";
 import * as memo_processing from "./memo_processing.js";
+import {memo_title_dto_to_memo_title} from "./memo_processing.js";
 import konsole from "./console_log.js";
 import * as server_comm from "./server_comm.js";
-import { create_synthetic_memo } from "./synthetic.js";
+import {create_synthetic_memo} from "./synthetic.js";
 import {raspandac} from "./events.js";
 
 const local_prefixes = ["/memo/", "/journal"];
@@ -243,11 +237,11 @@ async function loadMemoTitles(force_reload?: boolean) {
       window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
       return;
     } else if (response.status === 200) {
-      const responseJson = await response.json();
+      const responseJson: MemoTitleListDTO = await response.json();
       const new_memos = await db.get_new_memos();
-      responseJson.memos = [...new_memos, ...responseJson.memos];
-      await db.general_store_put("user", responseJson.user);
-      displayMemoTitles(responseJson, false, false);
+      await db.general_store_put("user", responseJson.requester);
+      const titleList = [...new_memos, ...responseJson.memos.map(memo_title_dto_to_memo_title)];
+      displayMemoTitles(titleList, false, false);
       //console.log(responseJson);
       return;
     } else {
@@ -260,14 +254,7 @@ async function loadMemoTitles(force_reload?: boolean) {
     konsole.error("Failed to fetch memo list", e);
   }
   konsole.log("Get all memos from indexedDB");
-  displayMemoTitles(
-    {
-      memo: await db.general_store_get("user"),
-      memos: await db.get_all_memos(),
-    },
-    false,
-    false
-  );
+  displayMemoTitles(await db.get_all_memos(), false, false);
 }
 
 const headerStartRegex = /^#+\s+/;
@@ -276,12 +263,12 @@ const make_memotitle_link_id = (id: number): string => `memo_title_link_${id}`;
 
 /**
  * Renders the list of memo titles in the DOM
- * @param {ServerMemoList} responseJson
+ * @param {MemoTitle[]} memoTitles
  * @param auto_open if the list has only one element then open it in the editor immediately
  * @param extra_info if true show also the id, user id, group id
  */
 const displayMemoTitles = async (
-  responseJson: ServerMemoList,
+  memoTitles: MemoTitle[],
   auto_open: boolean,
   extra_info: boolean
 ) => {
@@ -289,25 +276,32 @@ const displayMemoTitles = async (
   dest!.innerText = "";
 
   memo_processing
-    .make_title_list(responseJson.memos, await db.access_times())
-    .map((memo) => {
+    .make_title_list(memoTitles, await db.access_times())
+    .map((memoTitle) => {
       const a = document.createElement("a");
-      a.style.display = "block";
-      a.href = `/memo/${memo.id}`;
+      a.style.display = "inline-block";
+      a.href = `/memo/${memoTitle.id}`;
       if (extra_info) {
-        a.innerText = `${memo.title} #${memo.id} u:${memo.userId || ''} g:${memo.group_id || ''}`;
+        a.innerText = `${memoTitle.title} #${memoTitle.id} u:${memoTitle.userId || ''} g:${memoTitle.group_id || ''}`;
       } else {
-        a.innerText = memo.title;
+        a.innerText = memoTitle.title;
       }
-      a.id = make_memotitle_link_id(memo.id);
-      return a;
+      a.id = make_memotitle_link_id(memoTitle.id);
+      const li = document.createElement("li");
+      li.appendChild(a);
+      const STATUS = 'data-status'
+      if(memoTitle.status) {
+        li.setAttribute(STATUS, memoTitle.status);
+      }
+      return li;
     })
     .forEach((memo) => {
       dest!.appendChild(memo);
     });
 
   if (dest!.childElementCount === 1 && auto_open) {
-    dest!.firstElementChild!.dispatchEvent(
+    // we have li -> a
+    dest!.firstElementChild!.firstElementChild!.dispatchEvent(
       new CustomEvent("click", { bubbles: true })
     );
   }
@@ -341,22 +335,22 @@ export async function searchMemos() {
       return;
 
     case "$$$show dirty memos":
-      displayMemoTitles({ memo: null, memos: memo_processing.cache_memos_to_server_titles(await db.unsaved_memos()) }, false, true);
+      displayMemoTitles(memo_processing.cache_memos_to_server_titles(await db.unsaved_memos()), false, true);
       return;
 
     case "$$$show new memos":
-      displayMemoTitles({ memo: null, memos: await db.get_new_memos() }, false, true);
+      displayMemoTitles(await db.get_new_memos(), false, true);
       return;
 
     case "$$$show cached memos":
-      displayMemoTitles({ memo: null, memos: await db.get_all_memos() }, false, true);
+      displayMemoTitles(await db.get_all_memos(), false, true);
       return;
   }
 
   const p1 = criteria.match(/^\$\$\$drop memo (-?\d+)$/);
   if (p1) {
     db.delete_memo(parseInt(p1[1]));
-    displayMemoTitles({ memo: null, memos: memo_processing.cache_memos_to_server_titles(await db.unsaved_memos()) }, false, true);
+    displayMemoTitles(memo_processing.cache_memos_to_server_titles(await db.unsaved_memos()), false, true);
     return;
   }
 
@@ -367,7 +361,14 @@ export async function searchMemos() {
       body: `search=${encodeURIComponent(criteria)}`,
     }
   );
-  const responseJson = await response.json();
-  displayMemoTitles(responseJson, true, false);
-  //console.log(responseJson);
+  if (response.status === 401) {
+    // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
+    window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+    return;
+  } else if (response.status === 200) {
+    const responseJson: MemoTitleListDTO = await response.json();
+    const titles = responseJson.memos.map(memo_title_dto_to_memo_title)
+    displayMemoTitles(titles, true, false);
+    //console.log(responseJson);
+  }
 }

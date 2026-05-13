@@ -1,3 +1,14 @@
+organizator (0.1.4) UNRELEASED; urgency=medium
+
+  * fix using memos from local storage
+  * added indicators for new/cached/unsaved memos
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Tue, 12 May 2026 22:00:00 +0200
+organizator (0.1.3) UNRELEASED; urgency=medium
+
+  * allow checkboxes in markdown lists
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 11 May 2026 14:00:00 +0200
 organizator (0.1.2) UNRELEASED; urgency=medium
 
   * fix target attribute in markdown links

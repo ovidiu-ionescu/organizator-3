@@ -12,7 +12,7 @@ import {
   CacheMemo,
   PasswordThen,
   IdName,
-  ServerMemoTitle,
+  MemoTitle,
   ServerMemoReply,
   PermissionDetailLine,
   ExplicitPermissions,

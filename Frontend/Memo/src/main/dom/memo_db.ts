@@ -7,7 +7,7 @@
 import {
   Memo,
   ServerMemo,
-  ServerMemoTitle,
+  MemoTitle,
   ServerMemoReply,
   CacheMemo,
   AccessTime,
@@ -314,16 +314,16 @@ export const save_memo_after_saving_to_server = async (
 };
 
 /**
- * Creates a list of new memos, id < 0
+ * If id_limit is 0 it fetches just new memos
  */
 const get_memo_titles = async (
   id_limit: number
-): Promise<Array<ServerMemoTitle>> => {
+): Promise<Array<MemoTitle>> => {
   const transaction = await get_memo_read_transaction();
   const memo_store = transaction.objectStore("memo");
 
   return new Promise((resolve) => {
-    const result: ServerMemoTitle[] = [];
+    const result: MemoTitle[] = [];
     memo_store.openCursor().onsuccess = (event) => {
       const cursor: IDBCursorWithValue = (event.target as IDBRequest).result;
       if (cursor) {

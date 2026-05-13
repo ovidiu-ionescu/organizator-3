@@ -18,6 +18,7 @@ override_dh_auto_build:
 	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
 	nvm use default; \
 	npm run build'
+	cp Frontend/Memo/favicon.ico Frontend/Memo/build/main/favicon.ico
 
 override_dh_auto_install:
 

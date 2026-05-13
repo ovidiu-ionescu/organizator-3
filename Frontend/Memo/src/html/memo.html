@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="apple-touch-icon" sizes="152x152" href="/images/ios/tulip-blue-touch-icon-ipad.png">
@@ -22,7 +22,7 @@
       import "/dom/journal.js";
     </script>
     <script type="text/javascript"></script>
-    <style type="text/css">
+    <style>
       html {
         height: 100%;
         padding: 0;
@@ -54,9 +54,28 @@
         display: flex;
         flex-flow: column;
       }
+      #memoTitlesList {
+        list-style: none;
+        padding-left: 0;
+      }
       #memoTitlesList a {
         padding: 5px;
       }
+      /* Define the symbols based on the data-status attribute */
+      #memoTitlesList li::before {
+        _margin-right: 12px;
+        font-weight: bold;
+        width: 25px; /* Keeps alignment consistent */
+        display: inline-block;
+        text-align: center;
+      }
+
+      #memoTitlesList li[data-status="new"]::before     { content: "\2731"; color: #2ecc71; } /* ✱ (Heavy Asterisk) */
+      #memoTitlesList li[data-status="dirty"]::before { content: "\270E"; color: #f1c40f; } /* ✎ (Lower Right Pencil) */
+      #memoTitlesList li[data-status="cached"]::before  { content: "\231B"; color: #3498db; } /* ⌛ (Hourglass) */
+      #memoTitlesList li[data-status="server"]::before  { content: "\2601"; color: #ffffff; } /* ℹ (Info/Server) */
+      #memoTitlesList li[data-status="shared"]::before  { content: "\2601"; color: #9b59b6; } /* ℹ (Info/Server) */
+
       input[type='search'] {
         font-size: 16px;
       }
@@ -70,6 +89,7 @@
         margin-left: 20px;
       }
     </style>
+    <title>Memo</title>
   </head>
   <body onload="load_route()">
     <main>
@@ -85,7 +105,7 @@
             <span style="display:inline-block; width: 48px;">&nbsp;</span>
             <a href="/memo/new">New</a>
         </nav>
-        <side id="memoTitlesList"></side>
+        <ul id="memoTitlesList"></ul>
         <footer style="text-align: right;"><a href="/memo/$$$admin">Admin</a><a href="/journal">Journal</a></footer>
       </section>
       <log-journal id="journal" page></log-journal>

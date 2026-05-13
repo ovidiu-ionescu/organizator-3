@@ -9,16 +9,16 @@ import konsole from "./console_log.js";
 /**
  * Common operations on memos
  */
-
 import {
-  Memo,
-  ServerMemo,
-  ServerMemoReply,
-  CacheMemo,
-  ServerMemoTitle,
   AccessTime,
-  IdName,
-  Nullable, Undef,
+  CacheMemo,
+  Memo,
+  MemoStatus,
+  MemoTitle,
+  MemoTitleDTO,
+  Nullable,
+  ServerMemoReply,
+  Undef,
 } from "./memo_interfaces.js";
 
 function XOR(a: any, b: any) {
@@ -48,17 +48,28 @@ const MEMO_PROTOTYPE = {
 
 export const make_server_memo_title = (
   cache_memo: CacheMemo
-): ServerMemoTitle => {
+): MemoTitle => {
   const memo_group = cache_memo.local.memogroup;
   const group_id = memo_group && memo_group.id;
-  const userId = cache_memo.local.user!.id;
+  const userId = cache_memo.local.user?.id;
   const text = cache_memo.local.text;
   let title = extract_title(cache_memo.local);
+  let status: MemoStatus;
+  if (cache_memo.id < 0) {
+    status = MemoStatus.New
+  } else {
+    if(should_save_memo_to_server(cache_memo)) {
+      status = MemoStatus.Dirty
+    } else {
+      status = MemoStatus.Cached
+    }
+  }
   return {
     group_id,
     id: cache_memo.id,
     title,
     userId,
+    status: status
   };
 };
 
@@ -184,9 +195,9 @@ const headerStartRegex = /^#+\s+/;
  * @param access_times
  */
 export const make_title_list = (
-  titles: ServerMemoTitle[],
+  titles: MemoTitle[],
   access_times: AccessTime[]
-): ServerMemoTitle[] => {
+): MemoTitle[] => {
   const access_times_map: Record<number, number> = access_times.reduce(
     (a, t) => {
       a[t.id] = t.last_access;
@@ -247,5 +258,14 @@ export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
  * and what is not saved
  * @param cache_memos 
  */
-export const cache_memos_to_server_titles = (cache_memos: CacheMemo[]): ServerMemoTitle[] =>
+export const cache_memos_to_server_titles = (cache_memos: CacheMemo[]): MemoTitle[] =>
   cache_memos.map(make_server_memo_title);
+
+export const memo_title_dto_to_memo_title = (dto: MemoTitleDTO): MemoTitle =>
+    ({
+    id: dto.id,
+    title: dto.title,
+    group_id: undefined,
+    userId: undefined,
+    status: MemoStatus.Server,
+  })

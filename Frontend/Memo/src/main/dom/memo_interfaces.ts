@@ -1,5 +1,9 @@
-import { MemoEditor } from "./memo-editor"
-
+/**
+ * @prettier
+ *
+ * Defines the data types used in the front end
+ * The ones ending in DTO are coming from the server
+ */
 export interface Memo {
   id:           number;
   text:         string;
@@ -25,28 +29,32 @@ export interface ServerMemo {
   savetime?:    number;
 }
 
+/// Comes from server
 export interface ServerMemoReply {
   memo:         ServerMemo;
   requester:    Requester;
 }
 
-export interface ServerMemoTitle {
-  id:           number;
-  group_id:     number | null | undefined;
-  title:        string;
-  userId:       number;
-}
-
-export interface ServerMemoList {
-  memo:         Nullable<ServerMemo>;
-  memos:        Array<ServerMemoTitle>;
-}
-
 export interface MemoTitle {
   id:           number;
-  last_access:  number;
   title:        string;
-  readonly?:    boolean;
+  group_id:     Undef<number>;
+  userId:       Undef<number>;
+  status:    Undef<MemoStatus>
+}
+
+/// comes from server
+export interface MemoTitleDTO {
+  id:           number;
+  title:        string;
+  user_id:      number;
+  savetime:     number;
+}
+
+/// comes from server
+export interface MemoTitleListDTO {
+  memos:         MemoTitleDTO[];
+  requester:     Requester;
 }
 
 export interface CacheMemo {
@@ -79,7 +87,7 @@ export interface UpdateMemoLogic {
     resolve: (value?: Memo | PromiseLike<Memo>) => void, 
     reject:  GenericReject,
   ): CacheMemo
-};
+}
 
 export interface HasType {
   type: string;
@@ -123,7 +131,7 @@ export interface FileStoreDiagnostics {
     }[]; // Array of dir_only objects
   };
   requester: Requester;
-};
+}
 
 export interface MemoStats {
   data: {
@@ -170,3 +178,10 @@ export interface MemoGroups {
 
 export type Undef<T> = T | undefined;
 export type Nullable<T> = T | null;
+
+export enum MemoStatus {
+  New = "new",
+  Dirty = "dirty",
+  Cached = "cached",
+  Server = "server",
+}
