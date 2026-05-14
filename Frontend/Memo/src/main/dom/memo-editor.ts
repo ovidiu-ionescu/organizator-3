@@ -68,6 +68,7 @@ const template = `
       #presentation {
         padding: 0;
         flex: 1;
+        margin-top: 10px;
       }
       #presentation del {
         color: gray;
@@ -131,7 +132,6 @@ const template = `
       }
       #password_dialog footer {
         text-align: right;
-        margin-bottom: 10px;
       }
       #password_dialog input {
         font-size: 16px;
@@ -143,6 +143,9 @@ const template = `
       #edit_meta {
         display: flex;
         justify-content: space-between;
+      }
+      #edit_meta:has(+ #presentation) {
+        border-bottom: 1px solid white;
       }
       #presentation table, #presentation th, #presentation td {
         border: 1px solid grey;
@@ -188,39 +191,38 @@ const template = `
         font-family: "Libre Barcode EAN13 Text", system-ui;
         font-size: 200px;
       }
-      
-
     </style>
+    
     <div id="container">
-    <nav id="toolbar">
-    <img-inline-svg id="password_button" src="/images/vpn_key-white-48dp.svg"></img-inline-svg>
-    <img-inline-svg id="decrypt_button" src="/images/ic_lock_open_48px.svg"></img-inline-svg>
-    <img-inline-svg id="encrypt_button" src="/images/ic_lock_48px.svg"></img-inline-svg>
-    <img-inline-svg id="edit_button" src="/images/ic_create_48px.svg"></img-inline-svg>
-    <img-inline-svg id="share_button" src="/images/share-white-48dp.svg"></img-inline-svg>
-    <img-inline-svg id="journal_button" src="/images/menu_book-white-48dp.svg"></img-inline-svg>
-    </nav>
-    <!-- <img id="expand_img" src="/images/ic_expand_more_48px.svg"> -->
-    <div id="presentation">Loading...</div>
-    <div id="editing" style="display: none">
-    <nav id="edit_toolbar">
-      <img-inline-svg id="today_button" src="/images/ic_today_48px.svg"></img-inline-svg>
-      <img-inline-svg id="checkbox_button" src="/images/check_box-white-48dp.svg"></img-inline-svg>
-      <img-inline-svg id="link_button" src="/images/ic_link_48px.svg"></img-inline-svg>
-      <img-inline-svg id="table_button" src="/images/border_all-white-48dp.svg"></img-inline-svg>
-      <img-inline-svg id="crypto_button" src="/images/enhanced_encryption-white-48dp.svg"></img-inline-svg>
-      <img-inline-svg id="upload_button" src="/images/publish-white-48dp.svg"></img-inline-svg>
-      <input type="file" id="file_upload" style="display: none">
-      <img-inline-svg id="save_all_button" src="/images/save_alt-24px.svg"></img-inline-svg>
-    </nav>
-    <div id="edit_meta">
-      <span id="edit_user"></span>
-      <time id="edit_timestamp"></time>
-      <memogroup-list id="edit_memogroup"></memogroup-list>
-    </div>
-    <textarea id="source" autocomplete="off" ></textarea>
-    </div>
-    <footer id="status"></footer>
+      <nav id="toolbar">
+        <img-inline-svg id="password_button" src="/images/vpn_key-white-48dp.svg"></img-inline-svg>
+        <img-inline-svg id="decrypt_button" src="/images/ic_lock_open_48px.svg"></img-inline-svg>
+        <img-inline-svg id="encrypt_button" src="/images/ic_lock_48px.svg"></img-inline-svg>
+        <img-inline-svg id="edit_button" src="/images/ic_create_48px.svg"></img-inline-svg>
+        <img-inline-svg id="share_button" src="/images/share-white-48dp.svg"></img-inline-svg>
+        <img-inline-svg id="journal_button" src="/images/menu_book-white-48dp.svg"></img-inline-svg>
+      </nav>
+      <!-- <img id="expand_img" src="/images/ic_expand_more_48px.svg"> -->
+      <div id="presentation">Loading...</div>
+      <div id="editing" style="display: none">
+        <nav id="edit_toolbar">
+          <img-inline-svg id="today_button" src="/images/ic_today_48px.svg"></img-inline-svg>
+          <img-inline-svg id="checkbox_button" src="/images/check_box-white-48dp.svg"></img-inline-svg>
+          <img-inline-svg id="link_button" src="/images/ic_link_48px.svg"></img-inline-svg>
+          <img-inline-svg id="table_button" src="/images/border_all-white-48dp.svg"></img-inline-svg>
+          <img-inline-svg id="crypto_button" src="/images/enhanced_encryption-white-48dp.svg"></img-inline-svg>
+          <img-inline-svg id="upload_button" src="/images/publish-white-48dp.svg"></img-inline-svg>
+          <input type="file" id="file_upload" style="display: none">
+          <img-inline-svg id="save_all_button" src="/images/save_alt-24px.svg"></img-inline-svg>
+        </nav>
+        <div id="edit_meta">
+          <span id="edit_user"></span>
+          <time id="edit_timestamp"></time>
+          <memogroup-list id="edit_memogroup"></memogroup-list>
+        </div>
+        <textarea id="source" autocomplete="off" ></textarea>
+      </div>
+      <footer id="status"></footer>
     </div>
 `;
 
@@ -500,15 +502,34 @@ export class MemoEditor extends HTMLElement {
   } // end of initialize
 
   _show_presentation() {
+    this._move_header_in_presentation();
     this.$.presentation.style.display = "block";
     this.$.editing.style.display = "none";
     this._edit = false;
     this._display_markdown();
   }
   _show_editor() {
+    this._move_header_in_editor();
     this.$.presentation.style.display = "none";
     this.$.editing.style.display = "";
     this._edit = true;
+  }
+
+  _move_header_in_presentation() {
+    const header = this.$.edit_meta;
+    header.parentElement?.removeChild(header);
+    konsole.log(`insert memo header before presentation`);
+    const target = this.$.presentation;
+    target?.parentNode?.insertBefore(header, target);
+
+  }
+
+  _move_header_in_editor() {
+    const header = this.$.edit_meta;
+    header.parentElement?.removeChild(header);
+    konsole.log(`insert memo header before source`);
+    const target = this.$.source;
+    target?.parentNode?.insertBefore(header, target);
   }
 
   _resizeTextArea() {

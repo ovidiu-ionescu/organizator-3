@@ -1,3 +1,16 @@
+organizator (0.1.6) UNRELEASED; urgency=medium
+
+  * if a memo is readonly, that takes precedence over the changed status
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 14 May 2026 16:33:00 +0200
+organizator (0.1.5) UNRELEASED; urgency=medium
+
+  * better logic for detecting if a memo is changed
+  * show shared memos titles with a different color numbering
+  * added a public column for memo groups
+  * show SQL errors in the log
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 13 May 2026 23:49:00 +0200
 organizator (0.1.4) UNRELEASED; urgency=medium
 
   * fix using memos from local storage

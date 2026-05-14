@@ -498,7 +498,7 @@ fn build_simple_json_response(
 }
 
 fn handle_pg_error_response(e: PgError) -> Result<Response<Body>, GenericError> {
-    debug!("check if there's an SQLSTATE code {:#?}", e);
+    error!("check if there's an SQLSTATE code {:#?}", e);
     if let Some(code) = e.code() {
         match code.code() {
             // Forbidden (permission denied)

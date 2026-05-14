@@ -240,7 +240,7 @@ async function loadMemoTitles(force_reload?: boolean) {
       const responseJson: MemoTitleListDTO = await response.json();
       const new_memos = await db.get_new_memos();
       await db.general_store_put("user", responseJson.requester);
-      const titleList = [...new_memos, ...responseJson.memos.map(memo_title_dto_to_memo_title)];
+      const titleList = [...new_memos, ...responseJson.memos.map(mt => memo_title_dto_to_memo_title(mt, responseJson.requester.id))];
       displayMemoTitles(titleList, false, false);
       //console.log(responseJson);
       return;
@@ -367,7 +367,7 @@ export async function searchMemos() {
     return;
   } else if (response.status === 200) {
     const responseJson: MemoTitleListDTO = await response.json();
-    const titles = responseJson.memos.map(memo_title_dto_to_memo_title)
+    const titles = responseJson.memos.map(mt => memo_title_dto_to_memo_title(mt, responseJson.requester.id))
     displayMemoTitles(titles, true, false);
     //console.log(responseJson);
   }

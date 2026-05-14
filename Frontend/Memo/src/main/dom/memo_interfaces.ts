@@ -184,4 +184,5 @@ export enum MemoStatus {
   Dirty = "dirty",
   Cached = "cached",
   Server = "server",
+  Shared = "shared",
 }

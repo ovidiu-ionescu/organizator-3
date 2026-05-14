@@ -1,4 +1,5 @@
 -- get all memo groups with full details for the current user
+-- and the public ones
 
 --SELECT set_current_user ('username');
 
@@ -36,6 +37,7 @@ filtered_user_groups AS (
     JOIN user_group_users ugu ON ug.id = ugu.user_group_id
   WHERE
     ug.user_id = (SELECT id FROM current_user_details) -- Filter by current user
+    OR ug.public -- Include public groups
 ),
 memo_groups_with_access AS (
   -- Build the 'usergroups' array for each memo_group
@@ -58,7 +60,7 @@ memo_groups_with_access AS (
     memo_group mg
     LEFT JOIN memo_acl ma ON mg.id = ma.memo_group_id
     LEFT JOIN filtered_user_groups fug ON ma.user_group_id = fug.user_group_id
-  WHERE mg.user_id = (SELECT id FROM current_user_details)
+  WHERE mg.user_id = (SELECT id FROM current_user_details) OR mg.public
   GROUP BY
     mg.id, mg.name -- mg.name is functionally dependent on mg.id
   ORDER BY

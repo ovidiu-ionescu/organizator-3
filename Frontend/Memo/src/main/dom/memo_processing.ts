@@ -250,7 +250,19 @@ export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
   if(!cache_memo.server) {
     return true;
   }
-  return to_zero(cache_memo.local.timestamp) > to_zero(cache_memo.server.timestamp);
+  // if the timestamp has not changed, do not save
+  //const timestamp_changed = to_zero(cache_memo.local.timestamp) > to_zero(cache_memo.server.timestamp);
+  //if(!timestamp_changed) return false;
+  let dirty = false;
+  if(cache_memo.server.text !== cache_memo.local.text) {
+    dirty = true;
+  }
+  dirty ||= cache_memo.server.memogroup?.id !== cache_memo.local.memogroup?.id;
+  if(dirty && cache_memo.server.readonly) {
+    konsole.error(`memo ${cache_memo.server.id} is dirty and readonly`);
+    return false;
+  }
+  return dirty;
 }
 
 /**
@@ -261,11 +273,11 @@ export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
 export const cache_memos_to_server_titles = (cache_memos: CacheMemo[]): MemoTitle[] =>
   cache_memos.map(make_server_memo_title);
 
-export const memo_title_dto_to_memo_title = (dto: MemoTitleDTO): MemoTitle =>
+export const memo_title_dto_to_memo_title = (dto: MemoTitleDTO, requester_id: number): MemoTitle =>
     ({
     id: dto.id,
     title: dto.title,
     group_id: undefined,
-    userId: undefined,
-    status: MemoStatus.Server,
+    userId: dto.user_id,
+    status: dto.user_id === requester_id ? MemoStatus.Server : MemoStatus.Shared,
   })
