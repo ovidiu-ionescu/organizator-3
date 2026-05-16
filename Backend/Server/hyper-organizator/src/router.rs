@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::error::Error;
 
 use crate::db::QueryType::{Search, Select};
 use crate::db::{self};
@@ -20,7 +21,7 @@ use lib_hyper_organizator::response_utils::parse_body;
 use lib_hyper_organizator::server::SETTINGS;
 use lib_hyper_organizator::typedef::{GenericError, SQLstr, UserId, UserRoles};
 use lib_hyper_organizator::under_construction::default_response;
-use log::{debug, error, trace};
+use log::{debug, warn, error, trace};
 use regex::Regex;
 use serde_json::json;
 use tokio_postgres::Error as PgError;
@@ -498,11 +499,17 @@ fn build_simple_json_response(
 }
 
 fn handle_pg_error_response(e: PgError) -> Result<Response<Body>, GenericError> {
-    error!("check if there's an SQLSTATE code {:#?}", e);
+    if let Some(cause) = e.source() {
+        error!("{}", cause);
+    }
+    if let Some((db_err, where_ctx)) = e.as_db_error().map(|e| (e, e.where_())) {
+      error!("Message: {} | Where: {:?}", db_err.message(), where_ctx);
+    }
+    debug!("check if there's an SQLSTATE code {:#?}", e);
     if let Some(code) = e.code() {
         match code.code() {
             // Forbidden (permission denied)
-            "2F004" | "42501" =>
+            "2F004" | "42501" | "2F002" =>
             // Added 42501 as another common permission code
             {
                 "Data access forbidden".to_text_response_with_status(StatusCode::FORBIDDEN)
@@ -516,9 +523,10 @@ fn handle_pg_error_response(e: PgError) -> Result<Response<Body>, GenericError> 
             // No data found (returned by FETCH, SELECT INTO, etc.)
             "02000" => "No data found".to_text_response_with_status(StatusCode::NOT_FOUND),
             // Default case for other known SQLSTATE codes - return generic server error
-            _ => e
-                .to_string()
-                .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR),
+            _ => {
+              warn!("Unhandled SQLSTATE code: {}, treating as internal server error", code.code());
+              e.to_string()
+                .to_text_response_with_status(StatusCode::INTERNAL_SERVER_ERROR)},
         }
     } else {
         // Handle errors without a SQLSTATE code (e.g., connection errors)
