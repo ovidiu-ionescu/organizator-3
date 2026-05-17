@@ -6,28 +6,36 @@
 import konsole from "./console_log.js";
 import * as db from "./memo_db.js";
 import {
-  Memo,
-  MemoStats,
-  ServerMemo,
-  CacheMemo,
-  PasswordThen,
-  IdName,
-  MemoTitle,
-  ServerMemoReply,
-  PermissionDetailLine,
   ExplicitPermissions,
   FileStoreDiagnostics,
-  UserGroupsPerUser,
+  IdName,
+  Memo,
+  MemoGroups,
+  MemoStats,
+  PermissionDetailLine,
+  ServerMemoReply,
+  Undef,
   UserGroups,
-  MemoGroups, Undef,
+  UserGroupsPerUser,
 } from "./memo_interfaces.js";
 import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
-import { MemoEditor } from "./memo-editor.js";
+import {MemoEditor} from "./memo-editor.js";
 // @ts-ignore
 import {merge} from "../pkg/organizator_wasm.js";
 
-
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(`HTTP Error ${status}: ${message}`);
+    this.name = 'HttpError';
+  }
+}
+class UnauthenticatedError extends HttpError {
+  constructor(message: string = `No session, need to log in`) {
+    super(401, message);
+    this.name = 'UnauthenticatedError';
+  }
+}
 /**
  * The code communicating with the server
  */
@@ -59,13 +67,15 @@ export const save_to_server = async (memo: Memo): Promise<ServerMemoReply> => {
     mode: "cors",
   });
 
-  if (response.status === 200) {
-    return await response.json();
-  } else {
-    konsole.log(
-      `Save to server failed for memo ${memoId} with status ${response.status}`
-    );
-    throw new Error(`Save failed with status ${response.status}`);
+  switch (response.status) {
+    case 200: // OK
+      return await response.json();
+    case 401: // Not authenticated
+      konsole.error(`Unauthenticated when trying to save memo ${memoId}`);
+      throw new UnauthenticatedError();
+    default:
+      konsole.log(`Save to server failed for memo ${memoId} with status ${response.status}`);
+      throw new HttpError(response.status, `Save to server failed for memo ${memoId}`);
   }
 };
 
@@ -75,6 +85,7 @@ export const save_all = async () => {
     events.save_all_status(events.SaveAllStatus.Processing);
   }
   // konsole.log({unsaved_memos});
+  let failed = false;
   // save to server and get the server instance
   for (const memo of unsaved_memos) {
     const id = memo.id;
@@ -86,7 +97,7 @@ export const save_all = async () => {
         konsole.log(
           `The memo ${memo.id} is not present on the server and has no local content, delete it`
         );
-        db.delete_memo(memo.id);
+        await db.delete_memo(memo.id);
         continue;
       }
       if (
@@ -101,8 +112,7 @@ export const save_all = async () => {
           memo.id
         );
         const remote_memo = memo_processing.server2local(server_memo_reply);
-        const text = merge(memo.server.text, memo.local.text, remote_memo.text);
-        memo.local.text = text;
+        memo.local.text = merge(memo.server.text, memo.local.text, remote_memo.text);
 
         // if this is loaded in the current editor we need to swap in the new text
         const editor = <MemoEditor>document.getElementById("editor");
@@ -110,7 +120,7 @@ export const save_all = async () => {
           konsole.log(
             `Load into the editor the merged result for memo ${memo.id}`
           );
-          editor.set_memo(memo.local);
+          await editor.set_memo(memo.local);
         }
         // events.save_all_status(events.SaveAllStatus.Failed);
         // throw `Time conflict saving memo ${memo.id}`;
@@ -118,13 +128,20 @@ export const save_all = async () => {
     } else {
       if (!memo.local.text) {
         konsole.log(`New memo ${memo.id} has no content, delete it`);
-        db.delete_memo(memo.id);
+        await db.delete_memo(memo.id);
         continue;
       }
     }
 
-    const server_memo = await save_to_server(memo.local);
-    db.save_memo_after_saving_to_server(id, server_memo);
+    try {
+      const server_memo = await save_to_server(memo.local);
+      await db.save_memo_after_saving_to_server(id, server_memo);
+    } catch (e) {
+      if(e instanceof UnauthenticatedError) {
+        throw e;
+      }
+      failed = true;
+    }
   }
 
   // .map(async memo => ({
@@ -140,7 +157,7 @@ export const save_all = async () => {
   //   db.saveMemoAfterSavingToServer(memo.server_memo);
   // });
 
-  events.save_all_status(events.SaveAllStatus.Success);
+  if (!failed) events.save_all_status(events.SaveAllStatus.Success);
 };
 
 const get_options: RequestInit = {
