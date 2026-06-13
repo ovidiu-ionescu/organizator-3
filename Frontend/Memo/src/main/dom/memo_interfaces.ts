@@ -22,11 +22,12 @@ export type Requester = IdName;
 
 export interface ServerMemo {
   id:           number;
-  memogroup?:   IdName;
-  user:         IdName;
-  title:        string;
-  memotext:     string;
-  savetime?:    number;
+  memogroup?:    IdName;
+  user:          IdName;
+  title:         string;
+  memotext:      string;
+  savetime?:     number;
+  access_level?: number;
 }
 
 /// Comes from server

@@ -7,7 +7,8 @@ SELECT
      memo.group_id,
      memo_group.name as group_name,
      users.id as user_id,
-     users.username
+     users.username,
+     get_memo_access_level_for_requester(memo.id) access_level
 
      FROM memo 
      JOIN users ON memo.user_id = users.id

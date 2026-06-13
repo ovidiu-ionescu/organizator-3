@@ -1,0 +1,29 @@
+#!/usr/bin/bash
+#
+set -e
+
+log() {
+  printf "\n%s\n" "$1"
+}
+
+: ${USERNAME:?"is not set, it is needed for login"}
+
+COOKIE_FILE=$(mktemp)
+
+# By default read memo 1
+memo_id=${1:-1}
+
+host_identity="http://localhost:8080"
+host="http://localhost:8082"
+crl="curl --fail-with-body -s"
+
+# read the current password from stdin
+read -s -p "Current password for ${USERNAME}: " current_password
+
+JWT=$($crl -c "$COOKIE_FILE" "$host_identity/login" -d "username=${USERNAME}&password=$current_password")
+log "Logged in as ${USERNAME}"
+log "JWT: $JWT"
+AUTH="Authorization: Bearer $JWT"
+
+$crl -v -b "$COOKIE_FILE" "${host}/memogroups" -H "$AUTH"
+

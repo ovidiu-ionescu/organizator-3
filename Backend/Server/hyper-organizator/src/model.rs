@@ -113,6 +113,7 @@ pub struct Memo {
     pub savetime: Option<i64>,
     pub memogroup: Option<MemoGroup>,
     pub user: MemoUser,
+    pub access_level: Option<i32>,
 }
 
 impl Named for Memo {
@@ -147,6 +148,7 @@ impl From<Row> for Memo {
                 id: row.get("user_id"),
                 name: row.get("username"),
             },
+            access_level: row.get("access_level"),
         }
     }
 }
@@ -184,6 +186,9 @@ impl From<Row> for GetWriteMemo {
                 id: row.get("o_user_id"),
                 name: row.get("o_username"),
             },
+            // FIXME: modify the SQL query to return the access level
+            //access_level: row.get("o_access_level"),
+            access_level: None,
         });
 
         Self { memo }

@@ -164,6 +164,7 @@ async fn write_memo(mut request: Request<Body>) -> Result<Response<Body>, Generi
     ),
 )]
 async fn get_memogroups_for_user(request: Request<Body>) -> Result<Response<Body>, GenericError> {
+  trace!("Getting memo groups for user");
     let (client, username) = get_client_and_user(&request).await?;
 
     let memo_group: Result<(Vec<crate::model::MemoGroup>, Requester), _> =

@@ -2,4 +2,5 @@
 SELECT memo_group.id as o_id, memo_group.name as o_name
 FROM memo_group
 JOIN users ON user_id = users.id
-WHERE users.username = $1;
+WHERE users.username = $1
+  OR (memo_group.user_id =1 AND memo_group.public);

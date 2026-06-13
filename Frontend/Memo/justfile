@@ -1,5 +1,6 @@
 www := "/var/www/organizator.ro"
 
+# default target
 build:
   reset
   npm run build
