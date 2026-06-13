@@ -28,13 +28,14 @@
 
 --select * from memo_acl;
 
-CREATE OR REPLACE FUNCTION create_default_memo_groups(IN p_user_id integer)
+CREATE OR REPLACE FUNCTION create_default_memo_groups(IN p_user_id integer, IN p_name users.username%TYPE)
 RETURNS void AS $$
   DECLARE
     v_user_group_id integer;
     v_memo_group_id_ro integer;
     v_memo_group_id_rw integer;
     v_user_name users.username%TYPE;
+    v_name users.username%TYPE;
 
     ADMIN_ID CONSTANT integer := 1;
     READ_ONLY_ACCESS CONSTANT integer := 1;
@@ -42,10 +43,11 @@ RETURNS void AS $$
   BEGIN
     -- Fetch the user name
     SELECT username INTO v_user_name FROM users WHERE id = p_user_id;
+    v_name := COALESCE(p_name, v_user_name);
 
     -- Create a user group for the user; admin will own it
     INSERT INTO user_group (id, user_group_name, user_id)
-    VALUES (nextval('user_group_id_seq'), v_user_name || ' (Individual)', ADMIN_ID)
+    VALUES (nextval('user_group_id_seq'), v_name || ' (Individual)', ADMIN_ID)
     RETURNING id INTO v_user_group_id;
 
     -- Add the user to the user group
@@ -54,12 +56,12 @@ RETURNS void AS $$
 
     -- Create a read-only memo group for the user
     INSERT INTO memo_group (id, name, user_id, public)
-    VALUES (nextval('memo_group_id_seq'), v_user_name || ' RO', ADMIN_ID, true)
+    VALUES (nextval('memo_group_id_seq'), v_name || ' RO', ADMIN_ID, true)
     RETURNING id INTO v_memo_group_id_ro;
 
     -- Create a read-write memo group for the user
     INSERT INTO memo_group (id, name, user_id, public)
-    VALUES (nextval('memo_group_id_seq'), v_user_name || ' RW', ADMIN_ID, true)
+    VALUES (nextval('memo_group_id_seq'), v_name || ' RW', ADMIN_ID, true)
     RETURNING id INTO v_memo_group_id_rw;
 
     -- Grant read-only access to the user group for the read-only memo group

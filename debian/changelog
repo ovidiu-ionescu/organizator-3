@@ -1,7 +1,7 @@
 organizator (0.1.8) UNRELEASED; urgency=medium
 
- * extra logic to handle memos shared with read write permissions
- * fixed memogroup report
+  * extra logic to handle memos shared with read write permissions
+  * fixed memogroup report
 
  -- Ovidiu Ionescu <ovidiu@ionescu.net>  Sun, 13 Jun 2026 11:47:00 +0200
 organizator (0.1.7) UNRELEASED; urgency=medium

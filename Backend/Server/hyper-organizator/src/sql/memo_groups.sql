@@ -35,8 +35,8 @@ filtered_user_groups AS (
   FROM
     user_group ug
     JOIN user_group_users ugu ON ug.id = ugu.user_group_id
-  WHERE
-    ug.user_id = (SELECT id FROM current_user_details) -- Filter by current user
+--  WHERE
+--    ug.user_id = (SELECT id FROM current_user_details) -- Filter by current user
 ),
 memo_groups_with_access AS (
   -- Build the 'usergroups' array for each memo_group
