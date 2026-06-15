@@ -7,4 +7,5 @@ build_worker
 types
 node_modules
 *.swp
-
+dist
+deb

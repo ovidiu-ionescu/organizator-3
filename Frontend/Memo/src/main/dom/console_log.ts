@@ -18,7 +18,7 @@ const konsole = {
     add(...args);
   },
   error: (...args: any) => {
-    console.log(...args);
+    console.error(...args);
     add(...args);
   },
   journal: () => journal,

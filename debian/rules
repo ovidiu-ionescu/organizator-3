@@ -14,11 +14,24 @@ override_dh_auto_build:
 	cd Backend/Server && $(CARGO) build --release --workspace
 	cd Frontend/organizator-wasm && $(WASM_PACKAGER) build --release --target web
 	cd Frontend/Memo && \
-	/bin/bash -c 'export NVM_DIR="$(NVM_DIR)"; \
-	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
-	nvm use default; \
-	npm run build'
+	  /bin/bash -c 'export NVM_DIR="$(NVM_DIR)"; \
+	  [ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
+	  nvm use default; \
+	  npm run build'
+	cp -r Frontend/organizator-wasm/pkg/ Frontend/Memo/build/main/
+	cd Frontend/Memo && \
+	  /bin/bash -c 'export NVM_DIR="$(NVM_DIR)"; \
+	  [ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
+	  nvm use default; \
+	  npm run vite:build'
 	cp Frontend/Memo/favicon.ico Frontend/Memo/build/main/favicon.ico
+	cd Frontend/Memo && \
+	  mkdir -p deb && \
+	  cp dist/build/main/* deb/ && \
+	  cp -r dist/assets/ deb/ && \
+	  cp -r images/ deb/ && \
+	  cp favicon.ico deb/ && \
+	  cp src/html/org-manifest.json deb/
 
 override_dh_auto_install:
 

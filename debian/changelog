@@ -1,3 +1,8 @@
+organizator (0.1.9) UNRELEASED; urgency=medium
+
+  * use vite for packaging the frontend
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Sun, 15 Jun 2026 09:01:00 +0200
 organizator (0.1.8) UNRELEASED; urgency=medium
 
   * extra logic to handle memos shared with read write permissions

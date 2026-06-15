@@ -48,7 +48,7 @@ export const navigate = (evt: CustomEvent) => {
 let AFTER_LOGIN = true;
 
 export const load_route = () => {
-  konsole.log(`route loader`, document.location.pathname);
+  konsole.log(`route loader`, `「${document.location.pathname}」`);
 
   // check if we got here from login
   if (document.referrer) {
@@ -92,6 +92,8 @@ export const load_route = () => {
   if (window.location.pathname === "/journal") {
     activatePage("journal");
   }
+
+  konsole.error('load_route found no match to activate')
 };
 
 /**
