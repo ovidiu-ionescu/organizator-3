@@ -22,22 +22,10 @@ vite: build
 dev:
   npm run dev
 
-_deploy-vite: vite
-  cp dist/build/main/* {{www}}
-  cp -r images/ {{www}}
-  cp -r dist/assets/ {{www}}
-
 deb:
-  rm -rf deb && \
-  cd ../.. && \
-    cd Frontend/Memo && \
-    mkdir -p deb && \
-    cp dist/build/main/* deb/ && \
-    cp -r dist/assets/ deb/ && \
-    cp -r images/ deb/ && \
-    cp favicon.ico deb/ && \
-    cp src/html/org-manifest.json deb/
+  rm -rf deb
+  cp -rL deb-links/. deb
 
-deploy-deb:
+deploy-deb: deb
   cp -r deb/. {{www}}
 

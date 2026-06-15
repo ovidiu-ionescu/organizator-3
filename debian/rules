@@ -6,6 +6,7 @@ DESTDIR ?= $(CURDIR)/debian/organizator
 CARGO = cargo
 WASM_PACKAGER = wasm-pack
 NVM_DIR := $(HOME)/.nvm
+MEMO_DIR := $(CURDIR)/Frontend/Memo
 
 %:
 	dh $@
@@ -24,14 +25,8 @@ override_dh_auto_build:
 	  [ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
 	  nvm use default; \
 	  npm run vite:build'
-	cp Frontend/Memo/favicon.ico Frontend/Memo/build/main/favicon.ico
-	cd Frontend/Memo && \
-	  mkdir -p deb && \
-	  cp dist/build/main/* deb/ && \
-	  cp -r dist/assets/ deb/ && \
-	  cp -r images/ deb/ && \
-	  cp favicon.ico deb/ && \
-	  cp src/html/org-manifest.json deb/
+	rm -rf $(MEMO_DIR)/deb && \
+	  cp -rL $(MEMO_DIR)/deb-links $(MEMO_DIR)/deb
 
 override_dh_auto_install:
 
