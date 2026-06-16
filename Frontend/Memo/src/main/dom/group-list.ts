@@ -41,21 +41,27 @@ class GroupList extends HTMLElement {
         <option value="-1" style="text-align:center;"> --- </option>
       </select>
     `;
-    if (!this._groups) {
+    await this.build_options();
+  }
+
+  async build_options(force_refresh: boolean = false) {
+    konsole.log("Build memogroup options");
+    if (!this._groups ||force_refresh) {
       this._groups = await this._fetch_elements();
     }
-
     const sel = this.shadowRoot!.querySelector("#main_select") as HTMLSelectElement;
+    // remove all options apart the default empty one
+    sel.options.length = 1;
     this._groups
-      .map((group) => {
-        const opt = document.createElement("option");
-        opt.setAttribute("value", group.id.toString());
-        opt.innerText = group.name;
-        return opt;
-      })
-      .forEach((opt) => {
-        sel.appendChild(opt);
-      });
+        .map((group) => {
+          const opt = document.createElement("option");
+          opt.setAttribute("value", group.id.toString());
+          opt.innerText = group.name;
+          return opt;
+        })
+        .forEach((opt) => {
+          sel.appendChild(opt);
+        });
   }
 
   get memogroup() {

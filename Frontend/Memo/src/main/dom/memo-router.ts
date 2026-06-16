@@ -163,7 +163,7 @@ async function loadMemo() {
   const memo = await db.read_memo(parseInt(id));
   konsole.log(`Fetched memo from local storage ${id}`, memo);
   if (memo) {
-    set_memo_in_editor(memo);
+    await set_memo_in_editor(memo, true);
   } else {
     konsole.log("Failed to get memo from local storage", id);
   }
@@ -187,7 +187,7 @@ async function loadMemo() {
       set_status_in_editor(`# No memo ${id} on server`);
     } else {
       const memo = await db.save_memo_after_fetching_from_server(json);
-      set_memo_in_editor(memo);
+      await set_memo_in_editor(memo, false);
     }
   }
 
@@ -208,9 +208,9 @@ async function display_synthetic_memo(id: string) {
   //set_memo_in_editor(memo);
 }
 
-async function set_memo_in_editor(memo: Memo) {
+async function set_memo_in_editor(memo: Memo, from_local: boolean) {
   const editor = <MemoEditor>document.getElementById("editor");
-  editor.set_memo(memo);
+  await editor.set_memo(memo, from_local);
 }
 
 function set_status_in_editor(text: string) {

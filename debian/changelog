@@ -1,3 +1,8 @@
+organizator (0.1.11) UNRELEASED; urgency=medium
+
+  * added the build date in the synthetic maintenance memo
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Sun, 16 Jun 2026 19:41:00 +0200
 organizator (0.1.10) UNRELEASED; urgency=medium
 
   * fix for memogroup editing

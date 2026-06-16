@@ -19,7 +19,7 @@ vite: build
   cp -r ../organizator-wasm/pkg/ build/main/
   npm run vite:build
 
-dev:
+dev: vite
   npm run dev
 
 deb:

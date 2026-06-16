@@ -131,8 +131,10 @@ const create_memo_groups = async () => {
   return result.join('\n');
 }
 
+declare const __BUILD_DATE__: string;
 const create_admin = () =>
 `# Memo Maintenance
+### Build date: ${__BUILD_DATE__}
 
 - [Filestore Diagnostics]($$$filestore)
 - [Memo Stats]($$$memo_stats) requires admin rights

@@ -120,7 +120,7 @@ export const save_all = async () => {
           konsole.log(
             `Load into the editor the merged result for memo ${memo.id}`
           );
-          await editor.set_memo(memo.local);
+          await editor.set_memo(memo.local, true);
         }
         // events.save_all_status(events.SaveAllStatus.Failed);
         // throw `Time conflict saving memo ${memo.id}`;

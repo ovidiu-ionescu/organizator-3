@@ -18,6 +18,7 @@ import { promptPassword} from "./password.js";
 
 // @ts-ignore
 import init, {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
+import {MemoGroupList} from "./group-list";
 
 let WASM_LOADED = false;
 let WASM_LOADING = undefined;
@@ -607,8 +608,8 @@ export class MemoEditor extends HTMLElement {
       return
     }
     const digest = await digestMessage(current_memo.text);
-    if(this._digest === digest) {
-      konsole.log("save_local_only, triggered by", cause, "; digest identical, no need to save");
+    if(this._digest === digest && this._memogroup === current_memo.memogroup) {
+      konsole.log("save_local_only, triggered by", cause, "; digest and memogroup are identical, no need to save");
       return;
     }
     konsole.log(`save_local_only ${this._memoId}, triggered by: ${cause}`);
@@ -663,7 +664,7 @@ export class MemoEditor extends HTMLElement {
     };
   }
 
-  async set_memo(memo: Memo) {
+  async set_memo(memo: Memo, from_local: boolean) {
     konsole.log("Activating memo in editor", memo.id);
 
     await this.save_local_only({ type: "set_memo" });
@@ -675,6 +676,7 @@ export class MemoEditor extends HTMLElement {
     // maybe just keeping a full copy of the text is better
     this._digest = await digestMessage(memo.text);
     this.$.edit_user.innerText = memo?.user?.name ?? "";
+    await (this.$.edit_memogroup as unknown as MemoGroupList).build_options(!from_local);
     if (memo.memogroup) {
       this.$.edit_memogroup.value = memo.memogroup.id.toString();
     } else {

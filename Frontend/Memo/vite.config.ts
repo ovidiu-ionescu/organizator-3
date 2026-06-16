@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+    define: {
+        __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+    },
     // Configures the development server
     server: {
         open: '/memo/', // Automatically opens this page in your browser on npm run dev
@@ -42,11 +45,14 @@ export default defineConfig({
             configureServer(server) {
                 server.middlewares.use((req, res, next) => {
                     const url = req.url?.split('?')[0];
-                    if(url === '/memo/') {
+                    if(url?.startsWith('/memo/')) {
                         req.url = '/build/main/memo.html';
                     }
                     if(url === '/login.html') {
                         req.url = '/build/main/login.html';
+                    }
+                    if(url === '/logout.html') {
+                        req.url = '/build/main/logout.html';
                     }
 
                     next();
