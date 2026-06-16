@@ -3,7 +3,7 @@ import { resolve } from 'path';
 
 export default defineConfig({
     define: {
-        __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+        __BUILD_DATE__: JSON.stringify(new Date().toLocaleString()),
     },
     // Configures the development server
     server: {
