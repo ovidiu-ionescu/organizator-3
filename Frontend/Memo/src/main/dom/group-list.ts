@@ -8,13 +8,13 @@ import { IdName } from "./memo_interfaces.js";
 import { read_memo_groups } from "./server_comm.js";
 import konsole from "./console_log.js";
 
-class GroupList extends HTMLElement {
+class SelectList extends HTMLElement {
   private _groups: IdName[] | undefined;
   private readonly _fetch_elements: () => Promise<IdName[]>;
   constructor(fetch_elements: () => Promise<IdName[]>) {
     super();
     this._fetch_elements = fetch_elements;
-    this.initialize().catch(err => konsole.error("Failed to initialize GroupList", err));
+    this.initialize().catch(err => konsole.error("Failed to initialize SelectList", err));
   }
 
   async initialize() {
@@ -45,7 +45,7 @@ class GroupList extends HTMLElement {
   }
 
   async build_options(force_refresh: boolean = false) {
-    konsole.log("Build memogroup options");
+    konsole.log("Build options");
     if (!this._groups ||force_refresh) {
       this._groups = await this._fetch_elements();
     }
@@ -64,6 +64,7 @@ class GroupList extends HTMLElement {
         });
   }
 
+  // FIXME this method does not seem to be called and it's out of place anyway
   get memogroup() {
     const id = this._getSelect().value;
     konsole.log(`group-list return memogroup for memogroup_id ${id}`);
@@ -84,7 +85,7 @@ class GroupList extends HTMLElement {
   }
 }
 
-export class MemoGroupList extends GroupList {
+export class MemoGroupList extends SelectList {
   constructor() {
     super(read_memo_groups);
     konsole.log("MemoGroupList constructor");

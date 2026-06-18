@@ -1,3 +1,8 @@
+organizator (0.1.12) UNRELEASED; urgency=medium
+
+  * added tooltips to buttons in the memo editor
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 18 Jun 2026 10:26:00 +0200
 organizator (0.1.11) UNRELEASED; urgency=medium
 
   * added the build date in the synthetic maintenance memo

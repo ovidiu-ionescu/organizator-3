@@ -196,30 +196,30 @@ const template = `
     
     <div id="container">
       <nav id="toolbar">
-        <img-inline-svg id="password_button" src="/images/vpn_key-white-48dp.svg"></img-inline-svg>
-        <img-inline-svg id="decrypt_button" src="/images/ic_lock_open_48px.svg"></img-inline-svg>
-        <img-inline-svg id="encrypt_button" src="/images/ic_lock_48px.svg"></img-inline-svg>
-        <img-inline-svg id="edit_button" src="/images/ic_create_48px.svg"></img-inline-svg>
-        <img-inline-svg id="share_button" src="/images/share-white-48dp.svg"></img-inline-svg>
-        <img-inline-svg id="journal_button" src="/images/menu_book-white-48dp.svg"></img-inline-svg>
+        <img-inline-svg id="password_button" src="/images/vpn_key-white-48dp.svg" title="password"></img-inline-svg>
+        <img-inline-svg id="decrypt_button" src="/images/ic_lock_open_48px.svg" title="decrypt"></img-inline-svg>
+        <img-inline-svg id="encrypt_button" src="/images/ic_lock_48px.svg" title="encrypt"></img-inline-svg>
+        <img-inline-svg id="edit_button" src="/images/ic_create_48px.svg" title="toggle edit/view"></img-inline-svg>
+        <img-inline-svg id="share_button" src="/images/share-white-48dp.svg" title="show sharing status"></img-inline-svg>
+        <img-inline-svg id="journal_button" src="/images/menu_book-white-48dp.svg" title="event journal (for debugging)"></img-inline-svg>
       </nav>
       <!-- <img id="expand_img" src="/images/ic_expand_more_48px.svg"> -->
       <div id="presentation">Loading...</div>
       <div id="editing" style="display: none">
         <nav id="edit_toolbar">
-          <img-inline-svg id="today_button" src="/images/ic_today_48px.svg"></img-inline-svg>
-          <img-inline-svg id="checkbox_button" src="/images/check_box-white-48dp.svg"></img-inline-svg>
-          <img-inline-svg id="link_button" src="/images/ic_link_48px.svg"></img-inline-svg>
-          <img-inline-svg id="table_button" src="/images/border_all-white-48dp.svg"></img-inline-svg>
-          <img-inline-svg id="crypto_button" src="/images/enhanced_encryption-white-48dp.svg"></img-inline-svg>
-          <img-inline-svg id="upload_button" src="/images/publish-white-48dp.svg"></img-inline-svg>
+          <img-inline-svg id="today_button" src="/images/ic_today_48px.svg" title="insert date"></img-inline-svg>
+          <img-inline-svg id="checkbox_button" src="/images/check_box-white-48dp.svg" title="insert markdown checkbox"></img-inline-svg>
+          <img-inline-svg id="link_button" src="/images/ic_link_48px.svg" title="insert markdown link"></img-inline-svg>
+          <img-inline-svg id="table_button" src="/images/border_all-white-48dp.svg" title="insert markdown table"></img-inline-svg>
+          <img-inline-svg id="crypto_button" src="/images/enhanced_encryption-white-48dp.svg" title="insert secret info"></img-inline-svg>
+          <img-inline-svg id="upload_button" src="/images/publish-white-48dp.svg" title="insert image (or any file)"></img-inline-svg>
           <input type="file" id="file_upload" style="display: none">
-          <img-inline-svg id="save_all_button" src="/images/save_alt-24px.svg"></img-inline-svg>
+          <img-inline-svg id="save_all_button" src="/images/save_alt-24px.svg" title="save to server"></img-inline-svg>
         </nav>
         <div id="edit_meta">
           <span id="edit_user"></span>
           <time id="edit_timestamp"></time>
-          <memogroup-list id="edit_memogroup"></memogroup-list>
+          <memogroup-list id="edit_memogroup" title="sharing"></memogroup-list>
         </div>
         <textarea id="source" autocomplete="off" ></textarea>
       </div>
