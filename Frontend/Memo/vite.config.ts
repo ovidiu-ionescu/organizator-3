@@ -36,6 +36,7 @@ export default defineConfig({
                 memo: resolve(__dirname, 'build/main/memo.html'),
                 login: resolve(__dirname, `build/main/login.html`),
                 logout: resolve(__dirname, `build/main/logout.html`),
+                password: resolve(__dirname, `build/main/password.html`),
             },
         },
     },
@@ -53,6 +54,9 @@ export default defineConfig({
                     }
                     if(url === '/logout.html') {
                         req.url = '/build/main/logout.html';
+                    }
+                    if(url === '/password.html') {
+                        req.url = '/build/main/password.html';
                     }
 
                     next();

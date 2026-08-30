@@ -1,6 +1,8 @@
 www := "/var/www/organizator.ro"
 
 # default target
+default: deploy-deb
+
 build:
   reset
   npm run build
@@ -11,7 +13,8 @@ install-dependencies:
   npm install
   npm install typescript --save-dev
 
-deploy: build
+# no longer used
+__deploy: build
   cp src/html/* {{www}}
   cp -r build/main/dom/ {{www}}
 
@@ -22,10 +25,11 @@ vite: build
 dev: vite
   npm run dev
 
-deb:
+deb: vite
   rm -rf deb
   cp -rL deb-links/. deb
 
+# deploy the compiled modules (one js with everything)
 deploy-deb: deb
   cp -r deb/. {{www}}
 
