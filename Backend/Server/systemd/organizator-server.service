@@ -1,0 +1,20 @@
+[Unit]
+Description=Organizator Service
+After=network.target identity-organizator.service
+BindsTo=identity-organizator.service
+
+[Service]
+Type=simple
+User=ovidiu
+Group=ovidiu
+ExecStart=/usr/bin/organizator-server
+Restart=always
+LoadCredentialEncrypted=postgres_password:/etc/credstore/postgres_password
+# Optional: Enable sandboxing for better security
+PrivateMounts=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/www/organizator.ro/files
+
+[Install]
+WantedBy=multi-user.target identity-organizator.service

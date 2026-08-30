@@ -1,7 +1,7 @@
 Backend/Server/target/release/identity-organizator /usr/bin
-Backend/Server/target/release/hyper-organizator /usr/bin
+Backend/Server/target/release/organizator-server /usr/bin
 Frontend/Memo/deb/* /var/www/organizator.ro/
 Backend/Server/identity-organizator/settings.toml /etc/identity-organizator
-Backend/Server/hyper-organizator/settings.toml /etc/hyper-organizator
+Backend/Server/organizator-server/settings.toml /etc/organizator-server
 Backend/Server/systemd/* /usr/lib/systemd/system
 Frontend/Nginx/snippets/organizator /etc/nginx/snippets

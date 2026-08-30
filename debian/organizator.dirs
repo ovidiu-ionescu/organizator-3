@@ -1,5 +1,5 @@
 /etc/identity-organizator
-/etc/hyper-organizator
+/etc/organizator-server
 /var/www/organizator.ro/
 /var/www/organizator.ro/files
 

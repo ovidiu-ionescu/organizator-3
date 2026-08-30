@@ -1,5 +1,5 @@
 run:
-  reset; RUST_LOG=info cargo run
+  reset; RUST_LOG=debug cargo run
 
 run-release:
   reset; RUST_LOG=info cargo run --release

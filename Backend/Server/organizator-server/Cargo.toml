@@ -1,20 +1,18 @@
 [package]
-name = "identity-organizator"
+name = "organizator-server"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
 
 [dependencies]
 argon2.workspace = true
 axum.workspace = true
 axum-prometheus.workspace = true
-base64.workspace = true
 deadpool-postgres.workspace = true
 dirs.workspace = true
 indoc.workspace = true
 jsonwebtoken.workspace = true
 mimalloc.workspace = true
-password-hash.workspace = true
-ring.workspace = true
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -22,9 +20,9 @@ tokio-postgres.workspace = true
 toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+utoipa.workspace = true
 utoipa-axum.workspace = true
 utoipa-swagger-ui.workspace = true
 uuid.workspace = true
-utoipa.workspace = true
 lib-axum-organizator = { path = "../lib-axum-organizator" }
 

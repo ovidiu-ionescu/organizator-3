@@ -1,5 +1,5 @@
 use deadpool_postgres::Client;
-use lib_hyper_organizator::typedef::GenericError;
+use lib_axum_organizator::typedef::GenericError;
 use serde::Serialize;
 use tokio_postgres::Row;
 use tracing::debug;
@@ -54,3 +54,4 @@ pub async fn update_password(
     }
     Ok(())
 }
+
