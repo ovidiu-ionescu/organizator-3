@@ -3,6 +3,9 @@ name = "lib-axum-organizator"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+security = []
+
 [dependencies]
 argon2.workspace = true
 axum.workspace = true
