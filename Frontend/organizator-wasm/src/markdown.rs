@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
 use ammonia::Builder;
-use barcoders::{
-    sym::{code128::Code128, ean13::EAN13},
-};
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Parser, Tag, TagEnd, TextMergeStream};
 use pulldown_cmark_escape::{escape_href, escape_html};
 
@@ -11,8 +8,6 @@ use pulldown_cmark_escape::{escape_href, escape_html};
 enum CustomBlocks {
     Code128,
     EAN13,
-    Code128SVG,
-    EAN13SVG,
     None,
 }
 
@@ -43,14 +38,6 @@ pub fn process_markdown(markdown: &str) -> String {
                 in_custom_block = CustomBlocks::EAN13;
                 Event::Text("".into())
             }
-            "barcode128svg" => {
-                in_custom_block = CustomBlocks::Code128SVG;
-                Event::Text("".into())
-            }
-            "barcode13svg" => {
-                in_custom_block = CustomBlocks::EAN13SVG;
-                Event::Text("".into())
-            }
             _ => event,
         },
         Event::Text(text) if in_custom_block == CustomBlocks::Code128 => {
@@ -60,12 +47,6 @@ pub fn process_markdown(markdown: &str) -> String {
         Event::Text(text) if in_custom_block == CustomBlocks::EAN13 => {
             //Event::Html(process_barcode13(text))
             Event::Html(process_barcode13_libre(text))
-        }
-        Event::Text(text) if in_custom_block == CustomBlocks::Code128SVG => {
-            Event::Html(process_barcode128(text))
-        }
-        Event::Text(text) if in_custom_block == CustomBlocks::EAN13SVG => {
-            Event::Html(process_barcode13(text))
         }
         Event::End(TagEnd::CodeBlock) if CustomBlocks::None != in_custom_block => {
             in_custom_block = CustomBlocks::None;
@@ -93,32 +74,6 @@ fn process_link<'a>(dest_url: CowStr, title: CowStr) -> CowStr<'a> {
     }
     result.push_str("\">");
     result.into()
-}
-
-fn barcode2svg<'a>(encoded: &[u8], text: CowStr) -> CowStr<'a> {
-    let svg_gen = crate::barcode_svg::SVG::new(50);
-    
-    svg_gen.generate(encoded, text).unwrap_or_else(|_| "".into()).into()
-}
-
-fn process_barcode128<'a>(text: CowStr) -> CowStr<'a> {
-    match Code128::new(format!("{}{}", "\u{00C0}", text.trim())) {
-        Ok(barcode) => {
-            let encoded = barcode.encode();
-            barcode2svg(&encoded, text)
-        }
-        Err(_) => "<p style='color:red;'>Invalid Barcode Data</p>".into(),
-    }
-}
-
-fn process_barcode13(text: CowStr) -> CowStr {
-    match EAN13::new(text.trim()) {
-        Ok(barcode) => {
-            let encoded = barcode.encode();
-            barcode2svg(&encoded, text)
-        }
-        Err(_) => "<p style='color:red;'>Invalid Barcode Data</p>".into(),
-    }
 }
 
 fn process_barcode13_libre(text: CowStr) -> CowStr {
