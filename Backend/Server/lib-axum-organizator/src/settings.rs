@@ -44,7 +44,7 @@ fn read_config() -> Settings {
         return Settings::default();
     };
     let config: Settings = parse_config(&config_string);
-    info!("Config file read {:?}", config);
+    debug!("Config file read {:?}", config);
     config
 }
 
