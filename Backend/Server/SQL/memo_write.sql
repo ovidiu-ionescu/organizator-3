@@ -1,6 +1,6 @@
--- FUNCTION: public.memo_write(integer, character varying, text, bigint, integer, character varying)
+-- FUNCTION: public.memo_write(integer, character varying, text, bigint, integer, character varying, uuid[])
 
--- DROP FUNCTION IF EXISTS public.memo_write(integer, character varying, text, bigint, integer, character varying);
+-- DROP FUNCTION IF EXISTS public.memo_write(integer, character varying, text, bigint, integer, character varying, uuid[]);
 
 CREATE OR REPLACE FUNCTION public.memo_write(
 	INOUT io_memo_id integer,
@@ -12,7 +12,8 @@ CREATE OR REPLACE FUNCTION public.memo_write(
 	OUT o_user_id integer,
 	OUT o_username character varying,
 	OUT o_requester_id integer,
-	INOUT io_requester_name character varying)
+	INOUT io_requester_name character varying,
+	i_files uuid[])
     RETURNS record
     LANGUAGE 'plpgsql'
     COST 100
@@ -113,6 +114,11 @@ AS $BODY$
             saveuser_id = o_requester_id, -- same as user_id in this case
             savetime = io_savetime
           WHERE id = io_memo_id;
+		  -- update the included files
+		  UPDATE filestore
+		  SET memo_group_id = io_memo_group_id
+		  WHERE user_id = o_user_id
+		    AND id = ANY(i_files);
         END IF;
       ELSE
         -- requester is not owner, can only modify memotext
@@ -148,7 +154,7 @@ AS $BODY$
   END; 
 $BODY$;
 
-ALTER FUNCTION public.memo_write(integer, character varying, text, bigint, integer, character varying)
-    OWNER TO organizator_prod;
+ALTER FUNCTION public.memo_write(integer, character varying, text, bigint, integer, character varying, uuid[])
+    OWNER TO postgres;
 
 
