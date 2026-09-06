@@ -31,9 +31,7 @@ mod response_utils;
 
 use crate::db::QueryType::{Search, Select};
 use crate::model::{
-    ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, FilestoreResult,
-    GetWriteMemo, GetWriteMemoWithRequester, Memo, MemoGroupsWithRequester, MemoTitle,
-    MemoTitleListWithRequester, MemoWithRequester, Requester, UploadResponse,
+    ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, FilestoreResult, FilestoreResultWithRequester, GetWriteMemo, GetWriteMemoWithRequester, Memo, MemoGroupsWithRequester, MemoTitle, MemoTitleListWithRequester, MemoWithRequester, Requester, UploadResponse, UploadResponseWithRequester,
 };
 use crate::response_utils::{
     build_json_response, build_simple_json_response, millis_since_epoch, split_and_trim,
@@ -406,7 +404,7 @@ async fn get_memogroups(
 /// files that are on disk but not in the database. This is an admin-only endpoint.
 #[utoipa::path(get, path="/admin/files",
     responses(
-        (status=200, description="File store status", body=Object),
+        (status=200, description="File store status", body=FilestoreResultWithRequester),
         CommonError
     ),
     security(("bearer_auth" = []))
@@ -516,7 +514,7 @@ use uuid::Uuid;
         content_type = "multipart/form-data"
     ),
     responses(
-        (status = 201, description = "File uploaded successfully", body = UploadResponse),
+        (status = 201, description = "File uploaded successfully", body = UploadResponseWithRequester),
         (status = 400, description = "Missing file or invalid form field payload", body = String),
         (status = 500, description = "Failed to create directory or store file", body = String)
     )
