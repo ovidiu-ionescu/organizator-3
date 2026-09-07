@@ -103,7 +103,7 @@ pub async fn get_json<'a>(
             include_str!("sql/set_current_user.sql")
         })
         .await?;
-    let stmt = client.prepare(query).await?;
+    let stmt = client.prepare_cached(query).await?;
 
     let set_user_params: &[&(dyn ToSql + Sync)] = if username == "admin" {
         &[]

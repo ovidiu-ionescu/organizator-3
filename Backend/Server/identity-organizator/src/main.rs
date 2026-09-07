@@ -14,13 +14,15 @@ use axum::Router;
 use axum::response::{IntoResponse, Response};
 use axum_prometheus::PrometheusMetricLayer;
 use lib_axum_organizator::app_error::AppError;
+use lib_axum_organizator::axum_response_utils::{build_axum_json_response};
 use lib_axum_organizator::declare_api_doc;
 use lib_axum_organizator::postgres::{self, DbConn};
-use lib_axum_organizator::security::authorization_middleware::authorization_middleware;
+use lib_axum_organizator::security::authorization_middleware::{RequireAdmin, authorization_middleware};
 use lib_axum_organizator::security::check_security::{create_security_cookie, extract_jwt};
 use lib_axum_organizator::security::jot::{Jot, PublicKey, User};
 use lib_axum_organizator::settings::Settings;
 use lib_axum_organizator::state::AppState;
+use lib_axum_organizator::typedef::{HandlerResponse, SQLstr};
 use mimalloc::MiMalloc;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -84,6 +86,7 @@ async fn main() {
         .routes(routes!(refresh_token_handler))
         .routes(routes!(logout_handler))
         .routes(routes!(update_password_handler))
+        .routes(routes!(get_user_roles))
         .with_state(state.clone())
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -389,4 +392,27 @@ async fn update_password_handler(
     db::update_password(&client, requester_name, username, &password_hash).await?;
     info!("User 「{requester_name}」 updated password for 「{username}」");
     Ok(("Password updated").into_response())
+}
+
+#[utoipa::path(
+    get,
+    path = "/user-roles",
+    responses(
+        (status = 200, description = ""),
+        (status = 401, description = "Invalid credentials"),
+        (status = 403, description = "You need to be an admin to access this endpoint"),
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    tag = "UserRoles",
+)]
+#[axum::debug_handler]
+async fn get_user_roles(
+    State(state): State<Arc<AppState>>,
+    _admin: RequireAdmin,
+) -> HandlerResponse {
+    let client = state.pool.get().await.expect("Failed to get DB client");
+    let json = db::get_json_query(&client, SQLstr(include_str!("sql/get_users_and_roles.sql")), &[]).await?;
+    build_axum_json_response(json)
 }

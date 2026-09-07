@@ -4,3 +4,5 @@ run:
 run-release:
   reset; RUST_LOG=info cargo run --release
 
+debug:
+  reset; RUST_LOG=debug cargo run

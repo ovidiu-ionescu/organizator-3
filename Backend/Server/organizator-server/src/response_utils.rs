@@ -1,10 +1,10 @@
 use axum::response::Response;
 use axum::{
     Json,
-    http::{StatusCode, header},
     response::IntoResponse,
 };
 use lib_axum_organizator::app_error::AppError;
+use lib_axum_organizator::axum_response_utils::{build_axum_json_response, build_json_response};
 use serde_json::json;
 
 use crate::model::{Named, Requester};
@@ -23,14 +23,8 @@ pub fn build_json_response<T: serde::Serialize + Named>(
 }
 
 pub fn build_simple_json_response(data_result: (String, Requester)) -> Result<Response, AppError> {
-    Ok((
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/json")],
-        data_result.0,
-    )
-        .into_response())
+  build_axum_json_response(data_result.0)
 }
-
 pub fn split_and_trim(s: &str) -> (&str, &str) {
     let trimmed = s.trim_start();
     if let Some(pos) = trimmed.find('\n') {

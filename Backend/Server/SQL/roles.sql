@@ -28,8 +28,12 @@ CREATE TABLE user_roles (
         ON DELETE CASCADE
 );
 
+ALTER TABLE user_roles OWNER TO organizator_prod;
+ALTER TABLE roles OWNER TO organizator_prod;
+
 INSERT into roles (name, description) VALUES
 ('orgadm', 'Organizator administrator'),
 ('org', 'Organizator user'),
 ('photo', 'Access to photos')
 ;
+

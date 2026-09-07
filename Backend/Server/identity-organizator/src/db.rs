@@ -1,8 +1,8 @@
 use deadpool_postgres::Client;
-use lib_axum_organizator::typedef::GenericError;
+use lib_axum_organizator::typedef::{GenericError, SQLstr};
 use serde::Serialize;
-use tokio_postgres::Row;
-use tracing::debug;
+use tokio_postgres::{Row, types::ToSql};
+use tracing::{debug, info};
 
 #[derive(Serialize, Debug)]
 pub struct Login {
@@ -55,3 +55,13 @@ pub async fn update_password(
     Ok(())
 }
 
+pub async fn get_json_query(
+    db_client: &Client,
+    SQLstr(query): SQLstr<'_>,
+    params: &[&(dyn ToSql + Sync)],
+) -> Result<String, tokio_postgres::Error> {
+    let stmt = db_client.prepare_cached(query).await?;
+    let row = db_client.query_one(&stmt, params).await?;
+    info!("Row is 「{:?}」", row);
+    Ok(row.get(0))
+}
