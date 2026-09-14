@@ -65,3 +65,16 @@ pub async fn get_json_query(
     info!("Row is 「{:?}」", row);
     Ok(row.get(0))
 }
+
+pub async fn get_roles_for_user(
+    db_client: &Client,
+    username: &str,
+) -> Result<Vec<String>, tokio_postgres::Error> {
+    let stmt = db_client
+        .prepare_cached(include_str!("sql/get_roles_for_user.sql"))
+        .await?;
+    let rows = db_client.query(&stmt, &[&username]).await?;
+    let roles: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
+    debug!("Roles for user {}: {:?}", username, roles);
+    Ok(roles)
+}

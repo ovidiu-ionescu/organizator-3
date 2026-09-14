@@ -14,10 +14,12 @@ use axum::Router;
 use axum::response::{IntoResponse, Response};
 use axum_prometheus::PrometheusMetricLayer;
 use lib_axum_organizator::app_error::AppError;
-use lib_axum_organizator::axum_response_utils::{build_axum_json_response};
+use lib_axum_organizator::axum_response_utils::build_axum_json_response;
 use lib_axum_organizator::declare_api_doc;
 use lib_axum_organizator::postgres::{self, DbConn};
-use lib_axum_organizator::security::authorization_middleware::{RequireAdmin, authorization_middleware};
+use lib_axum_organizator::security::authorization_middleware::{
+    RequireAdmin, authorization_middleware,
+};
 use lib_axum_organizator::security::check_security::{create_security_cookie, extract_jwt};
 use lib_axum_organizator::security::jot::{Jot, PublicKey, User};
 use lib_axum_organizator::settings::Settings;
@@ -58,7 +60,7 @@ async fn main() {
         settings: settings.clone(),
     });
 
-  declare_api_doc!();
+    declare_api_doc!();
     info!(
         "Start the metrics listener on {}",
         state.settings.metrics_ip()
@@ -87,6 +89,7 @@ async fn main() {
         .routes(routes!(logout_handler))
         .routes(routes!(update_password_handler))
         .routes(routes!(get_user_roles))
+        .routes(routes!(get_all_roles))
         .with_state(state.clone())
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -229,13 +232,9 @@ async fn login_handler(
         return Ok((StatusCode::UNAUTHORIZED, "Bad password").into_response());
     }
 
-    // FIXME: this is a hack, we should have a roles table and a user_roles table
-    let roles = if login.id == 1 {
-        vec!["org", "orgadm", "photo"]
-    } else {
-        vec!["org", "photo"]
-    };
-    let new_token: String = state.jot.generate_token(&form.username, &roles)?;
+    let roles = db::get_roles_for_user(&client, &form.username).await?;
+    let temp: Vec<&str> = roles.iter().map(|s| s.as_str()).collect();
+    let new_token: String = state.jot.generate_token(&form.username, &temp)?;
     info!("User 「{}」 logged in", &form.username);
     let cookie = create_security_cookie(&new_token);
 
@@ -394,6 +393,7 @@ async fn update_password_handler(
     Ok(("Password updated").into_response())
 }
 
+/// Get all the users and their individual roles
 #[utoipa::path(
     get,
     path = "/user-roles",
@@ -413,6 +413,41 @@ async fn get_user_roles(
     _admin: RequireAdmin,
 ) -> HandlerResponse {
     let client = state.pool.get().await.expect("Failed to get DB client");
-    let json = db::get_json_query(&client, SQLstr(include_str!("sql/get_users_and_roles.sql")), &[]).await?;
+    let json = db::get_json_query(
+        &client,
+        SQLstr(include_str!("sql/get_users_and_roles.sql")),
+        &[],
+    )
+    .await?;
     build_axum_json_response(json)
 }
+
+/// Get all roles
+#[utoipa::path(
+    get,
+    path = "/roles",
+    responses(
+        (status = 200, description = ""),
+        (status = 401, description = "Invalid credentials"),
+        (status = 403, description = "You need to be an admin to access this endpoint"),
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    tag = "UserRoles",
+)]
+#[axum::debug_handler]
+async fn get_all_roles(
+    State(state): State<Arc<AppState>>,
+    _admin: RequireAdmin,
+) -> HandlerResponse {
+    let client = state.pool.get().await.expect("Failed to get DB client");
+    let json = db::get_json_query(
+        &client,
+        SQLstr(include_str!("sql/get_all_roles.sql")),
+        &[],
+    )
+    .await?;
+    build_axum_json_response(json)
+}
+

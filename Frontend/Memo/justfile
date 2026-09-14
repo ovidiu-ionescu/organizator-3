@@ -6,6 +6,7 @@ default: deploy-deb
 build:
   reset
   npm run build
+  # not sure if this does anything useful, maybe remove it?
   cp favicon-green.ico build/main/favicon.ico
 
 install-dependencies:
@@ -32,4 +33,5 @@ deb: vite
 # deploy the compiled modules (one js with everything)
 deploy-deb: deb
   cp -r deb/. {{www}}
+  cp favicon-green.ico {{www}}/favicon.ico  
 
