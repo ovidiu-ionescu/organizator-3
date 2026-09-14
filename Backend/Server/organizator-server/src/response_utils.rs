@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use lib_axum_organizator::app_error::AppError;
-use lib_axum_organizator::axum_response_utils::{build_axum_json_response, build_json_response};
+use lib_axum_organizator::axum_response_utils::build_axum_json_response;
 use serde_json::json;
 
 use crate::model::{Named, Requester};
