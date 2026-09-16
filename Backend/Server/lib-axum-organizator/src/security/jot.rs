@@ -99,7 +99,7 @@ pub struct PublicKeyResponse {
 }
 
 impl Jot {
-    fn autogenerate(security_config: &SecurityConfig) -> Result<Jot, AppError> {
+    pub fn autogenerate(security_config: &SecurityConfig) -> Result<Jot, AppError> {
         info!("Generating new keypair");
         let document = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())
             .map_err(|_| "could not generate pkcs8")?;

@@ -35,9 +35,11 @@ thiserror = "2.0.19"
 tokio-postgres = { version = "0.7.18", features = [ "with-uuid-1" ] }
 tokio = { version = "1.53.0", features = ["full"] }
 toml = "1.1.3"
+tower = "0.5"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 utoipa = { version = "5.5.0", features = ["uuid", "preserve_order", "preserve_path_order", "axum_extras"] }
 utoipa-axum = "0"
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+

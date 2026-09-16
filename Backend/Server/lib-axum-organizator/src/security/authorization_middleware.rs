@@ -4,10 +4,10 @@ use axum::extract::FromRequestParts;
 use axum::http::header;
 use axum::response::Response;
 use axum::{
-    extract::{Request, State, },
+    Extension,
+    extract::{Request, State},
     http::{HeaderName, HeaderValue, StatusCode, request::Parts},
     middleware::Next,
-    Extension,
 };
 use tracing::error;
 
@@ -72,21 +72,77 @@ pub async fn authorization_middleware(
 
 pub struct RequireAdmin;
 
-impl <S> FromRequestParts<S> for RequireAdmin
+impl<S> FromRequestParts<S> for RequireAdmin
 where
     S: Send + Sync,
 {
     type Rejection = (StatusCode, String);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-      let Extension(user) = Extension::<User>::from_request_parts(parts, _state)
+        let Extension(user) = Extension::<User>::from_request_parts(parts, _state)
             .await
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Not logged in".into()))?;
 
         if user.is_admin() {
             Ok(RequireAdmin)
         } else {
-            Err((StatusCode::FORBIDDEN, format!("User 「{}」 does not have admin privileges", user.id)))
+            Err((
+                StatusCode::FORBIDDEN,
+                format!("User 「{}」 does not have admin privileges", user.id),
+            ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::security::jot::Jot;
+    use crate::security::security_settings::SecurityConfig;
+    use crate::settings::Settings;
+
+    use super::*;
+    use crate::postgres::test_utils::make_dead_pool;
+    use axum::body::Body;
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+    use axum::{Router, middleware};
+    use tower::ServiceExt;
+
+    async fn protected_handler(Extension(user): Extension<User>) -> impl IntoResponse {
+        format!("Hello {}, role: {:?}", user.id(), user.roles)
+    }
+
+    fn make_app(state: Arc<AppState>) -> Router {
+        Router::new()
+            .route("/protected", get(protected_handler))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                authorization_middleware,
+            ))
+            .with_state(state)
+    }
+
+    fn make_dummy_state() -> AppState {
+        // make a jot
+        let security_config = SecurityConfig::default();
+        let jot = Jot::autogenerate(&security_config).unwrap();
+        AppState {
+            settings: Settings::default(),
+            pool: make_dead_pool(),
+            jot,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_authorization_middleware_with_router() {
+        let state = make_dummy_state();
+        let app = make_app(Arc::new(state));
+        let request = Request::builder()
+            .uri("/protected")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, response.status());
     }
 }

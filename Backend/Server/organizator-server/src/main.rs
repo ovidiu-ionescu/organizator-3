@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Extension, Form};
@@ -8,7 +8,9 @@ use axum::{Router, routing::get};
 use lib_axum_organizator::app_error::AppError;
 use lib_axum_organizator::declare_api_doc;
 use lib_axum_organizator::postgres::{self, DbConn};
-use lib_axum_organizator::security::authorization_middleware::{RequireAdmin, authorization_middleware};
+use lib_axum_organizator::security::authorization_middleware::{
+    RequireAdmin, authorization_middleware,
+};
 use lib_axum_organizator::security::jot::{Jot, User};
 use lib_axum_organizator::settings::Settings;
 use lib_axum_organizator::state::AppState;
@@ -31,7 +33,10 @@ mod response_utils;
 
 use crate::db::QueryType::{Search, Select};
 use crate::model::{
-    ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, FilestoreResult, FilestoreResultWithRequester, GetWriteMemo, GetWriteMemoWithRequester, Memo, MemoGroupsWithRequester, MemoTitle, MemoTitleListWithRequester, MemoWithRequester, Requester, UploadResponse, UploadResponseWithRequester,
+    ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, FilestoreResult,
+    FilestoreResultWithRequester, GetWriteMemo, GetWriteMemoWithRequester, Memo,
+    MemoGroupsWithRequester, MemoTitle, MemoTitleListWithRequester, MemoWithRequester, Requester,
+    UploadResponse, UploadResponseWithRequester,
 };
 use crate::response_utils::{
     build_json_response, build_simple_json_response, millis_since_epoch, split_and_trim,
@@ -79,6 +84,10 @@ async fn main() {
         .with_state(state.clone())
         .split_for_parts();
 
+    let upload_router = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .routes(routes!(upload_handler))
+        .route_layer(DefaultBodyLimit::max(512 * 1024 * 1024));
+
     let (protected_router, protected_api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(get_memo))
         .routes(routes!(write_memo))
@@ -87,7 +96,7 @@ async fn main() {
         .routes(routes!(memo_search))
         .routes(routes!(file_auth))
         .routes(routes!(get_explicit_permissions))
-        .routes(routes!(upload_handler))
+        .merge(upload_router)
         .routes(routes!(get_usergroups))
         .routes(routes!(get_memogroups))
         .routes(routes!(file_list))
@@ -552,11 +561,13 @@ pub async fn upload_handler(
             }
         } else if field.file_name().is_some() {
             let original_name = field.file_name().unwrap().to_string();
+            debug!("Original file name: 「{original_name}」");
 
             let extension = StdPath::new(&original_name)
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("");
+            debug!("Extension: 「{extension}」");
 
             let uuid = Uuid::new_v4();
             let new_filename = if extension.is_empty() {
@@ -571,6 +582,7 @@ pub async fn upload_handler(
                 .await
                 .map_err(|err| AppError::from(format!("Failed to create file: {err}")))?;
 
+            debug!("Start reading the file data");
             while let Some(chunk) = field.chunk().await? {
                 // pass explicit slice reference to write_all to help the compiler infer the correct
                 // type
@@ -589,8 +601,8 @@ pub async fn upload_handler(
     }
 
     // Ensure a file was actually processed
-    let (original_filename, uuid, saved_as, _path) = file_data
-        .ok_or_else(|| AppError::bad_request("No file found in request body"))?;
+    let (original_filename, uuid, saved_as, _path) =
+        file_data.ok_or_else(|| AppError::bad_request("No file found in request body"))?;
 
     let (rows_inserted, requester) = db::execute(
         &db_client,

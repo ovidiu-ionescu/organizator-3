@@ -8,10 +8,10 @@ use axum::{
 };
 use deadpool_postgres::Object;
 use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use std::error::Error;
+use tokio_postgres::Error as PgError;
 use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
-use tokio_postgres::Error as PgError;
-use std::error::Error;
 
 pub async fn make_database_pool(postgres: PostgresConfig) -> Pool {
     let config = Config {
@@ -117,4 +117,21 @@ pub fn handle_pg_error_response(e: &PgError) -> impl IntoResponse {
     }
 }
 
+#[cfg(test)]
+pub mod test_utils {
+    use super::*;
 
+    pub fn make_dead_pool() -> deadpool_postgres::Pool {
+        let mut cfg = Config::new();
+        // Point to a port where nothing is listening
+        cfg.host = Some("127.0.0.1".to_string());
+        cfg.port = Some(1);
+        cfg.dbname = Some("nonexistent".to_string());
+        cfg.manager = Some(ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        });
+
+        // This succeeds because deadpool never connects on creation
+        cfg.create_pool(Some(Runtime::Tokio1), NoTls).unwrap()
+    }
+}

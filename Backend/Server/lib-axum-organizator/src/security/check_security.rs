@@ -53,22 +53,7 @@ pub fn check_ssl_header(request: &mut Request) -> bool {
         _ => {
             info!("No valid DN found in {SSL_HEADER_DN} header");
             false
-        } /*
-                  Some(Ok(dn)) if dn.len() > 3 && &dn[0..3] == "CN=" => {
-                      let user_id = &dn[3..].to_string();
-                      trace!("User id from DN: {}", user_id);
-                      request
-                          .extensions_mut()
-                          .insert(User::new(user_id, Vec::new()));
-                      //Some(UserId(dn[3..].to_string()))
-                      Some(UserId("".to_string()))
-                  }
-                  Some(Ok(dn)) => {
-                      info!("Invalid DN: 「{}」", dn);
-                      None
-                  }
-                  _ => None,
-          */
+        }
     }
 }
 
@@ -215,9 +200,8 @@ mod tests {
     use crate::security::security_settings::SecurityConfig;
 
     use super::*;
-    use axum::{body::Body, http::StatusCode};
+    use axum::body::Body;
 
-    /*
     #[test]
     fn test_check_ssl_header() {
         let mut request = Request::new(Body::empty());
@@ -226,18 +210,17 @@ mod tests {
             .insert(SSL_HEADER_VERIFY, "SUCCESS".parse().unwrap());
         request
             .headers_mut()
-            .insert(SSL_HEADER_DN, "CN=admin".parse().unwrap());
-        assert_eq!(
-            check_ssl_header(&mut request),
-            Some(UserId("admin".to_string()))
-        );
+            .insert(SSL_HEADER_DN, "CN=admin,OU=orgadm".parse().unwrap());
+        assert!(check_ssl_header(&mut request));
+        let user = request.extensions().get::<User>().unwrap();
+        assert_eq!("admin", user.id());
+        assert!(user.is_admin());
     }
-    */
 
     #[tokio::test]
     async fn test_check_jwt_header() {
         let jot = Jot::new(&SecurityConfig::default()).await.unwrap();
-        let token = jot.generate_token("admin", &[]).unwrap();
+        let token = jot.generate_token("admin", &["orgadm"]).unwrap();
         let header = String::from(BEARER) + &token;
 
         let mut request = Request::builder()
@@ -245,6 +228,9 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         assert_eq!(check_jwt_header(&mut request, &jot), JwtStatus::Ok);
+        let user = request.extensions().get::<User>().unwrap();
+        assert_eq!("admin", user.id());
+        assert!(user.is_admin());
     }
 
     /*
