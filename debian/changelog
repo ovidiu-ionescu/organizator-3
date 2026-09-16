@@ -1,8 +1,13 @@
+organizator (0.1.15) UNRELEASED; urgency=medium
+
+  * increased request size for file upload
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 16 Sep 2026 23:42:00 +0200
 organizator (0.1.14) UNRELEASED; urgency=medium
 
   * improved db security, use set_config in transaction
 
- -- Ovidiu Ionescu <ovidiu@ionescu.net>  Fry, 4 Sep 2026 13:08:00 +0200
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Fri, 4 Sep 2026 13:08:00 +0200
 organizator (0.1.13) UNRELEASED; urgency=medium
 
   * ported the backend to use axum
