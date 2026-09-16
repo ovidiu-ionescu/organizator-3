@@ -96,9 +96,12 @@ where
 
 #[cfg(test)]
 mod tests {
+
+    use crate::security::check_security::{SSL_HEADER_DN, SSL_HEADER_VERIFY};
     use crate::security::jot::Jot;
     use crate::security::security_settings::SecurityConfig;
     use crate::settings::Settings;
+    use crate::typedef::GenericError;
 
     use super::*;
     use crate::postgres::test_utils::make_dead_pool;
@@ -144,5 +147,81 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+    }
+
+    // Test using the header set by Nginx from a client certificate
+    #[tokio::test]
+    async fn integration_test() -> Result<(), GenericError> {
+        let state = Arc::new(make_dummy_state());
+        let app = make_app(state.clone());
+
+        // request with the header should be authorized
+        let request = Request::builder()
+            .uri("/protected")
+            .header(SSL_HEADER_VERIFY, "SUCCESS")
+            .header(SSL_HEADER_DN, "CN=admin")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        println!("Response: {:#?}", &response);
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // request without the header should be unauthorized
+        let app = make_app(state.clone());
+        let request = Request::new(Body::empty());
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    macro_rules! test_with_env {
+        ($expiry: expr, $grace: expr, $response: ident) => {
+            let security_config = SecurityConfig {
+                session_expiry: $expiry,
+                session_expiry_grace_period: $grace,
+                public_key_url: None,
+            };
+            let mut jot = Jot::autogenerate(&security_config).unwrap();
+            jot.session_expiry = $expiry;
+            jot.session_expiry_grace_period = $grace;
+            let token = jot.generate_token("admin", &[]).unwrap();
+
+            let state = Arc::new(AppState {
+                settings: Settings::default(),
+                pool: make_dead_pool(),
+                jot,
+            });
+            let app = make_app(state.clone());
+            let header = String::from(BEARER) + &token;
+
+            // request with a valid JWT token should be authorized
+            let request = Request::builder()
+                .uri("/protected")
+                .header(header::AUTHORIZATION, header)
+                .body(Body::empty())
+                .unwrap();
+
+            let $response = app.oneshot(request).await.unwrap();
+        };
+    }
+
+    // Test using the Authorization header with a JWT token
+    #[tokio::test]
+    async fn integration_test_jwt() -> Result<(), GenericError> {
+        test_with_env!(3600, 300, response);
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // request with a header in the grace period should be authorized
+        test_with_env!(0, 300, response);
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // check we got a new token
+
+        // request with an expired JWT token should be unauthorized
+        test_with_env!(0, 0, response);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
     }
 }

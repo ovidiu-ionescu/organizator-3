@@ -20,10 +20,3 @@ impl Default for SecurityConfig {
         }
     }
 }
-
-// test module
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use indoc::indoc;
-}

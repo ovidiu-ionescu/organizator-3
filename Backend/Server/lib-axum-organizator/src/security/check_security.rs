@@ -9,8 +9,8 @@ use axum::{
 ///
 use tracing::{info, trace, debug};
 
-const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
-const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
+pub const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
+pub const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
 
 /// Bearer token is described here: <https://www.rfc-editor.org/rfc/rfc6750>
 pub const BEARER: &str = "Bearer ";
@@ -232,84 +232,4 @@ mod tests {
         assert_eq!("admin", user.id());
         assert!(user.is_admin());
     }
-
-    /*
-    // Test using the header set by Nginx from a client certificate
-    #[tokio::test]
-    async fn integration_test() -> Result<(), Error> {
-        pretty_env_logger::init();
-
-        let mut service = ServiceBuilder::new()
-            .layer(AddExtensionLayer::new(Arc::new(
-                Jot::new(&SecurityConfig::default()).await.unwrap(),
-            )))
-            .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
-            .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
-
-        let mut request = Request::new(Body::empty());
-        // request with the header should be authorized
-        request
-            .headers_mut()
-            .insert(SSL_HEADER_VERIFY, "SUCCESS".parse().unwrap());
-        request
-            .headers_mut()
-            .insert(SSL_HEADER_DN, "CN=admin".parse().unwrap());
-        let response = service.ready().await?.call(request).await?;
-        println!("Response: {:#?}", &response);
-        assert_eq!(response.status(), StatusCode::OK);
-
-        // request without the header should be unauthorized
-        let request = Request::new(Body::empty());
-        let response = service.ready().await?.call(request).await?;
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-
-        Ok(())
-    }
-
-    macro_rules! test_with_env {
-        ($expiry: expr, $grace: expr, $response: ident) => {
-            let security_config = SecurityConfig {
-                session_expiry: $expiry,
-                session_expiry_grace_period: $grace,
-                ignore_paths: vec![],
-                public_key_url: None,
-            };
-            let mut jot = Jot::new(&security_config).await.unwrap();
-            jot.session_expiry = $expiry;
-            jot.session_expiry_grace_period = $grace;
-            let token = jot.generate_token("admin", &[]).unwrap();
-            let mut service = ServiceBuilder::new()
-                .layer(AddExtensionLayer::new(Arc::new(jot)))
-                .layer(RequireAuthorizationLayer::custom(OrganizatorAuthorization))
-                .service_fn(|_| async { Ok::<_, Error>(Response::new(Body::empty())) });
-            let header = String::from(BEARER) + &token;
-            let mut request = Request::new(Body::empty());
-
-            // request with a valid JWT token should be authorized
-            request
-                .headers_mut()
-                .insert(header::AUTHORIZATION, header.parse().unwrap());
-            let $response = service.ready().await?.call(request).await?;
-        };
-    }
-
-    // Test using the Authorization header with a JWT token
-    #[tokio::test]
-    async fn integration_test_jwt() -> Result<(), Error> {
-        test_with_env!(3600, 300, response);
-        assert_eq!(response.status(), StatusCode::OK);
-
-        // request with a header in the grace period should be authorized
-        test_with_env!(0, 300, response);
-        assert_eq!(response.status(), StatusCode::OK);
-
-        // check we got a new token
-
-        // request with an expired JWT token should be unauthorized
-        test_with_env!(0, 0, response);
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-
-        Ok(())
-    }
-    */
 }
