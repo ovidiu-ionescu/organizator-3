@@ -398,7 +398,67 @@ async fn update_password_handler(
     get,
     path = "/user-roles",
     responses(
-        (status = 200, description = ""),
+        (
+            status = 200, 
+            description = "",
+            body = Object,
+            example = json!([
+              {
+                "id": 1,
+                "name": "admin",
+                "roles": [
+                  {
+                    "id": 1,
+                    "name": "orgadm",
+                    "description": "Organizator administrator"
+                  },
+                  {
+                    "id": 2,
+                    "name": "org",
+                    "description": "Organizator user"
+                  },
+                  {
+                    "id": 3,
+                    "name": "photo",
+                    "description": "Access to photos"
+                  }
+                ]
+              },
+              {
+                "id": 2,
+                "name": "user",
+                "roles": [
+                  {
+                    "id": 2,
+                    "name": "org",
+                    "description": "Organizator user"
+                  },
+                  {
+                    "id": 3,
+                    "name": "photo",
+                    "description": "Access to photos"
+                  }
+                ]
+              },
+              {
+                "id": 3,
+                "name": "guest",
+                "roles": [
+                  {
+                    "id": 2,
+                    "name": "org",
+                    "description": "Organizator user"
+                  },
+                  {
+                    "id": 3,
+                    "name": "photo",
+                    "description": "Access to photos"
+                  }
+                ]
+              }
+            ]
+            )
+        ),
         (status = 401, description = "Invalid credentials"),
         (status = 403, description = "You need to be an admin to access this endpoint"),
     ),
@@ -427,7 +487,32 @@ async fn get_user_roles(
     get,
     path = "/roles",
     responses(
-        (status = 200, description = ""),
+        (
+            status = 200, 
+            description = "",
+            body = Object,
+            example = json!([
+                {
+                  "id": 1,
+                  "name": "orgadm",
+                  "description": "Organizator administrator",
+                  "created_at": "2026-09-06T05:39:45.367601+00:00"
+                },
+                {
+                  "id": 2,
+                  "name": "org",
+                  "description": "Organizator user",
+                  "created_at": "2026-09-06T05:39:45.367601+00:00"
+                },
+                {
+                  "id": 3,
+                  "name": "photo",
+                  "description": "Access to photos",
+                  "created_at": "2026-09-06T05:39:45.367601+00:00"
+                }
+              ]
+            )
+        ),
         (status = 401, description = "Invalid credentials"),
         (status = 403, description = "You need to be an admin to access this endpoint"),
     ),
