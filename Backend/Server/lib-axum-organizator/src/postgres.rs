@@ -84,21 +84,43 @@ pub fn handle_pg_error_response(e: &PgError) -> impl IntoResponse {
     debug!("check if there's an SQLSTATE code {:#?}", e);
     if let Some(code) = e.code() {
         match code.code() {
-            // Forbidden (permission denied)
-            "2F004" | "42501" | "2F002" =>
-            // Added 42501 as another common permission code
-            {
+            // Permission denied. Most of these are raised deliberately by SQL/ when a user is not
+            // allowed to touch a memo, a group or another user's password: 2F002
+            // (modifying_sql_data_not_permitted), 2F004 (reading_sql_data_not_permitted). 42501
+            // (insufficient_privilege) is raised nowhere in SQL/, so it does come from Postgres
+            // itself and does mean a missing privilege — the message logged above tells the two
+            // apart. Logged at error level because a denial that is answered and then forgotten is
+            // exactly the one nobody notices going wrong.
+            "2F002" | "2F004" | "42501" => {
+                error!(
+                    "SQLSTATE {} denied by the database; answering 403. The message logged above says whether our own SQL raised it or a privilege is missing",
+                    code.code()
+                );
                 (StatusCode::FORBIDDEN, "Data access forbidden".to_string())
             }
-            // Unauthorized (invalid credentials/authentication failure)
-            "28P01" | "28000" =>
-            // Added 28P01 (invalid_password)
-            {
+            // invalid_password: Postgres refused the service's OWN credentials. That is a server
+            // fault, not a client one — answering 401 would tell every client to authenticate
+            // again, and their login would fail too, because it hits the same credentials. Unlike
+            // 28000 this code appears nowhere in SQL/, so there is no ambiguity about its source.
+            "28P01" => {
+                error!(
+                    "Database rejected the service's own credentials (SQLSTATE {}); answering 500 rather than 401",
+                    code.code()
+                );
                 (
-                    StatusCode::UNAUTHORIZED,
-                    "Data access unauthorized".to_string(),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Something went wrong on our end.".to_string(),
                 )
             }
+            // invalid_authorization_specification, but not from the connection: SQL/ raises this
+            // one on purpose in six files to mean "the requester did not resolve to exactly one
+            // user" (get_user_by_name, set_current_user, memo_read, memo_write, ...). That is a
+            // client-facing failure of the caller's own identity, so it keeps its 401 and the
+            // usual re-authenticate path.
+            "28000" => (
+                StatusCode::UNAUTHORIZED,
+                "Data access unauthorized".to_string(),
+            ),
             // No data found (returned by FETCH, SELECT INTO, etc.)
             "02000" => (StatusCode::NOT_FOUND, "No data found".to_string()),
             // Default case for other known SQLSTATE codes - return generic server error

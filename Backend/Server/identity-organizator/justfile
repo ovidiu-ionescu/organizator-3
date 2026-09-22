@@ -1,3 +1,4 @@
+# default
 run:
   reset; RUST_LOG=info cargo run
 

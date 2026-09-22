@@ -26,8 +26,10 @@ use lib_axum_organizator::settings::Settings;
 use lib_axum_organizator::state::AppState;
 use lib_axum_organizator::typedef::{HandlerResponse, SQLstr};
 use mimalloc::MiMalloc;
-use serde::Deserialize;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 use tracing_subscriber::EnvFilter;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
@@ -36,9 +38,11 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use tracing::{error, info, warn};
 
-use crate::db::{Login, fetch_login};
+use crate::db::{Login, Role, fetch_login};
+use crate::login_throttle::LoginThrottle;
 
 mod db;
+mod login_throttle;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -87,8 +91,9 @@ async fn main() {
     let (protected_router, protected_api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(refresh_token_handler))
         .routes(routes!(logout_handler))
+        .routes(routes!(me_handler))
         .routes(routes!(update_password_handler))
-        .routes(routes!(get_user_roles))
+        .routes(routes!(get_user_roles, put_user_roles))
         .routes(routes!(get_all_roles))
         .with_state(state.clone())
         .route_layer(axum::middleware::from_fn_with_state(
@@ -195,6 +200,10 @@ struct LoginForm {
     password: String,
 }
 
+/// Wrong passwords are counted for this process, which is the scope that matters while a single
+/// binary serves the login route. See login_throttle.rs for what it does and what it does not.
+static LOGIN_THROTTLE: LazyLock<LoginThrottle> = LazyLock::new(LoginThrottle::new);
+
 #[utoipa::path(
     post,
     path = "/login",
@@ -210,7 +219,8 @@ struct LoginForm {
     responses(
         (status = 200, description = "Login successful"),
         (status = 401, description = "Invalid credentials"),
-        (status = 400, description = "Malformed form submission")
+        (status = 400, description = "Malformed form submission"),
+        (status = 429, description = "Too many wrong passwords for this username; the Retry-After header says how long to wait")
     ),
     tag = "Authentication"
 )]
@@ -221,19 +231,49 @@ async fn login_handler(
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AppError> {
     info!("Received login request for username: {}", form.username);
-    let client = state.pool.get().await.expect("Failed to get DB client");
 
     if form.username.is_empty() {
         error!("Username is empty");
         return Ok((StatusCode::BAD_REQUEST, "Username is empty").into_response());
     }
-    let login = fetch_login(&client, &form.username).await?;
-    if !verify_password(&form.password, &login) {
-        return Ok((StatusCode::UNAUTHORIZED, "Bad password").into_response());
+
+    // Checked before the password is verified and before a database connection is taken, so a
+    // caller who is being made to wait learns nothing from the attempt and cannot use it to burn
+    // the pool. Note this also means a failure during a wait does not extend the wait.
+    let wait_left = LOGIN_THROTTLE.wait_left(&form.username);
+    if wait_left > Duration::ZERO {
+        warn!(
+            "Login for 「{}」 refused, {}s left to wait",
+            form.username,
+            wait_left.as_secs()
+        );
+        return Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, wait_left.as_secs().to_string())],
+            "Too many failed attempts, try again later",
+        )
+            .into_response());
     }
 
+    let client = state.pool.get().await.expect("Failed to get DB client");
+    let login = fetch_login(&client, &form.username).await?;
+    if !verify_password(&form.password, &login) {
+        let wait = LOGIN_THROTTLE.record_failure(&form.username);
+        warn!(
+            "Bad password for 「{}」{}",
+            form.username,
+            match wait {
+                Duration::ZERO => String::new(),
+                wait => format!(", next attempt in {}s", wait.as_secs()),
+            }
+        );
+        return Ok((StatusCode::UNAUTHORIZED, "Bad password").into_response());
+    }
+    LOGIN_THROTTLE.record_success(&form.username);
+
     let roles = db::get_roles_for_user(&client, &form.username).await?;
-    let temp: Vec<&str> = roles.iter().map(|s| s.as_str()).collect();
+    // the token carries the names only; the descriptions are for the API to hand out, not the JWT
+    let temp: Vec<&str> = roles.iter().map(|role| role.name.as_str()).collect();
     let new_token: String = state.jot.generate_token(&form.username, &temp)?;
     info!("User 「{}」 logged in", &form.username);
     let cookie = create_security_cookie(&new_token);
@@ -318,6 +358,47 @@ async fn logout_handler() -> impl IntoResponse {
         .into_response()
 }
 
+/// The shortest new password accepted. Length is what actually resists guessing: character-class
+/// rules rarely add entropy, because they push everyone towards the same shapes (Password1!) and
+/// towards reuse. Ten is the floor asked for here; longer would be better.
+const MIN_PASSWORD_LENGTH: usize = 10;
+
+/// Common passwords that are at least MIN_PASSWORD_LENGTH long, lower case, one per line, compiled
+/// into the binary like the SQL is. See the header of that file for its source and what was
+/// dropped. Shorter entries are left out on purpose: the length rule already rejects those, so
+/// keeping them would only grow the binary.
+static COMMON_PASSWORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    include_str!("data/common-passwords.txt")
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect()
+});
+
+/// Why this new password is too easy to guess, or None when it is acceptable.
+///
+/// The comparisons are case-insensitive on purpose: Password123 is no less common than password123,
+/// and `admin2026` is no better than `Admin2026`. Nothing is trimmed — a leading or trailing space
+/// is a legitimate part of a password, and silently ignoring it would store something other than
+/// what was typed.
+fn password_problem(password: &str, username: &str) -> Option<String> {
+    if password.chars().count() < MIN_PASSWORD_LENGTH {
+        return Some(format!(
+            "New password must be at least {MIN_PASSWORD_LENGTH} characters"
+        ));
+    }
+
+    let lowered = password.to_lowercase();
+    if COMMON_PASSWORDS.contains(lowered.as_str()) {
+        return Some("That password is one of the most commonly used ones".to_string());
+    }
+    if !username.is_empty() && lowered.contains(&username.to_lowercase()) {
+        return Some("New password must not contain the username".to_string());
+    }
+
+    None
+}
+
 #[derive(Deserialize, Debug, Clone, ToSchema)]
 struct ChangePasswordForm {
     /// Only required if admin is changing another user's password.
@@ -342,8 +423,9 @@ struct ChangePasswordForm {
     ),
     responses(
         (status = 200, description = "Password updated successfully"),
-        (status = 401, description = "Invalid credentials"),
+        (status = 400, description = "Bad old password"),
         (status = 403, description = "Forbidden: You are not allowed to change this user's password"),
+        (status = 422, description = "The new password was refused: too short, one of the most commonly used, or it contains the username"),
     ),
     security(
         ("bearer_auth" = [])
@@ -364,7 +446,33 @@ async fn update_password_handler(
     // old password is the requester's password
     let login = fetch_login(&client, requester_name).await?;
     if !verify_password(&form.old_password, &login) {
-        return Ok((StatusCode::UNAUTHORIZED, "Bad old password").into_response());
+        return Ok((StatusCode::BAD_REQUEST, "Bad old password").into_response());
+    }
+
+    // use the form username if supplied and not empty, otherwise use the requester
+    let username = match form.username {
+        Some(ref username) if !username.is_empty() => username,
+        _ => requester_name,
+    };
+    // let's check if the requester is allowed to change the password for the username.
+    // The users table enforces this again per row with its update_policy, which admits only the
+    // row matching organizator.current_user — or any row when that is id 1, which is the database's
+    // idea of the admin and not the same as is_admin() below.
+    if username != requester_name && !requester.is_admin() {
+        return Ok((
+            StatusCode::FORBIDDEN,
+            "You are not allowed to change this user's password",
+        )
+            .into_response());
+    }
+
+    // Refused only once the caller has proven who they are and that they may touch this user, so a
+    // failure there is reported instead of a complaint about the new password. 422 rather than 400
+    // because 400 already means "bad old password", and a client should not have to tell two
+    // failures apart by reading a body. This also covers an empty password, which would otherwise
+    // hash and store happily and then verify against an empty string at login.
+    if let Some(problem) = password_problem(&form.new_password, username) {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, problem).into_response());
     }
 
     // compute the new password hash and salt
@@ -373,24 +481,50 @@ async fn update_password_handler(
     let password_hash = argon2
         .hash_password(form.new_password.as_bytes(), &salt)?
         .to_string();
-
-    // use the form username if supplied and not empty, otherwise use the requester
-    let username = match form.username {
-        Some(ref username) if !username.is_empty() => username,
-        _ => requester_name,
-    };
-    // let's check if the requester is allowed to change the password for the username
-    // at this point, there is no row security in for table users
-    if username != requester_name && !requester.is_admin() {
-        return Ok((
-            StatusCode::FORBIDDEN,
-            "You are not allowed to change this user's password",
-        )
-            .into_response());
-    }
     db::update_password(&client, requester_name, username, &password_hash).await?;
     info!("User 「{requester_name}」 updated password for 「{username}」");
     Ok(("Password updated").into_response())
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct MeResponse {
+    /// The name the caller signed in with, which is what /password takes as `username`.
+    name: String,
+    /// The same test /user-roles and /roles make before letting the caller through.
+    is_admin: bool,
+    /// What the caller may reach, which is the one part of the user list a non-admin still gets to
+    /// see: their own roles, so they can tell which systems they have access to.
+    roles: Vec<Role>,
+}
+
+/// Who the caller is, so a client can tell what to show them: the whole user list for an admin,
+/// and only the caller's own roles and password form for anybody else.
+#[utoipa::path(
+    get,
+    path = "/me",
+    responses(
+        (status = 200, description = "The caller's name, whether they are an admin, and their roles", body = MeResponse),
+        (status = 401, description = "Invalid credentials"),
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    tag = "Me",
+)]
+#[axum::debug_handler]
+async fn me_handler(
+    State(state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+) -> Result<Json<MeResponse>, AppError> {
+    let client = state.pool.get().await.expect("Failed to get DB client");
+    let roles = db::get_roles_for_user(&client, &requester.id()).await?;
+    let is_admin = requester.is_admin();
+    Ok(Json(MeResponse {
+        name: requester.into_id(),
+        is_admin,
+        roles,
+    }))
 }
 
 /// Get all the users and their individual roles
@@ -482,6 +616,53 @@ async fn get_user_roles(
     build_axum_json_response(json)
 }
 
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct UserRoleUpdate {
+    user_id: i64,
+    role_ids: Vec<i64>,
+}
+
+#[utoipa::path(
+    put,
+    path = "/user-roles",
+    security(
+        ("bearer_auth" = [])
+    ),
+    request_body = Vec<UserRoleUpdate>,
+    responses(
+        (status = 204, description = "Roles updated successfully"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "UserRoles",
+)]
+#[axum::debug_handler]
+async fn put_user_roles(
+    State(state): State<Arc<AppState>>,
+    _admin: RequireAdmin,
+    Json(payload): Json<Vec<UserRoleUpdate>>,
+) -> HandlerResponse {
+  // Collect distinct user IDs being targeted
+    let target_user_ids: Vec<i64> = payload.iter().map(|u| u.user_id).collect();
+
+    // Flatten user_id and role_id pairs into parallel vectors for UNNEST
+    let mut flat_user_ids: Vec<i64> = Vec::new();
+    let mut flat_role_ids: Vec<i64> = Vec::new();
+
+    for update in &payload {
+        for &role_id in &update.role_ids {
+            flat_user_ids.push(update.user_id);
+            flat_role_ids.push(role_id);
+        }
+    }
+    let client = state.pool.get().await.expect("Failed to get DB client");
+    client.execute(
+        include_str!("sql/put_users_and_roles.sql"),
+        &[&target_user_ids, &flat_user_ids, &flat_role_ids]
+    ).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
 /// Get all roles
 #[utoipa::path(
     get,
@@ -536,3 +717,64 @@ async fn get_all_roles(
     build_axum_json_response(json)
 }
 
+
+#[cfg(test)]
+mod password_policy_tests {
+    use super::*;
+
+    #[test]
+    fn the_common_list_is_actually_loaded() {
+        // Guards the include_str! and the parser together: a wrong path fails the build, but a
+        // parser that quietly skipped everything would not.
+        assert!(
+            COMMON_PASSWORDS.len() > 9_000,
+            "expected the list to be loaded, got {} entries",
+            COMMON_PASSWORDS.len()
+        );
+        assert!(COMMON_PASSWORDS.contains("password123"));
+        assert!(COMMON_PASSWORDS.contains("1234567890"));
+    }
+
+    #[test]
+    fn short_passwords_are_refused() {
+        for password in ["", "short", "ninechars"] {
+            assert!(
+                password_problem(password, "admin").is_some(),
+                "{password:?} should have been refused"
+            );
+        }
+        assert!(password_problem("tencharsxx", "admin").is_none());
+    }
+
+    #[test]
+    fn common_passwords_are_refused_whatever_the_case() {
+        for password in ["password123", "PASSWORD123", "Password123", "1234567890"] {
+            assert!(
+                password_problem(password, "admin").is_some(),
+                "{password:?} should have been refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_password_containing_the_username_is_refused() {
+        for password in ["admin2026!", "Admin2026!", "the-admin-2026"] {
+            assert!(
+                password_problem(password, "admin").is_some(),
+                "{password:?} should have been refused"
+            );
+        }
+        // a different user's name is not this user's problem
+        assert!(password_problem("admin2026!", "someone").is_none());
+    }
+
+    #[test]
+    fn an_ordinary_password_is_accepted() {
+        for password in ["correct-horse-battery", "Tr0ub4dor & 3", "a long passphrase here"] {
+            assert!(
+                password_problem(password, "admin").is_none(),
+                "{password:?} should have been accepted"
+            );
+        }
+    }
+}

@@ -60,6 +60,9 @@ impl User {
     pub fn id(&self) -> &str {
         &self.id.0
     }
+    pub fn into_id(self) -> String {
+      self.id.0
+    }
 }
 impl From<Claims> for User {
     fn from(claims: Claims) -> Self {
