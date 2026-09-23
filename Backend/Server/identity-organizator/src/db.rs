@@ -1,6 +1,7 @@
 use deadpool_postgres::Client;
 use lib_axum_organizator::typedef::{GenericError, SQLstr};
 use serde::Serialize;
+use tokio::try_join;
 use tokio_postgres::{Row, types::ToSql};
 use tracing::{debug, info};
 use utoipa::ToSchema;
@@ -54,9 +55,12 @@ pub async fn update_password(
     let commit_statement = client.prepare_cached("COMMIT").await?;
     let commit_future = client.execute(&commit_statement, &[]);
 
-    let (_b, u, rows, _c) = (begin_future.await, set_requester_future.await, stmt_future.await, commit_future.await);
-    let user_id = u?.get::<_, i32>(0);
-    let rows = rows?;
+    let (_b, u, rows, _c) = try_join!(begin_future, set_requester_future, stmt_future, commit_future)?;
+    let user_id = u.get::<_, i32>(0);
+    debug!("Requester user id {user_id}");
+    if rows != 1 {
+      return Err(format!("Wrong number of database rows affected {rows}").into());
+    }
 
     Ok(())
 }
@@ -68,7 +72,7 @@ pub async fn get_json_query(
 ) -> Result<String, tokio_postgres::Error> {
     let stmt = db_client.prepare_cached(query).await?;
     let row = db_client.query_one(&stmt, params).await?;
-    info!("Row is 「{:?}」", row);
+    debug!("Row is 「{:?}」", row);
     Ok(row.get(0))
 }
 
