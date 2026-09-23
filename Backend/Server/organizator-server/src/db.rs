@@ -3,6 +3,7 @@
 use crate::model::{DBPersistence, Requester};
 use deadpool_postgres::Client;
 use lib_axum_organizator::typedef::SQLstr;
+use tokio::try_join;
 use tracing::{debug, trace};
 use tokio_postgres::{Error, Row, types::ToSql};
 
@@ -35,13 +36,13 @@ where
     let commit_statement = client.prepare_cached("COMMIT").await?;
     let commit_future = client.execute(&commit_statement, &[]);
 
-    let (_b, u, row, _c) = (begin_future.await, set_user_future.await, stmt_future.await, commit_future.await);
+    let (_b, u, row, _c) = try_join!(begin_future, set_user_future, stmt_future, commit_future)?;
 
-    let user_id = u?.get::<_, i32>(0);
+    let user_id = u.get::<_, i32>(0);
     let requester = Requester::new(user_id, username);
     debug!("Requester is {:?}", requester);
     trace!("Received one row from database");
-    Ok((T::from(row?), requester))
+    Ok((T::from(row), requester))
 }
 
 pub async fn get_multiple<'a, T>(
@@ -73,12 +74,12 @@ where
     let commit_statement = client.prepare_cached("COMMIT").await?;
     let commit_future = client.execute(&commit_statement, &[]);
 
-    let (_b, u, rows, _c) = (begin_future.await, set_user_future.await, stmt_future.await, commit_future.await);
+    let (_b, u, rows, _c) = try_join!(begin_future, set_user_future, stmt_future, commit_future)?;
 
-    let user_id = u?.get::<_, i32>(0);
+    let user_id = u.get::<_, i32>(0);
     let requester = Requester::new(user_id, username);
     debug!("Requester is {:?}", requester);
-    let rows = rows?;
+    let rows = rows;
     trace!("Received {} rows from database", rows.len());
     Ok((
         rows.into_iter().map(|row| T::from(row)).collect(),
@@ -116,18 +117,18 @@ pub async fn get_json<'a>(
     let commit_statement = client.prepare_cached("COMMIT").await?;
     let commit_future = client.execute(&commit_statement, &[]);
     
-    let (_b, u, row, _c) = (begin_future.await, set_user_future.await, stmt_future.await, commit_future.await);
+    let (_b, u, row, _c) = try_join!(begin_future, set_user_future, stmt_future, commit_future)?;
 
     let user_id = if username == "admin" {
         0
     } else {
-        u?.get::<_, i32>(0)
+        u.get::<_, i32>(0)
     };
     let requester = Requester::new(user_id, username);
     debug!("Requester is {:?}", requester);
     trace!("Received one row from database");
 
-    let json: String = row?.get(0);
+    let json: String = row.get(0);
     Ok((json, requester))
 }
 
@@ -152,12 +153,12 @@ pub async fn execute<'a>(
     let commit_statement = client.prepare_cached("COMMIT").await?;
     let commit_future = client.execute(&commit_statement, &[]);
     
-    let (_b, u, rows_affected, _c) = (begin_future.await, set_user_future.await, stmt_future.await, commit_future.await);
+    let (_b, u, rows_affected, _c) = try_join!(begin_future, set_user_future, stmt_future, commit_future)?;
 
-    let user_id = u?.get::<_, i32>(0);
+    let user_id = u.get::<_, i32>(0);
     let requester = Requester::new(user_id, username);
     debug!("Requester is {:?}", requester);
-    let rows_affected = rows_affected?;
+    let rows_affected = rows_affected;
     trace!("Affected {} rows in the database", rows_affected);
     Ok((rows_affected, requester))
 }

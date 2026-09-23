@@ -3,7 +3,7 @@ use lib_axum_organizator::typedef::{GenericError, SQLstr};
 use serde::Serialize;
 use tokio::try_join;
 use tokio_postgres::{Row, types::ToSql};
-use tracing::{debug, info};
+use tracing::debug;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Debug)]
