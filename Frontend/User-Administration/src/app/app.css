@@ -1,0 +1,18 @@
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+/* Keeps the filter row clear of the toolbar's Edit button in the results section. */
+.filters {
+  margin-bottom: 1rem;
+}

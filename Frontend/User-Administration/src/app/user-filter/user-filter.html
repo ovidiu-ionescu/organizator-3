@@ -1,0 +1,13 @@
+<div>
+  <input
+  #searchInput
+  id="search"
+  type="text"
+  class="field"
+    placeholder="Filter by username or role"
+    (input)="onInput($event)"
+    />
+  <button type="button" class="btn" (click)="clearFilter(searchInput)">
+    Clear
+  </button>
+</div>

@@ -1,3 +1,13 @@
+organizator (0.1.17) UNRELEASED; urgency=medium
+
+  * added password change into the interface
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 22 Sep 2026 22:54:00 +0200
+organizator (0.1.16) UNRELEASED; urgency=medium
+
+  * added Angular interface for user role management
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 18 Sep 2026 23:32:00 +0200
 organizator (0.1.15) UNRELEASED; urgency=medium
 
   * increased request size for file upload

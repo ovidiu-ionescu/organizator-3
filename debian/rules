@@ -12,6 +12,12 @@ MEMO_DIR := $(CURDIR)/Frontend/Memo
 	dh $@
 
 override_dh_auto_build:
+	cd Frontend/User-Administration && \
+	  /bin/bash -c 'export NVM_DIR="$(NVM_DIR)"; \
+	  [ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; \
+	  nvm use default; \
+	  npm install && \
+		ng build --base-href=/user-admin/'
 	cd Backend/Server && $(CARGO) build --release --workspace
 	cd Frontend/organizator-wasm && $(WASM_PACKAGER) build --release --target web
 	cd Frontend/Memo && \

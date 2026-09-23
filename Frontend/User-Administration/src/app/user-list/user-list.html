@@ -1,0 +1,167 @@
+<div class="user-list">
+  <div class="toolbar">
+    <h2>{{ selfOnly() ? 'Your account' : 'User List' }}</h2>
+    <!-- Rendered only for an admin: a non-admin sees the same name and nothing to press on it. -->
+    @if (isAdmin()) {
+      @if (editing()) {
+        <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+        <button type="button" class="btn" (click)="cancelEditing()" [disabled]="saving()">Cancel</button>
+      } @else {
+        <button type="button" class="btn" (click)="startEditing()" [disabled]="loading()">Edit roles</button>
+      }
+    }
+  </div>
+
+  <!-- Nothing above the list is about one user, so a non-admin with only their own row gets none of it. -->
+  @if (!selfOnly()) {
+    <p class="status" [class.error]="status()?.error" role="status" aria-live="polite">
+      {{ status()?.text }}
+    </p>
+  }
+
+  <ul>
+    @for (user of visibleUsers(); track user.id) {
+      <li>
+        <strong [innerHTML] = "user.name | highlight: filterTerm()"></strong>
+        @if (editing()) {
+          <ul class="chips">
+            @for (role of user.roles; track role.id) {
+              <li class="chip">
+                <span>{{ role.name }}</span>
+                <button
+                  type="button"
+                  class="chip-remove"
+                  [attr.aria-label]="'Remove role ' + role.name + ' from ' + user.name"
+                  (click)="removeRole(user, role)"
+                >&times;</button>
+              </li>
+            } @empty {
+              <li class="no-roles">No roles assigned.</li>
+            }
+          </ul>
+          <div class="add-role">
+            @let noRolesLeft = availableRolesFor(user).length === 0;
+            <label [for]="'role-select-' + user.id">
+              Add role<span class="visually-hidden"> to {{ user.name }}</span>
+            </label>
+            <select
+              #roleSelect
+              class="field"
+              [id]="'role-select-' + user.id"
+              [disabled]="noRolesLeft"
+            >
+              <option value="">{{ noRolesLeft ? 'No more roles' : 'Select a role…' }}</option>
+              @for (role of availableRolesFor(user); track role.id) {
+                <option [value]="role.id" [title]="role.description">{{ role.name }}</option>
+              }
+            </select>
+            <button
+              type="button"
+              class="btn"
+              (click)="addRole(user, roleSelect)"
+              [disabled]="noRolesLeft"
+            >
+              Add
+            </button>
+          </div>
+        } @else {
+          <!-- Read-only for everyone here: a non-admin reads their own roles to see what they can
+               reach, and the chips that replace this list are for an admin only. -->
+          @if (user.roles.length > 0) {
+            <ul class="roles-list">
+              @for (role of user.roles; track role.id) {
+                <li>
+                  <strong [innerHTML] = "role.name | highlight: filterTerm()"></strong>:
+                  <span [innerHTML] = "role.description| highlight: filterTerm()"></span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="no-roles">No roles assigned.</p>
+          }
+
+          @if (passwordUserId() === user.id) {
+            <form
+              class="password-form"
+              [id]="'password-form-' + user.id"
+              (submit)="submitPassword(user, newPassword, currentPassword, $event)"
+            >
+              <div class="password-row">
+                <label [for]="'new-password-' + user.id">New password</label>
+                <span class="password-field">
+                  <input
+                    #newPassword
+                    class="field"
+                    [id]="'new-password-' + user.id"
+                    name="new_password"
+                    [type]="showNewPassword() ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    required
+                  />
+                  <button type="button" class="btn reveal" (click)="toggleNewPassword()">
+                    {{ showNewPassword() ? 'Hide' : 'Show' }}
+                    <span class="visually-hidden"> new password for {{ user.name }}</span>
+                  </button>
+                </span>
+              </div>
+
+              <div class="password-row">
+                <label [for]="'current-password-' + user.id">Your password</label>
+                <input
+                  #currentPassword
+                  class="field"
+                  [id]="'current-password-' + user.id"
+                  name="old_password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                />
+              </div>
+
+              <div class="password-actions">
+                <button type="submit" class="btn btn-primary" [disabled]="passwordSaving()">
+                  {{ passwordSaving() ? 'Setting…' : 'Set' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  (click)="closePasswordForm(newPassword, currentPassword)"
+                  [disabled]="passwordSaving()"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          } @else {
+            <button
+              #changePasswordButton
+              type="button"
+              class="password-trigger"
+              [id]="'change-password-' + user.id"
+              (click)="openPasswordForm(user)"
+            >
+              Change password<span class="visually-hidden"> for {{ user.name }}</span>
+            </button>
+          }
+
+          @if (passwordStatus(); as message) {
+            @if (message.userId === user.id) {
+              <p
+                class="status password-status"
+                [class.error]="message.error"
+                role="status"
+                aria-live="polite"
+              >
+                {{ message.text }}
+              </p>
+            }
+          }
+        }
+      </li>
+    } @empty {
+      <li>No users found.</li>
+    }
+  </ul>
+</div>

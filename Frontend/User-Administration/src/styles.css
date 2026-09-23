@@ -1,0 +1,111 @@
+/*
+ * Theme tokens. Dark is the default; the toggle in the header sets data-theme="light" on <html>.
+ * Component styles consume these tokens instead of hard-coded colors.
+ */
+:root {
+  color-scheme: dark; /* native widgets (select popups, scrollbars, inputs) follow the theme */
+
+  --page-bg: #0f141a;
+  --surface: #1a212b;
+  --surface-hover: #232c38;
+  --surface-active: #2b3644;
+
+  --border: #5f6d7c; /* 3:1 against both --page-bg and --surface */
+  --border-subtle: #39434f;
+
+  --text: #e7ecf3;
+  --text-muted: #9fabb8;
+
+  --accent: #2f6fd0;
+  --accent-hover: #2861b8; /* darker on hover, so the white label keeps 4.5:1 */
+  --accent-text: #6ea8fe; /* accent only reaches 3.8:1 as text on --page-bg, so text has its own */
+  --focus: #7cb0ff;
+  --danger: #ff9a92;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --page-bg: #f2f4f7;
+  --surface: #fff;
+  --surface-hover: #e7eaee;
+  --surface-active: #d6dbe0;
+
+  --border: #767a80;
+  --border-subtle: #c3c8ce;
+
+  --text: #1b1f23;
+  --text-muted: #565f6a;
+
+  --accent: #1a5fb4;
+  --accent-hover: #14508f;
+  --accent-text: #1a5fb4; /* already 5.7:1 on the light background */
+  --focus: #1a5fb4;
+  --danger: #b3261e;
+}
+
+html {
+  background-color: var(--page-bg);
+}
+
+body {
+  margin: 1rem;
+  background-color: var(--page-bg);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+}
+
+/* Shared controls, used by every component. */
+.btn {
+  font: inherit;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.field {
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+.field::placeholder {
+  color: var(--text-muted);
+}
+
+.btn:focus-visible,
+.field:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

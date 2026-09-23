@@ -1,0 +1,11 @@
+# default
+run:
+  ng serve --host=0.0.0.0 --serve-path=/angular-dev-server/ --configuration development
+
+deploy: build
+  mkdir -p /var/www/organizator.ro/user-admin
+  cp -r dist/user-administration/browser/* /var/www/organizator.ro/user-admin/
+
+build:
+  ng build --base-href=/user-admin/
+

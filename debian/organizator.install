@@ -5,3 +5,5 @@ Backend/Server/identity-organizator/settings.toml /etc/identity-organizator
 Backend/Server/organizator-server/settings.toml /etc/organizator-server
 Backend/Server/systemd/* /usr/lib/systemd/system
 Frontend/Nginx/snippets/organizator /etc/nginx/snippets
+Frontend/User-Administration/dist/user-administration/browser/* /var/www/organizator.ro/user-admin/
+

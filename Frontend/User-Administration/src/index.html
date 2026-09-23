@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>UserAdministration</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <script>
+    // Applies the stored theme before the app boots, so a light theme does not flash dark first.
+    // Must match the storage key and default in src/app/theme.ts.
+    try {
+      document.documentElement.setAttribute(
+        'data-theme',
+        localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
+      );
+    } catch (e) {
+      // storage unavailable, fall through to the default dark theme
+    }
+  </script>
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>
