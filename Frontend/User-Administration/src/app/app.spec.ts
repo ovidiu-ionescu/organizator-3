@@ -2,29 +2,30 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Router, provideRouter } from '@angular/router';
 
 import { App } from './app';
-import { Account } from './session';
-import { User } from './user-list/user-list';
+import { routes } from './app.routes';
 
-const USERS: User[] = [
-  {
-    id: 1,
-    name: 'admin',
-    roles: [{ id: 1, name: 'orgadm', description: 'Organizator administrator' }],
-  },
-  { id: 2, name: 'guest', roles: [{ id: 2, name: 'photo', description: 'Access to photos' }] },
-];
-
+/**
+ * The shell: the heading, the theme toggle, and the menu that gets you between the two
+ * screens. The screens themselves are tested where they live, so this navigates the real
+ * route table and answers whatever the pages it reaches ask the server for.
+ */
 describe('App', () => {
   let fixture: ComponentFixture<App>;
   let httpMock: HttpTestingController;
+  /** What /me answers. Set per test, so a non-admin case really is one. */
+  let isAdmin: boolean;
 
   beforeEach(async () => {
+    isAdmin = true;
+
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
         provideZonelessChangeDetection(),
+        provideRouter(routes),
         provideHttpClient(),
         provideHttpClientTesting(),
       ],
@@ -41,40 +42,105 @@ describe('App', () => {
     delete document.documentElement.dataset['theme'];
   });
 
-  function loadUsers(account: Account = { name: 'admin', isAdmin: true, roles: [] }) {
-    httpMock.expectOne({ url: '/organizator/me', method: 'GET' }).flush(account);
+  /**
+   * Navigates and lets the lazy page load, then answers what it asked for. The pages chain
+   * their reads — who the visitor is first, then what that lets them see — so this keeps
+   * answering until nothing is outstanding, rather than flushing one round and hoping.
+   */
+  async function go(url: string) {
+    await TestBed.inject(Router).navigateByUrl(url);
+    await fixture.whenStable();
     fixture.detectChanges();
 
-    // a non-admin is never sent the list, so there is no request to answer for one
-    if (!account.isAdmin) return;
+    for (let round = 0; round < 5; round++) {
+      const outstanding = httpMock.match(() => true);
+      if (outstanding.length === 0) break;
 
-    httpMock
-      .expectOne({ url: '/organizator/user-roles', method: 'GET' })
-      .flush(structuredClone(USERS));
-    fixture.detectChanges();
+      for (const request of outstanding) {
+        request.flush(responseFor(request.request.url));
+      }
+
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
   }
 
-  function userListText(): string {
-    return (fixture.nativeElement.querySelector('app-user-list') as HTMLElement).textContent ?? '';
+  function responseFor(url: string): object {
+    if (url === '/organizator/me') {
+      return { name: isAdmin ? 'admin' : 'ovidiu', isAdmin, roles: [] };
+    }
+    if (url === '/organizator/usergroups') {
+      return { usergroups: [], requester: { id: 1, name: 'admin' } };
+    }
+    if (url === '/organizator/memogroups') {
+      return { memogroups: [], requester: { id: 1, name: 'admin' } };
+    }
+    return []; // /user-roles, /admin/all_user_groups
   }
 
-  it('should create the app', () => {
-    loadUsers();
+  function navLinks(): HTMLAnchorElement[] {
+    return Array.from(fixture.nativeElement.querySelectorAll('nav a'));
+  }
 
-    expect(fixture.componentInstance).toBeTruthy();
+  it('shows the heading, the theme toggle and both menu entries', async () => {
+    await go('/');
+
+    expect(fixture.nativeElement.querySelector('h1')?.textContent).toContain(
+      'User administration'
+    );
+    expect(navLinks().map(link => link.textContent?.trim())).toEqual([
+      'Users & roles',
+      'Groups',
+    ]);
+    expect(navLinks().map(link => link.getAttribute('href'))).toEqual(['/users', '/groups']);
   });
 
-  it('renders the heading, the filter and the user list', () => {
-    loadUsers();
+  it('opens on the users screen', async () => {
+    await go('/');
 
-    expect(fixture.nativeElement.querySelector('h1')?.textContent).toContain('User administration');
-    expect(fixture.nativeElement.querySelector('#search')).toBeTruthy();
-    expect(userListText()).toContain('admin');
-    expect(userListText()).toContain('Organizator administrator');
+    expect(fixture.nativeElement.querySelector('app-users-page')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-groups-page')).toBeNull();
   });
 
-  it('switches the theme with the header toggle and remembers it', () => {
-    loadUsers();
+  it('reaches the groups screen through the menu', async () => {
+    await go('/groups');
+
+    expect(fixture.nativeElement.querySelector('app-groups-page')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-users-page')).toBeNull();
+  });
+
+  it('sends an unknown path to the users screen rather than nowhere', async () => {
+    await go('/no-such-screen');
+
+    expect(fixture.nativeElement.querySelector('app-users-page')).toBeTruthy();
+  });
+
+  it('marks the entry you are on, and only that one', async () => {
+    await go('/');
+
+    expect(navLinks()[0].getAttribute('aria-current')).toBe('page');
+    expect(navLinks()[1].getAttribute('aria-current')).toBeNull();
+
+    await go('/groups');
+
+    expect(navLinks()[0].getAttribute('aria-current')).toBeNull();
+    expect(navLinks()[1].getAttribute('aria-current')).toBe('page');
+  });
+
+  it('shows the menu to a non-admin too, who has their own groups to manage', async () => {
+    isAdmin = false;
+
+    await go('/groups');
+
+    // The groups screen is theirs as well — the endpoint returns only their own — so the
+    // entry is not hidden from them the way the user list's filter is. The admin report on
+    // that screen is, though.
+    expect(navLinks()).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('app-groups-page')).toBeTruthy();
+  });
+
+  it('switches the theme and remembers it', async () => {
+    await go('/');
 
     const toggle = fixture.nativeElement.querySelector('.app-header button') as HTMLButtonElement;
 
@@ -91,26 +157,5 @@ describe('App', () => {
     expect(document.documentElement.dataset['theme']).toBe('dark');
     expect(localStorage.getItem('theme')).toBe('dark');
     expect(toggle.textContent).toContain('Switch to light theme');
-  });
-
-  it('keeps the filter away from a non-admin, who has nothing to filter', () => {
-    loadUsers({ name: 'ovidiu', isAdmin: false, roles: [] });
-
-    expect(fixture.nativeElement.querySelector('#search')).toBeNull();
-    expect(userListText()).toContain('ovidiu');
-  });
-
-  it('filters the user list with the search input', async () => {
-    loadUsers();
-
-    const input = fixture.nativeElement.querySelector('#search') as HTMLInputElement;
-    input.value = 'guest';
-    input.dispatchEvent(new Event('input'));
-
-    await new Promise((resolve) => setTimeout(resolve, 350)); // UserFilter debounces for 300ms
-
-    fixture.detectChanges();
-    expect(userListText()).toContain('guest');
-    expect(userListText()).not.toContain('admin');
   });
 });

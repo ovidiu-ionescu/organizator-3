@@ -1,0 +1,44 @@
+<section class="panel">
+  <app-user-groups
+    [groups]="userGroups()"
+    [usernames]="usernames()"
+    [loading]="loadingUserGroups()"
+    [saving]="savingUserGroups()"
+    [status]="userGroupStatus()"
+    (create)="createUserGroup($event)"
+    (rename)="renameUserGroup($event.group, $event.name)"
+    (addMember)="addMember($event.group, $event.username)"
+    (removeMember)="removeMember($event.group, $event.username)"
+    (remove)="deleteUserGroup($event)"
+  />
+</section>
+
+<section class="panel">
+  <app-memo-groups
+    [groups]="memoGroups()"
+    [userGroups]="userGroups()"
+    [requesterId]="memoRequesterId()"
+    [isAdmin]="isAdmin()"
+    [loading]="loadingMemoGroups()"
+    [saving]="savingMemoGroups()"
+    [status]="memoGroupStatus()"
+    (create)="createMemoGroup($event)"
+    (rename)="renameMemoGroup($event.group, $event.name)"
+    (setPublic)="setMemoGroupPublic($event.group, $event.public)"
+    (grant)="grantAccess($event.group, $event.userGroupId, $event.access)"
+    (revoke)="revokeAccess($event.group, $event.userGroup)"
+    (remove)="deleteMemoGroup($event)"
+  />
+</section>
+
+<!-- Only an admin may read /admin/all_user_groups, so for everyone else there is no report
+     and nothing to say about one. -->
+@if (isAdmin()) {
+  <section class="panel">
+    <app-all-user-groups
+      [owners]="allUserGroups()"
+      [loading]="loadingAllGroups()"
+      [status]="allGroupsStatus()"
+    />
+  </section>
+}

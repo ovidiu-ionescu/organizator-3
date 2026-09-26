@@ -12,7 +12,37 @@
   font-size: 1.5rem;
 }
 
-/* Keeps the filter row clear of the toolbar's Edit button in the results section. */
-.filters {
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
   margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-nav a {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+.app-nav a:hover {
+  background-color: var(--surface-hover);
+}
+
+/* Sits on the border of its own box so it reads as the tab that is open, which is the one
+   thing colour alone would not say. */
+.app-nav a.active {
+  background-color: var(--surface);
+  border-color: var(--border-subtle);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.app-nav a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }

@@ -2,11 +2,15 @@
 SELECT
   json_build_object(
     'usergroups',
-    json_agg(user_groups.usergroup),
+    -- COALESCE, because json_agg over no rows is SQL NULL, which would reach the client as
+    -- `null` rather than `[]` — an empty list is what "this user owns no groups" means.
+    COALESCE(json_agg(user_groups.usergroup), '[]'::JSON),
     'requester',
     json_build_object(
+      -- ::INTEGER, because the setting is TEXT: without the cast the id goes out as the JSON
+      -- string "7" while /memogroups sends the number 7 for the same person.
       'id',
-      current_setting('organizator.current_user'),
+      (current_setting('organizator.current_user'))::INTEGER,
       'name',
       (
         SELECT
@@ -28,11 +32,13 @@ FROM
           'name',
           user_group.user_group_name,
           'users',
-          usg.usrs
+          COALESCE(usg.usrs, '[]'::JSON)
         ) AS usergroup
       FROM
         user_group
-        JOIN (
+        -- LEFT JOIN, so a group with no members is still listed: it is the group a new
+        -- member is about to be added to, and it would otherwise vanish from the response.
+        LEFT JOIN (
           SELECT
             user_group_detail.user_group_id,
             json_agg(

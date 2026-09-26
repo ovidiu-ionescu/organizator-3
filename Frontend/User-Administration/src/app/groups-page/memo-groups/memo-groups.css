@@ -1,0 +1,161 @@
+.panel-body h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.status {
+  min-height: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.row-status {
+  min-height: 0;
+  margin: 0.375rem 0 0;
+  font-size: 0.875rem;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.create-row,
+.rename-row,
+.add-grant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.create-row {
+  margin-bottom: 1rem;
+}
+
+.create-row label,
+.add-grant label {
+  font-size: 0.875rem;
+}
+
+.groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A group is a block of several lines — name, members, the field that adds one, the result
+   of the last change — so the gap between two of them has to be wide enough to read as a
+   break. Spacing the rows from each other rather than from the bottom keeps the last one
+   from trailing a gap into the panel below. */
+.group + .group {
+  margin-top: 2.5rem;
+}
+
+/* The name and its controls sit together rather than at opposite ends: the row is the whole
+   width of the page, so spreading them puts Rename and Delete an eye's journey away from the
+   name they belong to as soon as the window is wide. */
+.group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* A secondary action on the row: no box, just accent-coloured text. The vertical padding
+   lifts the hit area over the 24px WCAG 2.5.8 minimum, as it does on the user list. */
+.row-action {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.125rem 0;
+  border: none;
+  background: none;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.row-action:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.row-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.row-action.danger {
+  color: var(--danger);
+}
+
+.row-action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.grants {
+  margin: 0.375rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.grant-name {
+  min-width: 8rem;
+}
+
+/* The letter the Memo app prints for the same level, so the two screens read alike. It is a
+   reminder of the select beside it, never the only place the level is said. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background-color: var(--surface);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* A word rather than a letter, so it needs the room one takes. The colour is a cue only —
+   the word itself is what says the group is public. */
+.badge.public {
+  padding: 0 0.5rem;
+  color: var(--accent-text);
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.add-grant {
+  margin-top: 0.375rem;
+}

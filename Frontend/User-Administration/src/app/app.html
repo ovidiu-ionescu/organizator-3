@@ -5,13 +5,11 @@
   </button>
 </header>
 
-<!-- A non-admin has one row of their own and nothing to filter, so the box would only be in the way.
-     Kept while the answer is still unknown, so an admin does not see it appear a moment late. -->
-@if (session.isAdmin() !== false) {
-  <section class="filters">
-    <app-user-filter (filterChange)="updateFilter($event)"></app-user-filter>
-  </section>
-}
-<section class="results">
-  <app-user-list [filterTerm]="searchTerm()"></app-user-list>
-</section>
+<!-- ariaCurrentWhenActive is what marks the link the visitor is on for a screen reader; the
+     `active` class only says the same thing to the eye. -->
+<nav class="app-nav" aria-label="Sections">
+  <a routerLink="/users" routerLinkActive="active" ariaCurrentWhenActive="page">Users &amp; roles</a>
+  <a routerLink="/groups" routerLinkActive="active" ariaCurrentWhenActive="page">Groups</a>
+</nav>
+
+<router-outlet />

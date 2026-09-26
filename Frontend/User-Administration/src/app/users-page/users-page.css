@@ -1,0 +1,4 @@
+/* Keeps the filter row clear of the toolbar's Edit button in the results section. */
+.filters {
+  margin-bottom: 1rem;
+}

@@ -1,0 +1,170 @@
+<div class="panel-body">
+  <!-- h2, not h3: the shell owns the only h1, and a page that jumps from h1 to h3 fails the
+       heading-order check that docs/best-practices.md requires. The ids below are prefixed
+       'ug-' because a memo group and a user group can share a number, their keys coming from
+       separate sequences. -->
+  <h2 #panelHeading tabindex="-1">Your user groups</h2>
+
+  <p class="status" [class.error]="status()?.error" role="status" aria-live="polite">
+    {{ panelStatus() }}
+  </p>
+
+  <!-- Always open: a group is created in order to be filled, and the two steps belong together. -->
+  <form class="create-row" (submit)="createGroup(newGroupName, $event)">
+    <label for="new-user-group-name">New user group</label>
+    <input
+      #newGroupName
+      id="new-user-group-name"
+      class="field"
+      name="name"
+      type="text"
+      autocomplete="off"
+      placeholder="Name"
+      [disabled]="saving()"
+    />
+    <button type="submit" class="btn" [disabled]="saving()">Create</button>
+  </form>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  }
+
+  <ul class="groups">
+    @for (group of groups(); track group.id) {
+      <li class="group">
+        @if (renamingId() === group.id) {
+          <form class="rename-row" (submit)="submitRename(group, renameName, $event)">
+            <label class="visually-hidden" [for]="'ug-rename-' + group.id">
+              New name for {{ group.name }}
+            </label>
+            <input
+              #renameName
+              #renameField
+              class="field"
+              [id]="'ug-rename-' + group.id"
+              name="name"
+              type="text"
+              autocomplete="off"
+              [value]="group.name"
+              [disabled]="saving()"
+            />
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">Save</button>
+            <button type="button" class="btn" (click)="cancelRename()" [disabled]="saving()">
+              Cancel
+            </button>
+          </form>
+        } @else {
+          <div class="group-head">
+            <strong>{{ group.name }}</strong>
+            <span class="controls">
+              <button
+                #renameButton
+                type="button"
+                class="row-action"
+                [id]="'ug-rename-' + group.id"
+                (click)="openRename(group)"
+                [disabled]="saving()"
+              >
+                Rename<span class="visually-hidden"> {{ group.name }}</span>
+              </button>
+
+              @if (confirmingDeleteId() === group.id) {
+                <span class="confirm">
+                  <span>Delete {{ group.name }}?</span>
+                  <button
+                    #confirmDeleteButton
+                    type="button"
+                    class="row-action danger"
+                    [id]="'ug-confirm-delete-' + group.id"
+                    (click)="confirmDelete(group)"
+                    [disabled]="saving()"
+                  >
+                    Yes, delete<span class="visually-hidden"> {{ group.name }}</span>
+                  </button>
+                  <button type="button" class="row-action" (click)="cancelDelete()">Cancel</button>
+                </span>
+              } @else {
+                <button
+                  #deleteButton
+                  type="button"
+                  class="row-action danger"
+                  [id]="'ug-delete-' + group.id"
+                  (click)="confirmDelete(group)"
+                  [disabled]="saving()"
+                >
+                  Delete<span class="visually-hidden"> {{ group.name }}</span>
+                </button>
+              }
+            </span>
+          </div>
+        }
+
+        <!-- An empty group is the normal state of a group that was just created, so it says
+             so and keeps its member field, rather than being hidden or collapsed. -->
+        <ul class="chips">
+          @for (member of group.users; track member.id) {
+            <li class="chip">
+              <span>{{ member.name }}</span>
+              <button
+                type="button"
+                class="chip-remove"
+                [attr.aria-label]="'Remove ' + member.name + ' from ' + group.name"
+                (click)="dropMember(group, member.name)"
+                [disabled]="saving()"
+              >
+                &times;
+              </button>
+            </li>
+          } @empty {
+            <li class="no-members">No members yet. Add the first one below.</li>
+          }
+        </ul>
+
+        <form class="add-member" (submit)="submitMember(group, memberName, $event)">
+          <label [for]="'ug-member-' + group.id">
+            Add member<span class="visually-hidden"> to {{ group.name }}</span>
+          </label>
+          <input
+            #memberName
+            class="field"
+            [id]="'ug-member-' + group.id"
+            name="username"
+            type="text"
+            autocomplete="off"
+            placeholder="Username"
+            [attr.list]="usernames().length > 0 ? 'known-usernames' : null"
+            [disabled]="saving()"
+          />
+          <button type="submit" class="btn" [disabled]="saving()">Add</button>
+        </form>
+
+        <!-- Always in the page, even when empty: a live region has to exist before the text it
+             announces is put into it, or the first message is never read out. -->
+        <p
+          class="status row-status"
+          [class.error]="statusFor(group)?.error"
+          role="status"
+          aria-live="polite"
+        >
+          {{ statusFor(group)?.text }}
+        </p>
+      </li>
+    } @empty {
+      @if (!loading() && !failed()) {
+        <li class="muted">
+          You do not own any user groups yet. Create one above, then add the people to share with.
+        </li>
+      }
+    }
+  </ul>
+
+  <!-- Only an admin can read the user list, so only an admin gets suggestions; everyone else
+       types the username, which is what the endpoint takes anyway. -->
+  @if (usernames().length > 0) {
+    <datalist id="known-usernames">
+      @for (name of usernames(); track name) {
+        <option [value]="name"></option>
+      }
+    </datalist>
+  }
+</div>

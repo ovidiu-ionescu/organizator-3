@@ -1,7 +1,8 @@
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::IntoResponse;
-use axum::{Extension, Form};
+use axum::response::{IntoResponse, Response};
+use axum::{Extension, Form, Json};
+use serde_json::json;
 use axum_prometheus::PrometheusMetricLayer;
 
 use axum::{Router, routing::get};
@@ -98,7 +99,18 @@ async fn main() {
         .routes(routes!(get_explicit_permissions))
         .merge(upload_router)
         .routes(routes!(get_usergroups))
+        .routes(routes!(create_user_group))
+        .routes(routes!(rename_user_group))
+        .routes(routes!(delete_user_group))
+        .routes(routes!(add_user_group_member))
+        .routes(routes!(remove_user_group_member))
         .routes(routes!(get_memogroups))
+        .routes(routes!(create_memo_group))
+        .routes(routes!(rename_memo_group))
+        .routes(routes!(delete_memo_group))
+        .routes(routes!(set_memo_group_access))
+        .routes(routes!(revoke_memo_group_access))
+        .routes(routes!(set_memo_group_public))
         .routes(routes!(file_list))
         .routes(routes!(get_memo_stats))
         .routes(routes!(get_all_usergroups))
@@ -384,6 +396,688 @@ async fn get_usergroups(
     )
     .await?;
     build_simple_json_response(json)
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct AddMemberForm {
+    username: String,
+}
+
+/// What `add_user_group_member.sql` reports about the insert it attempted.
+#[derive(serde::Deserialize, Debug)]
+struct AddMemberOutcome {
+    /// `added`, `already_member`, `no_user` or `no_group`.
+    outcome: String,
+}
+
+/// Add a user to one of the caller's own user groups.
+///
+/// The body names the member by username rather than by id: `/user-roles` is the only endpoint
+/// that lists users and it is admin-only, so a username is the one identifier every caller has.
+#[utoipa::path(
+    post,
+    path = "/usergroups/{id}/members",
+    params(("id" = i32, Path, description = "user_group.id")),
+    request_body = AddMemberForm,
+    responses(
+        (status = 200, description = "The user group with its members, as it is now", body = Object),
+        (status = 403, description = "The group belongs to someone else", body = Object),
+        (status = 404, description = "No such group, or not the caller's", body = Object),
+        (status = 409, description = "That user is already a member", body = Object),
+        (status = 422, description = "No user of that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn add_user_group_member(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(group_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<AddMemberForm>,
+) -> HandlerResponse {
+    let member = form.username.trim();
+    let username = requester.id();
+    debug!("Adding 「{member}」 to user group {group_id} for {username}");
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/add_user_group_member.sql")),
+        &[&group_id, &member],
+    )
+    .await?;
+
+    let outcome: AddMemberOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "added" {
+        return Ok(match outcome.outcome.as_str() {
+            "no_user" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("No user named 「{member}」"),
+            ),
+            "already_member" => refused(
+                StatusCode::CONFLICT,
+                format!("「{member}」 is already in this group"),
+            ),
+            // A group that is someone else's and a group that does not exist give the same
+            // answer, so the ids of other people's groups cannot be probed.
+            _ => refused(StatusCode::NOT_FOUND, "No such user group".to_string()),
+        });
+    }
+
+    // A second statement, and deliberately not a second CTE: a data-modifying statement and
+    // everything around it share one snapshot, so a SELECT in the statement that did the
+    // INSERT cannot see the row it added. Reading the group here, after that transaction has
+    // committed, is what makes the member list the caller gets back include the new member.
+    let (group_json, group_requester) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/get_user_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    build_simple_json_response((group_json, group_requester))
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct NameForm {
+    name: String,
+}
+
+/// What the group writes report. `outcome` is one of each endpoint's own set; the two payload
+/// fields are present only where an endpoint has something extra to say.
+#[derive(serde::Deserialize, Debug)]
+struct GroupWriteOutcome {
+    outcome: String,
+    /// A user-group create builds this from the row it inserted.
+    #[serde(default)]
+    group: Option<serde_json::Value>,
+    /// A memo-group create reports the id of what it made, and the handler reads it back.
+    #[serde(default)]
+    id: Option<i32>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct CreateMemoGroupForm {
+    name: String,
+    /// Only an admin is offered this; anyone else gets a group of their own either way.
+    #[serde(default)]
+    public: bool,
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct AccessForm {
+    /// 1 for read, 2 for read and write. There is no level meaning "no access".
+    access: i32,
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct PublicForm {
+    public: bool,
+}
+
+/// Create a user group of the caller's own.
+#[utoipa::path(
+    post,
+    path = "/usergroups",
+    request_body = NameForm,
+    responses(
+        (status = 201, description = "The group that was created", body = Object),
+        (status = 409, description = "The caller already has a group by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn create_user_group(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    // last extractor consumes the body
+    Json(form): Json<NameForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    debug!("Creating user group 「{name}」 for {}", requester.id());
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A user group needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        requester.id(),
+        SQLstr(include_str!("sql/create_user_group.sql")),
+        &[&name],
+    )
+    .await?;
+
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "created" {
+        return Ok(refused(
+            StatusCode::CONFLICT,
+            format!("You already have a user group called 「{name}」"),
+        ));
+    }
+
+    let group = outcome
+        .group
+        .ok_or_else(|| AppError::bad_request("The user group was created but not reported"))?;
+
+    Ok((StatusCode::CREATED, Json(group)).into_response())
+}
+
+/// Rename one of the caller's own user groups.
+#[utoipa::path(
+    put,
+    path = "/usergroups/{id}",
+    params(("id" = i32, Path, description = "user_group.id")),
+    request_body = NameForm,
+    responses(
+        (status = 200, description = "The user group with its members, as it is now", body = Object),
+        (status = 404, description = "No such group, or not the caller's", body = Object),
+        (status = 409, description = "The caller already has a group by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn rename_user_group(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(group_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<NameForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    let username = requester.id();
+    debug!("Renaming user group {group_id} to 「{name}」 for {username}");
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A user group needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/rename_user_group.sql")),
+        &[&group_id, &name],
+    )
+    .await?;
+
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "renamed" {
+        return Ok(match outcome.outcome.as_str() {
+            "name_taken" => refused(
+                StatusCode::CONFLICT,
+                format!("You already have a user group called 「{name}」"),
+            ),
+            _ => refused(StatusCode::NOT_FOUND, "No such user group".to_string()),
+        });
+    }
+
+    let (group_json, group_requester) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/get_user_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    build_simple_json_response((group_json, group_requester))
+}
+
+/// Delete one of the caller's own user groups, and its members with it.
+#[utoipa::path(
+    delete,
+    path = "/usergroups/{id}",
+    params(("id" = i32, Path, description = "user_group.id")),
+    responses(
+        (status = 204, description = "Deleted, with its members and its access grants"),
+        (status = 404, description = "No such group, or not the caller's", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn delete_user_group(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(group_id): Path<i32>,
+) -> HandlerResponse {
+    debug!("Deleting user group {group_id} for {}", requester.id());
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        requester.id(),
+        SQLstr(include_str!("sql/delete_user_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        // 204, with no body: the group is gone, and what it was granted on went with it by
+        // the schema's own cascade.
+        "removed" => Ok(StatusCode::NO_CONTENT.into_response()),
+        _ => Ok(refused(StatusCode::NOT_FOUND, "No such user group".to_string())),
+    }
+}
+
+/// Create a memo group of the caller's own, public if an admin asks for that.
+#[utoipa::path(
+    post,
+    path = "/memogroups",
+    request_body = CreateMemoGroupForm,
+    responses(
+        (status = 201, description = "The memo group that was created", body = Object),
+        (status = 409, description = "The caller already has a memo group by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn create_memo_group(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    // last extractor consumes the body
+    Json(form): Json<CreateMemoGroupForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    let username = requester.id();
+    debug!(
+        "Creating memo group 「{}」 (public: {}) for {}",
+        name, form.public, username
+    );
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A memo group needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/create_memo_group.sql")),
+        &[&name, &form.public],
+    )
+    .await?;
+
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "created" {
+        return Ok(refused(
+            StatusCode::CONFLICT,
+            format!("You already have a memo group called 「{name}」"),
+        ));
+    }
+
+    let group_id = outcome
+        .id
+        .ok_or_else(|| AppError::bad_request("The memo group was created but not reported"))?;
+
+    let (group_json, _) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/get_memo_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    Ok((StatusCode::CREATED, build_json_body(group_json)?).into_response())
+}
+
+/// Rename one of the caller's own memo groups.
+#[utoipa::path(
+    put,
+    path = "/memogroups/{id}",
+    params(("id" = i32, Path, description = "memo_group.id")),
+    request_body = NameForm,
+    responses(
+        (status = 200, description = "The memo group as it is now", body = Object),
+        (status = 404, description = "No such group, or not the caller's", body = Object),
+        (status = 409, description = "The caller already has a memo group by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn rename_memo_group(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(group_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<NameForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    let username = requester.id();
+    debug!("Renaming memo group {group_id} to 「{name}」 for {username}");
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A memo group needs a name".to_string(),
+        ));
+    }
+
+    memo_group_write(
+        &db_client,
+        username,
+        include_str!("sql/rename_memo_group.sql"),
+        &[&group_id, &name],
+        group_id,
+        "renamed",
+        &format!("You already have a memo group called 「{name}」"),
+    )
+    .await
+}
+
+/// Delete one of the caller's own memo groups, and its access grants with it.
+#[utoipa::path(
+    delete,
+    path = "/memogroups/{id}",
+    params(("id" = i32, Path, description = "memo_group.id")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "No such group, or not the caller's", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn delete_memo_group(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(group_id): Path<i32>,
+) -> HandlerResponse {
+    debug!("Deleting memo group {group_id} for {}", requester.id());
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        requester.id(),
+        SQLstr(include_str!("sql/delete_memo_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome == "removed" {
+        Ok(StatusCode::NO_CONTENT.into_response())
+    } else {
+        Ok(refused(StatusCode::NOT_FOUND, "No such memo group".to_string()))
+    }
+}
+
+/// Give a user group access to a memo group, or change the access it has.
+#[utoipa::path(
+    put,
+    path = "/memogroups/{id}/usergroups/{user_group_id}",
+    params(
+        ("id" = i32, Path, description = "memo_group.id"),
+        ("user_group_id" = i32, Path, description = "user_group.id")
+    ),
+    request_body = AccessForm,
+    responses(
+        (status = 200, description = "The memo group as it is now", body = Object),
+        (status = 400, description = "Access is neither 1 (read) nor 2 (read and write)", body = Object),
+        (status = 404, description = "No such memo group or user group, or not the caller's", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn set_memo_group_access(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path((group_id, user_group_id)): Path<(i32, i32)>,
+    // last extractor consumes the body
+    Json(form): Json<AccessForm>,
+) -> HandlerResponse {
+    let username = requester.id();
+    debug!(
+        "Setting access {} for user group {user_group_id} on memo group {group_id}, for {username}",
+        form.access
+    );
+
+    memo_group_write(
+        &db_client,
+        username,
+        include_str!("sql/set_memo_group_access.sql"),
+        &[&group_id, &user_group_id, &form.access],
+        group_id,
+        "granted",
+        "Access is read (1) or read and write (2)",
+    )
+    .await
+}
+
+/// Take a user group's access to a memo group away.
+#[utoipa::path(
+    delete,
+    path = "/memogroups/{id}/usergroups/{user_group_id}",
+    params(
+        ("id" = i32, Path, description = "memo_group.id"),
+        ("user_group_id" = i32, Path, description = "user_group.id")
+    ),
+    responses(
+        (status = 200, description = "The memo group as it is now", body = Object),
+        (status = 404, description = "No such memo group, or not the caller's", body = Object),
+        (status = 409, description = "That user group had no access to take away", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn revoke_memo_group_access(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path((group_id, user_group_id)): Path<(i32, i32)>,
+) -> HandlerResponse {
+    let username = requester.id();
+    debug!("Revoking user group {user_group_id} on memo group {group_id}, for {username}");
+
+    memo_group_write(
+        &db_client,
+        username,
+        include_str!("sql/revoke_memo_group_access.sql"),
+        &[&group_id, &user_group_id],
+        group_id,
+        "revoked",
+        "That user group has no access to this memo group",
+    )
+    .await
+}
+
+/// Make a memo group visible to every user, or stop it being. An admin's alone.
+#[utoipa::path(
+    put,
+    path = "/memogroups/{id}/public",
+    params(("id" = i32, Path, description = "memo_group.id")),
+    request_body = PublicForm,
+    responses(
+        (status = 200, description = "The memo group as it is now", body = Object),
+        (status = 403, description = "Only an admin may publish a memo group", body = Object),
+        (status = 404, description = "No such memo group", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn set_memo_group_public(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(group_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<PublicForm>,
+) -> HandlerResponse {
+    let username = requester.id();
+    debug!(
+        "Setting public={} on memo group {group_id}, for {username}",
+        form.public
+    );
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/set_memo_group_public.sql")),
+        &[&group_id, &form.public],
+    )
+    .await?;
+
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "changed" => {
+            let (group_json, _) = db::get_json(
+                &db_client,
+                username,
+                SQLstr(include_str!("sql/get_memo_group.sql")),
+                &[&group_id],
+            )
+            .await?;
+            Ok(build_json_body(group_json)?.into_response())
+        }
+        "not_admin" => Ok(refused(
+            StatusCode::FORBIDDEN,
+            "Only an administrator can make a memo group public".to_string(),
+        )),
+        _ => Ok(refused(
+            StatusCode::NOT_FOUND,
+            "No such memo group".to_string(),
+        )),
+    }
+}
+
+/// Runs a memo-group write and, if it succeeded, answers with the group as it now stands.
+///
+/// Every one of these writes has the same shape: one statement that decides what happened,
+/// then a read of the group — in its own statement, because a data-modifying statement and
+/// everything around it share one snapshot and could not see the change (add_user_group_member.sql).
+/// `success` names the outcome that means it worked; anything else is refused with `conflict`,
+/// which each caller words for the outcomes its own statement can produce.
+async fn memo_group_write(
+    db_client: &deadpool_postgres::Client,
+    username: &str,
+    query: &str,
+    params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    group_id: i32,
+    success: &str,
+    conflict: &str,
+) -> HandlerResponse {
+    let (outcome_json, _) = db::get_json(db_client, username, SQLstr(query), params).await?;
+    let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != success {
+        let (status, message) = match outcome.outcome.as_str() {
+            "name_taken" | "not_granted" => (StatusCode::CONFLICT, conflict.to_string()),
+            "bad_access" => (StatusCode::BAD_REQUEST, conflict.to_string()),
+            "no_user_group" => (
+                StatusCode::NOT_FOUND,
+                "No such user group, or not yours".to_string(),
+            ),
+            _ => (StatusCode::NOT_FOUND, "No such memo group".to_string()),
+        };
+        return Ok(refused(status, message));
+    }
+
+    let (group_json, _) = db::get_json(
+        db_client,
+        username,
+        SQLstr(include_str!("sql/get_memo_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    Ok(build_json_body(group_json)?.into_response())
+}
+
+/// The JSON a group read produced, as a body. `db::get_json` hands back the text the database
+/// built, so it is parsed to be embedded rather than sent as a JSON string.
+fn build_json_body(json: String) -> Result<Json<serde_json::Value>, AppError> {
+    Ok(Json(serde_json::from_str(&json)?))
+}
+
+/// Remove a user from one of the caller's own user groups.
+///
+/// The member is named by username, like the endpoint that adds one, and for the same reason.
+#[utoipa::path(
+    delete,
+    path = "/usergroups/{id}/members/{username}",
+    params(
+        ("id" = i32, Path, description = "user_group.id"),
+        ("username" = String, Path, description = "users.username of the member to remove")
+    ),
+    responses(
+        (status = 200, description = "The user group with its members, as it is now", body = Object),
+        (status = 404, description = "No such group, or not the caller's", body = Object),
+        (status = 409, description = "That user is not a member", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn remove_user_group_member(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path((group_id, member)): Path<(i32, String)>,
+) -> HandlerResponse {
+    let member = member.trim();
+    let username = requester.id();
+    debug!("Removing 「{member}」 from user group {group_id} for {username}");
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/remove_user_group_member.sql")),
+        &[&group_id, &member],
+    )
+    .await?;
+
+    let outcome: AddMemberOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "removed" {
+        return Ok(match outcome.outcome.as_str() {
+            // Not a member covers a name that is real and a name that is not: telling those
+            // two apart would be a way to ask which usernames exist.
+            "not_member" => refused(
+                StatusCode::CONFLICT,
+                format!("「{member}」 is not in this group"),
+            ),
+            _ => refused(StatusCode::NOT_FOUND, "No such user group".to_string()),
+        });
+    }
+
+    // A second statement, for the reason add_user_group_member gives: the DELETE and a SELECT
+    // beside it share one snapshot, so only a read after the transaction commits shows the
+    // member actually gone.
+    let (group_json, group_requester) = db::get_json(
+        &db_client,
+        username,
+        SQLstr(include_str!("sql/get_user_group.sql")),
+        &[&group_id],
+    )
+    .await?;
+
+    build_simple_json_response((group_json, group_requester))
+}
+
+/// A refusal the caller is meant to read, in the same `{"error": "..."}` shape `AppError`
+/// answers in, so the app has one thing to parse whatever refused it.
+fn refused(status: StatusCode, message: String) -> Response {
+    (status, Json(json!({ "error": message }))).into_response()
 }
 
 /// Get all memo groups for the current logged in user with full details.

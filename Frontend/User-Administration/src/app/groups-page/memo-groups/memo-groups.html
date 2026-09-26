@@ -1,0 +1,221 @@
+<div class="panel-body">
+  <!-- h2, not h3, for the same heading-order reason as the sibling panel. The ids are
+       prefixed 'mg-' so they cannot collide with the user-groups panel's: memo groups and
+       user groups are numbered by separate sequences and do share ids. -->
+  <h2 #panelHeading tabindex="-1">Memo groups</h2>
+
+  <p class="status" [class.error]="status()?.error" role="status" aria-live="polite">
+    {{ panelStatus() }}
+  </p>
+
+  <form class="create-row" (submit)="createGroup(newGroupName, $event)">
+    <label for="new-memo-group-name">New memo group</label>
+    <input
+      #newGroupName
+      id="new-memo-group-name"
+      class="field"
+      name="name"
+      type="text"
+      autocomplete="off"
+      placeholder="Name"
+      [disabled]="saving()"
+    />
+
+    <!-- Only an admin may publish a memo group to everyone, so only an admin is offered it. -->
+    @if (isAdmin()) {
+      <label class="checkbox">
+        <input #newGroupPublic id="new-memo-group-public" type="checkbox" [disabled]="saving()" />
+        <span>Public — usable by every user</span>
+      </label>
+    }
+
+    <button type="submit" class="btn" [disabled]="saving()">Create</button>
+  </form>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  }
+
+  <ul class="groups">
+    @for (group of groups(); track group.id) {
+      <li class="group">
+        @if (renamingId() === group.id) {
+          <form class="rename-row" (submit)="submitRename(group, renameName, $event)">
+            <label class="visually-hidden" [for]="'mg-rename-' + group.id">
+              New name for {{ group.name }}
+            </label>
+            <input
+              #renameName
+              #renameField
+              class="field"
+              [id]="'mg-rename-' + group.id"
+              name="name"
+              type="text"
+              autocomplete="off"
+              [value]="group.name"
+              [disabled]="saving()"
+            />
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">Save</button>
+            <button type="button" class="btn" (click)="cancelRename()" [disabled]="saving()">
+              Cancel
+            </button>
+          </form>
+        } @else {
+          <div class="group-head">
+            <strong>{{ group.name }}</strong>
+
+            <!-- Said in words, not only by the checkbox below: a public group is visible to
+                 people who are not its owner, and that has to be readable at a glance. -->
+            @if (group.public) {
+              <span class="badge public">Public</span>
+            }
+
+            @if (showsVisibility(group)) {
+              <label class="checkbox">
+                <input
+                  #visibility
+                  type="checkbox"
+                  [id]="'mg-public-' + group.id"
+                  [checked]="group.public === true"
+                  (change)="changeVisibility(group, visibility)"
+                  [disabled]="saving()"
+                />
+                <span>Public<span class="visually-hidden"> — {{ group.name }}</span></span>
+              </label>
+            }
+            <!-- A public memo group owned by an admin is visible to everyone but is only the
+                 owner's to change, so the controls follow the owner when the server names one. -->
+            @if (isEditable(group)) {
+              <span class="controls">
+                <button
+                  #renameButton
+                  type="button"
+                  class="row-action"
+                  [id]="'mg-rename-' + group.id"
+                  (click)="openRename(group)"
+                  [disabled]="saving()"
+                >
+                  Rename<span class="visually-hidden"> {{ group.name }}</span>
+                </button>
+
+                @if (confirmingDeleteId() === group.id) {
+                  <span class="confirm">
+                    <span>Delete {{ group.name }}?</span>
+                    <button
+                      #confirmDeleteButton
+                      type="button"
+                      class="row-action danger"
+                      [id]="'mg-confirm-delete-' + group.id"
+                      (click)="confirmDelete(group)"
+                      [disabled]="saving()"
+                    >
+                      Yes, delete<span class="visually-hidden"> {{ group.name }}</span>
+                    </button>
+                    <button type="button" class="row-action" (click)="cancelDelete()">Cancel</button>
+                  </span>
+                } @else {
+                  <button
+                    #deleteButton
+                    type="button"
+                    class="row-action danger"
+                    [id]="'mg-delete-' + group.id"
+                    (click)="confirmDelete(group)"
+                    [disabled]="saving()"
+                  >
+                    Delete<span class="visually-hidden"> {{ group.name }}</span>
+                  </button>
+                }
+              </span>
+            }
+          </div>
+        }
+
+        <!-- Who has access, and how much. A memo group with nothing granted is an ordinary
+             state — it is what a group looks like before it is shared — so it says so. -->
+        <ul class="grants">
+          @for (grant of group.usergroups; track grant.id) {
+            <li class="grant">
+              <span class="grant-name">{{ grant.name }}</span>
+              <!-- The select beside it says the level in words, so the letter is for the eye only. -->
+              <span class="badge" aria-hidden="true">{{ short(grant.access) }}</span>
+              <label class="visually-hidden" [for]="'mg-access-' + group.id + '-' + grant.id">
+                Access for {{ grant.name }} on {{ group.name }}
+              </label>
+              <select
+                #accessSelect
+                class="field"
+                [id]="'mg-access-' + group.id + '-' + grant.id"
+                (change)="changeAccess(group, grant, accessSelect)"
+                [disabled]="saving() || !isEditable(group)"
+              >
+                <option value="0">No access</option>
+                @for (level of accessLevels; track level.value) {
+                  <option [value]="level.value" [selected]="level.value === grant.access">
+                    {{ level.label }}
+                  </option>
+                }
+              </select>
+            </li>
+          } @empty {
+            <li class="muted">No user group has access yet.</li>
+          }
+        </ul>
+
+        @if (isEditable(group)) {
+          @let noGroupsLeft = available(group).length === 0;
+          <form class="add-grant" (submit)="addGrant(group, grantSelect, grantAccess, $event)">
+            <label [for]="'mg-grant-' + group.id">
+              Grant access<span class="visually-hidden"> on {{ group.name }}</span>
+            </label>
+            <select
+              #grantSelect
+              class="field"
+              [id]="'mg-grant-' + group.id"
+              [disabled]="saving() || noGroupsLeft"
+            >
+              <option value="">{{ noGroupsLeft ? 'No more user groups' : 'Select a user group…' }}</option>
+              @for (candidate of available(group); track candidate.id) {
+                <option [value]="candidate.id">{{ candidate.name }}</option>
+              }
+            </select>
+
+            <!-- The level is chosen here rather than granted at read and raised afterwards:
+                 which level a group is being let in at is part of deciding to let it in. -->
+            <label class="visually-hidden" [for]="'mg-grant-access-' + group.id">
+              Access level to grant on {{ group.name }}
+            </label>
+            <select
+              #grantAccess
+              class="field"
+              [id]="'mg-grant-access-' + group.id"
+              [disabled]="saving() || noGroupsLeft"
+            >
+              @for (level of accessLevels; track level.value) {
+                <option [value]="level.value">{{ level.label }}</option>
+              }
+            </select>
+
+            <button type="submit" class="btn" [disabled]="saving() || noGroupsLeft">
+              Grant
+            </button>
+          </form>
+        }
+
+        <!-- Always in the page, even when empty: a live region has to exist before the text it
+             announces is put into it, or the first message is never read out. -->
+        <p
+          class="status row-status"
+          [class.error]="statusFor(group)?.error"
+          role="status"
+          aria-live="polite"
+        >
+          {{ statusFor(group)?.text }}
+        </p>
+      </li>
+    } @empty {
+      @if (!loading() && !failed()) {
+        <li class="muted">No memo groups. Create one above to start sharing memos.</li>
+      }
+    }
+  </ul>
+</div>

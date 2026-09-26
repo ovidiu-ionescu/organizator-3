@@ -10,21 +10,29 @@ WITH current_user_details AS (
     (SELECT username FROM users WHERE id = (current_setting('organizator.current_user'))::INTEGER) AS name
 ),
 user_group_users AS (
-  -- Aggregate users for each user_group_id
+  -- Aggregate users for each user_group_id.
+  -- Driven by user_group rather than by user_group_detail: a group with no members needs a
+  -- row here too, or the join below finds nothing for it and the ACL entry naming it is
+  -- dropped — so a grant on a group that is still empty could never be seen, raised or
+  -- revoked, which is exactly the group a grant is most likely to be made on.
   SELECT
-    ugd.user_group_id,
-    json_agg(
-      json_build_object(
-        'id', u.id,
-        'name', u.username
-      )
-      ORDER BY u.id
+    ug.id AS user_group_id,
+    COALESCE(
+      json_agg(
+        json_build_object(
+          'id', u.id,
+          'name', u.username
+        )
+        ORDER BY u.id
+      ) FILTER (WHERE u.id IS NOT NULL),
+      '[]'::JSON
     ) AS users_json
   FROM
-    user_group_detail ugd
-    JOIN users u ON ugd.user_id = u.id
+    user_group ug
+    LEFT JOIN user_group_detail ugd ON ugd.user_group_id = ug.id
+    LEFT JOIN users u ON ugd.user_id = u.id
   GROUP BY
-    ugd.user_group_id
+    ug.id
 ),
 filtered_user_groups AS (
   -- Get user groups relevant to the current user, along with their users
@@ -43,6 +51,9 @@ memo_groups_with_access AS (
   SELECT
     mg.id AS memo_group_id,
     mg.name AS memo_group_name,
+    -- Whether every user can see this group, not just its owner. It is why a group the
+    -- caller does not own is in this result at all, so the screen has to be able to say so.
+    mg.public AS memo_group_public,
     COALESCE(
       json_agg(
         json_build_object(
@@ -61,19 +72,25 @@ memo_groups_with_access AS (
     LEFT JOIN filtered_user_groups fug ON ma.user_group_id = fug.user_group_id
   WHERE mg.user_id = (SELECT id FROM current_user_details) OR mg.public
   GROUP BY
-    mg.id, mg.name -- mg.name is functionally dependent on mg.id
+    mg.id, mg.name, mg.public -- both are functionally dependent on mg.id
   ORDER BY
     mg.id
 )
 SELECT
   json_build_object(
     'memogroups', (
-      SELECT json_agg(
-        json_build_object(
-          'id', mgwa.memo_group_id,
-          'name', mgwa.memo_group_name,
-          'usergroups', mgwa.usergroups_array
-        )
+      -- COALESCE, because json_agg over no rows is SQL NULL, which would reach the client as
+      -- `null` rather than `[]` — an empty list is what "no memo groups" means.
+      SELECT COALESCE(
+        json_agg(
+          json_build_object(
+            'id', mgwa.memo_group_id,
+            'name', mgwa.memo_group_name,
+            'public', mgwa.memo_group_public,
+            'usergroups', mgwa.usergroups_array
+          )
+        ),
+        '[]'::JSON
       )
       FROM memo_groups_with_access mgwa
     ),

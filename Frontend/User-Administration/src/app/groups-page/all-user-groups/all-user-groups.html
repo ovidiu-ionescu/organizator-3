@@ -1,0 +1,41 @@
+<div class="panel-body">
+  <h3>All user groups</h3>
+
+  <p class="status" [class.error]="status()?.error" role="status" aria-live="polite">
+    {{ status()?.text }}
+  </p>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  }
+
+  <ul class="owners">
+    @for (owner of owners(); track owner.owner.id) {
+      <li class="owner">
+        <strong>{{ owner.owner.name }}</strong>
+        <ul class="groups">
+          @for (group of owner.groups; track group.id) {
+            <li class="group">
+              <span>{{ group.name }}</span>
+              @if (group.users.length > 0) {
+                <ul class="members">
+                  @for (member of group.users; track member.id) {
+                    <li>{{ member.name }}</li>
+                  }
+                </ul>
+              } @else {
+                <span class="muted">No members yet.</span>
+              }
+            </li>
+          } @empty {
+            <li class="muted">This user owns no groups.</li>
+          }
+        </ul>
+      </li>
+    } @empty {
+      @if (!loading() && status()?.error !== true) {
+        <li class="muted">No user groups have been defined yet.</li>
+      }
+    }
+  </ul>
+</div>
