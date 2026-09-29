@@ -1,3 +1,13 @@
+organizator (0.1.19) UNRELEASED; urgency=medium
+
+  * added memogroup management
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Sat, 26 Sep 2026 19:34:00 +0200
+organizator (0.1.18) UNRELEASED; urgency=medium
+
+  * 17 was missing the new angular files, this is the corrected version
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 22 Sep 2026 23:26:00 +0200
 organizator (0.1.17) UNRELEASED; urgency=medium
 
   * added password change into the interface
