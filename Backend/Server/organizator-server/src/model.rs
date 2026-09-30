@@ -186,9 +186,10 @@ impl From<Row> for GetWriteMemo {
                 id: row.get("o_user_id"),
                 name: row.get("o_username"),
             },
-            // FIXME: modify the SQL query to return the access level
-            //access_level: row.get("o_access_level"),
-            access_level: None,
+            // memo_write reports this now, computed by the same function the read path uses
+            // (see SQL/Updates/003). A column the function does not return panics rather than
+            // erroring, so the migration has to be applied before this binary is deployed.
+            access_level: row.get("o_access_level"),
         });
 
         Self { memo }

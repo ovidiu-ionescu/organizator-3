@@ -84,14 +84,20 @@ pub fn handle_pg_error_response(e: &PgError) -> impl IntoResponse {
     debug!("check if there's an SQLSTATE code {:#?}", e);
     if let Some(code) = e.code() {
         match code.code() {
-            // Permission denied. Most of these are raised deliberately by SQL/ when a user is not
-            // allowed to touch a memo, a group or another user's password: 2F002
-            // (modifying_sql_data_not_permitted), 2F004 (reading_sql_data_not_permitted). 42501
-            // (insufficient_privilege) is raised nowhere in SQL/, so it does come from Postgres
-            // itself and does mean a missing privilege — the message logged above tells the two
-            // apart. Logged at error level because a denial that is answered and then forgotten is
-            // exactly the one nobody notices going wrong.
-            "2F002" | "2F004" | "42501" => {
+            // Permission denied. These are raised deliberately by SQL/ when a user is not allowed
+            // to touch a memo, a group or another user's password: 2F002
+            // (modifying_sql_data_not_permitted, raised by memo_write), 2F003
+            // (prohibited_sql_statement_attempted, raised by memo_group_user_access and
+            // file_user_access) and 2F004 (reading_sql_data_not_permitted, raised by memo_read).
+            // 42501 (insufficient_privilege) is raised nowhere in SQL/, so it does come from
+            // Postgres itself and does mean a missing privilege — the message logged above tells
+            // the two apart. Logged at error level because a denial that is answered and then
+            // forgotten is exactly the one nobody notices going wrong.
+            //
+            // 2F003 was missing here, so a level-1 user writing to a shared memo was answered 500
+            // with the raw Postgres text: a deliberate refusal reaching the client as a server
+            // fault. Every code SQL/ raises deliberately is in this list now.
+            "2F002" | "2F003" | "2F004" | "42501" => {
                 error!(
                     "SQLSTATE {} denied by the database; answering 403. The message logged above says whether our own SQL raised it or a privilege is missing",
                     code.code()

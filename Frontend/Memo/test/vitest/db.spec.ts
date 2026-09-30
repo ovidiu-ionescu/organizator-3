@@ -34,12 +34,16 @@ describe("Testing the database functions", () => {
 
   it('Should save the server memo and access time should be read time', async () => {
     await db.save_memo_after_fetching_from_server({
-      memo: {        
+      memo: {
         id:        2,
         memogroup: undefined,
         title:     'Title\r\n',
         memotext:  'Body',
         savetime:  100,
+        // What the server sends for a memo the requester may write. It is load-bearing: the
+        // tests below edit this memo and expect it to be queued for saving, and a memo whose
+        // access level is missing is treated as read-only and never queued.
+        access_level: 2,
         user: {
           id:      1,
           name:    'root'
@@ -60,7 +64,11 @@ describe("Testing the database functions", () => {
         id:      1,
         name:    'root'
       },
-      readonly: true
+      readonly: false,
+      // requester id 2, memo owned by user 1
+      owned: false,
+      // just fetched, so the local and server halves of the record agree
+      dirty: false
     });
 
     const access_times = await db.access_times();
@@ -139,7 +147,13 @@ describe("Testing the database functions", () => {
       },
       text:    'Title 3\nBody3',
       timestamp: 200,
-      readonly: true,
+      // Not the read-only default that a missing access level gets when a memo is *read*: this
+      // one came back from a write the server accepted, which is proof the requester may write.
+      readonly: false,
+      // requester id 1, memo owned by user 5
+      owned: false,
+      // it went to the server, so nothing is outstanding
+      dirty: false,
     });
   });
 
@@ -179,10 +193,75 @@ describe("Testing the database functions", () => {
 
     const transaction = await db.get_memo_write_transaction();
     await db.raw_write_memo(transaction, cache_memo);
+
+    // Reading it back says so, from the server half the record keeps: the editor colours its save
+    // button from this rather than assuming a memo it just opened is in step with the server.
+    const read = await db.read_memo(3);
+    expect(read?.dirty).to.be.true;
+
     const unsaved = await db.unsaved_memos();
     unsaved.map(m => m.id).forEach(id => console.log('to save: ', id));
     expect(unsaved.length).to.be.at.least(1);;
     expect(unsaved.map(m => m.id)).to.include(3);
+  });
+
+  it('should treat a memo that arrived without an access level as read-only', async () => {
+    // Nobody told us we may write this one, so we assume we may not: it is shown read-only and
+    // an edit to it is kept in the local database but not queued for the server. The server
+    // always sends a level on a read (see get_memo_access_level_for_requester), so this is the
+    // shape of a reply that has lost the field rather than one it normally produces.
+    const memo = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id:        4,
+        memogroup: undefined,
+        title:     'No level\r\n',
+        memotext:  'Body',
+        savetime:  300,
+        user: {
+          id:      1,
+          name:    'root'
+        },
+      },
+      requester: {
+        id:   2,
+        name: 'root'
+      }
+    });
+    expect(memo.readonly).to.be.true;
+
+    await db.save_local_only({ id: 4, text: 'No level\nBody edited' });
+    const queued = (await db.unsaved_memos()).filter((m) => m.id === 4);
+    expect(queued).to.have.lengthOf(0);
+  });
+
+  it('should record a memo it has never fetched as one the server has not seen', async () => {
+    // No cache entry means no server half, and a record with no server half has to be saved.
+    // Recording the memo as its own server copy — which is what this used to do — asserts the
+    // server already holds exactly this text, and the memo is never queued.
+    await db.save_local_only({ id: 5, text: 'Never fetched\nBody' });
+
+    const unsaved = await db.unsaved_memos();
+    expect(unsaved.map((m) => m.id)).to.include(5);
+    expect((await db.read_memo(5))?.dirty).to.be.true;
+  });
+
+  it('should leave the database usable after dropping it', async () => {
+    // A connection is open, as it is in use. That is the point: a delete waits for the open
+    // connections to close, and the page's own connection is one of them, so a delete that does
+    // not close it first never runs — and every open after that queues behind the delete, which
+    // is how the editor came to sit on "Loading..." forever with a dropped cache.
+    await db.get_db();
+    const transaction = await db.get_memo_write_transaction();
+    await db.raw_write_memo(transaction, { id: 771, local: { id: 771, text: "a memo" } });
+    expect(await db.read_memo(771)).not.to.be.null;
+
+    await db.drop_database();
+
+    expect(await db.read_memo(771)).to.be.null;
+    // And it is openable again, with its stores back and taking writes.
+    const after = await db.get_memo_write_transaction();
+    await db.raw_write_memo(after, { id: 772, local: { id: 772, text: "another memo" } });
+    expect((await db.read_memo(772))?.text).to.be.equal("another memo");
   });
 
   // it('', async () => {});

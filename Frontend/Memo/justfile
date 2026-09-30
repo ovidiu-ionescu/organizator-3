@@ -1,13 +1,14 @@
 www := "/var/www/organizator.ro"
 
-# default target
+# default target, calls deploy-deb
 default: deploy-deb
 
 build:
   reset
   npm run build
-  # not sure if this does anything useful, maybe remove it?
-  cp favicon-green.ico build/main/favicon.ico
+  # The deployed site keeps the blue tulip; the dev server serves the green one instead, from
+  # vite.config.ts, so that a tab shows at a glance which of the two it is.
+  cp favicon.ico build/main/favicon.ico
 
 install-dependencies:
   npm update
@@ -33,5 +34,5 @@ deb: vite
 # deploy the compiled modules (one js with everything)
 deploy-deb: deb
   cp -r deb/. {{www}}
-  cp favicon-green.ico {{www}}/favicon.ico  
+  cp favicon.ico {{www}}/favicon.ico
 

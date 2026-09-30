@@ -11,6 +11,15 @@ export interface Memo {
   timestamp?:   number;
   user?:        IdName;
   readonly?:    boolean;
+  /// Whether the requester owns this memo. Only the owner may put it in a different group, so
+  /// the editor needs to know. Left undefined where it is not known — a memo cached before this
+  /// field existed, or one that has never been to the server — and the UI treats "not known" as
+  /// not its business to restrict.
+  owned?:       boolean;
+  /// Whether this holds changes the server has not seen. Read from the cached record, which
+  /// keeps the server's copy beside the local one; undefined when the memo is not in the cache
+  /// at all, as an unsaved new memo is.
+  dirty?:       boolean;
 }
 
 export interface IdName {

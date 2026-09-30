@@ -17,27 +17,9 @@ import {alignedText, digestMessage} from "./util.js";
 import { promptPassword} from "./password.js";
 
 // @ts-ignore
-import init, {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
+import {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
 import {MemoGroupList} from "./group-list";
-
-let WASM_LOADED = false;
-let WASM_LOADING = undefined;
-
-const loadWasm = async () => {
-  if (WASM_LOADED) return;
-  konsole.log("wasm init", WASM_LOADING);
-  if (!WASM_LOADING) {
-    konsole.log("Initiate wasm loading");
-    WASM_LOADING = init();
-  } else {
-    konsole.log("wasm already loading", WASM_LOADING);
-  }
-  await WASM_LOADING;
-  WASM_LOADED = true;
-  konsole.log("wasm was loaded, from now on it should not load again");
-};
-
-//loadWasm();
+import {wasm_ready} from "./wasm.js";
 
 const template = `
     <style>
@@ -51,7 +33,7 @@ const template = `
         flex-flow: column;
         flex: 1;
       }
-      T extends <T>(value: T | PromiseLike<T>) => void#source {
+      #source {
         resize: none;
         width: 100%;
         min-height: 20px;
@@ -161,8 +143,10 @@ const template = `
         word-break: break-all;
 */
       }
-      #source {
-        flex: 1;
+      #status {
+        padding: 2px;
+        /* a report is one line per memo that was left behind */
+        white-space: pre-line;
       }
       
       div[data-gen="barcode"] {
@@ -203,6 +187,9 @@ const template = `
         <img-inline-svg id="share_button" src="/images/share-white-48dp.svg" title="show sharing status"></img-inline-svg>
         <img-inline-svg id="journal_button" src="/images/menu_book-white-48dp.svg" title="event journal (for debugging)"></img-inline-svg>
       </nav>
+      <!-- Above the memo rather than below it: what a save did is read before the text is, not
+           after scrolling to the end of it. -->
+      <footer id="status"></footer>
       <!-- <img id="expand_img" src="/images/ic_expand_more_48px.svg"> -->
       <div id="presentation">Loading...</div>
       <div id="editing" style="display: none">
@@ -223,7 +210,6 @@ const template = `
         </div>
         <textarea id="source" autocomplete="off" ></textarea>
       </div>
-      <footer id="status"></footer>
     </div>
 `;
 
@@ -265,9 +251,15 @@ export class MemoEditor extends HTMLElement {
   private _user: Undef<IdName>;
   private _timestamp: Undef<number>;
   private _readonly: Undef<boolean>;
+  private _owned: Undef<boolean>;
   private _uploading: Undef<boolean>;
   private _digest: Undef<string>;
   private _password: Undef<string>;
+  /// The text as it stood when it was last in step with the local database, and whether the
+  /// cached record says that copy still holds changes the server has not seen. Between saves
+  /// these two are what the save button's colour is decided from.
+  private _saved_text: Undef<string>;
+  private _dirty: Undef<boolean>;
 
   constructor() {
     super();
@@ -360,6 +352,9 @@ export class MemoEditor extends HTMLElement {
         editor.value = s.substring(0, start_offset) + toInsert + s.substring(end_offset);
         editor.selectionStart = start_offset;
         editor.selectionEnd = start_offset + toInsert.length;
+        // Writing the value in code raises no input event, and the memo has changed just as much
+        // as if it had been typed — the button should say so.
+        editor.dispatchEvent(new Event("input"));
       }
     };
 
@@ -396,6 +391,9 @@ export class MemoEditor extends HTMLElement {
       await server_comm.save_all();
     });
 
+    // React to an edit as it is made, rather than when the memo next reaches the database.
+    this.$.source.addEventListener("input", () => this._show_save_colour());
+
     // pasting links
     this.$.source.addEventListener("paste", (event) => {
       const text = event.clipboardData?.getData("text/plain");
@@ -416,6 +414,7 @@ export class MemoEditor extends HTMLElement {
           editor.value = new_text;
           editor.selectionStart = interestPoint;
           editor.selectionEnd = interestPoint;
+          editor.dispatchEvent(new Event("input"));
         }
       }
     });
@@ -457,7 +456,11 @@ export class MemoEditor extends HTMLElement {
     raspandac.on("savingEvent", (event) => {
       konsole.log("Received saving event", event);
       this.$.status.innerText = event.detail;
-      this._memoId = undefined;
+      // Not this._memoId = undefined. A status line is a message to show, not a reason to forget
+      // which memo is open: save_local_only returns early when there is no memo, so clearing it
+      // here meant a single database error — the only thing that emits this today — stopped the
+      // editor saving anything at all until the page was reloaded. show_status clears it where
+      // that is the point, because there really is no memo to hold.
     });
 
     raspandac.on("saveAllStatus", event => {
@@ -466,6 +469,14 @@ export class MemoEditor extends HTMLElement {
       );
       this.$.save_all_button.style.color = (event as CustomEvent).detail;
       konsole.log(`Button color is: [${this.$.save_all_button.style.color}]`);
+    });
+
+    // What a save-all run did with the memos it could not save. Deliberately not the
+    // savingEvent above: that one clears the memo this editor is holding, and a report about a
+    // save is no reason to stop editing.
+    raspandac.on("saveAllReport", event => {
+      konsole.log(`Received saveAllReport event, detail ${event.detail}`);
+      this.$.status.innerText = event.detail;
     });
 
     raspandac.on("memoChangeId", (event: CustomEvent) => {
@@ -557,7 +568,7 @@ export class MemoEditor extends HTMLElement {
     if (!text.startsWith("#")) {
       text = "```\n" + text + "\n```";
     }
-    loadWasm().then(() => {
+    wasm_ready().then(() => {
       this.$.presentation.innerHTML = process_markdown(text, 16);
     });
   }
@@ -610,23 +621,55 @@ export class MemoEditor extends HTMLElement {
     const digest = await digestMessage(current_memo.text);
     if(this._digest === digest && this._memogroup === current_memo.memogroup) {
       konsole.log("save_local_only, triggered by", cause, "; digest and memogroup are identical, no need to save");
+      // Nothing was written, so nothing about the record has changed — but the reader may have
+      // typed and undone since the button was last coloured, so let it catch up.
+      this._show_save_colour();
       return;
     }
     konsole.log(`save_local_only ${this._memoId}, triggered by: ${cause}`);
-    const saved_memo = await db.save_local_only(current_memo);
+    let saved_memo: Memo;
+    try {
+      saved_memo = await db.save_local_only(current_memo);
+      // Say so, because the record has changed and anything drawn from it is now out of date.
+      // The list of titles is the one that matters: it draws its markers from the cache, and
+      // without this a memo edited and left behind went on looking untouched until the list
+      // happened to be drawn again.
+      events.memo_saved_locally(this._memoId);
+    } catch (e) {
+      // Writing to this device's database failed, which is the one thing the red button means:
+      // the memo is not on the server and it is not here either, so there is nothing left to
+      // retry from. Failing to *sync* is the other thing — the memos are safe locally and the
+      // button stays orange, where "not on the server yet" already lives.
+      konsole.error(
+        `save_local_only ${this._memoId} could not be written to the local database`,
+        e
+      );
+      events.save_all_status(events.SaveAllStatus.Failed);
+      // The red button alone says something is wrong; this says what, and what to do about it.
+      // The text on screen is all that is left of the memo — the database did not take it — so
+      // copying it out is the one thing that helps.
+      this.$.status.innerText =
+        `Could not save memo ${this._memoId} to this device's database, and it is not on the ` +
+        `server either. Copy the text somewhere safe before closing the page.`;
+      return;
+    }
     if (saved_memo.timestamp && this._timestamp && (saved_memo.timestamp > this._timestamp)) {
       konsole.log(
-        `save_local_only ${this._memoId}, save happened, trigger dirty green, current timestamp: ${this._timestamp ? new Date(this._timestamp).toIsoString(): "none"}, cache timestamp ${new Date(saved_memo.timestamp).toIsoString()}`
+        `save_local_only ${this._memoId}, save happened, current timestamp: ${this._timestamp ? new Date(this._timestamp).toIsoString(): "none"}, cache timestamp ${new Date(saved_memo.timestamp).toIsoString()}`
       );
       this._timestamp = saved_memo.timestamp;
       this._display_timestamp();
-      events.save_all_status(events.SaveAllStatus.Dirty);
       this._digest = digest;
     } else {
       konsole.log(
         `Save local of memo ${this._memoId} did not happen, we didn't get a new timestamp, old ${this._timestamp}, new ${saved_memo.timestamp}`
       );
     }
+    // Whatever the database made of it, this is what the editor has written and what the record
+    // now says about it — so this is what the button should be coloured from.
+    this._saved_text = current_memo.text;
+    this._dirty = saved_memo.dirty;
+    this._show_save_colour();
   }
 
   new_memo() {
@@ -640,7 +683,14 @@ export class MemoEditor extends HTMLElement {
     this.$.source.value = "";
     this.$.edit_memogroup.value = "-1";
     this._readonly = false;
+    // Whoever writes a new memo owns it, so the group is theirs to choose from the start.
+    this._show_memogroup_editable(true);
     this._digest = undefined;
+    // Empty, unsaved and unchanged: neutral, like any other memo just opened. Nothing is stored
+    // yet, so the empty text is what the editor has written.
+    this._saved_text = "";
+    this._dirty = false;
+    this._show_save_colour();
     this._show_editor();
   }
 
@@ -684,7 +734,15 @@ export class MemoEditor extends HTMLElement {
     }
     this._timestamp = memo.timestamp;
     this._readonly = !!memo.readonly;
+    this._show_memogroup_editable(memo.owned);
     this._display_timestamp();
+
+    // Whatever the memo before this one did is not news about this one. The text now in the
+    // editor is what was last written, and the cached record says whether that copy still holds
+    // changes the server has not seen — from those two the button gets its colour.
+    this._saved_text = memo.text;
+    this._dirty = memo.dirty;
+    this._show_save_colour();
 
     this._show_presentation();
   }
@@ -703,6 +761,12 @@ export class MemoEditor extends HTMLElement {
     this.$.edit_memogroup.value = "-1";
     this._timestamp = undefined;
     this._readonly = true;
+    // There is no memo here, so there is nothing to change the group of.
+    this._show_memogroup_editable(undefined);
+    // Neither is there anything to save, and no memo for a text to be in step with.
+    this._saved_text = undefined;
+    this._dirty = undefined;
+    events.save_all_status(events.SaveAllStatus.Neutral);
     this._display_timestamp();
     this._show_presentation();
   }
@@ -712,6 +776,44 @@ export class MemoEditor extends HTMLElement {
       return "";
     }
     this.$.edit_timestamp.innerText = new Date(this._timestamp).toIsoString();
+  }
+
+  /**
+   * Colour the save button for what is in the editor at this moment.
+   *
+   * The button follows the editing, not only the database, and it says which of the two places
+   * the memo has reached. Text that has moved on from what was last written is in this browser
+   * and nowhere else, which is its own colour; once written it is in the local database and
+   * waiting for the server, which is the other one. Putting the text back the way it was puts
+   * the colour back with it, rather than leaving it claiming a change that is no longer there.
+   */
+  _show_save_colour() {
+    const edited = this.$.source.value !== this._saved_text;
+    if (edited) {
+      events.save_all_status(events.SaveAllStatus.Edited);
+    } else if (this._dirty) {
+      events.save_all_status(events.SaveAllStatus.Dirty);
+    } else {
+      events.save_all_status(events.SaveAllStatus.Neutral);
+    }
+  }
+
+  /**
+   * Whether the reader may put this memo in another group: only its owner may, and the server
+   * refuses it for anybody else (2F002). This only takes the control away — enforcement is the
+   * trigger on memo, not a disabled dropdown.
+   *
+   * A memo that has not said whose it is keeps the control enabled. Unknown ownership is not a
+   * reason to take an action away from the owner, and a memo that is only cached, or being
+   * edited offline, may not have been asked yet. If it turns out to be somebody else's, the save
+   * is refused and the reader is told.
+   */
+  _show_memogroup_editable(owned: Undef<boolean>) {
+    this._owned = owned;
+    const list = this.$.edit_memogroup as unknown as MemoGroupList;
+    if (list) {
+      list.readonly = owned === false;
+    }
   }
 
   async _show_sharing() {

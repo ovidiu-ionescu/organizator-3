@@ -13,11 +13,18 @@ pub enum QueryType {
     Search,
 }
 
+/// Fetch at most one row, or `None` when the query matches nothing.
+///
+/// A `query_one` would answer zero rows with a `RowNotFound` that carries no SQLSTATE code, so
+/// `handle_pg_error_response` has nothing to match on and falls through to a 500 — a memo the
+/// caller is not allowed to see then looks to the client like a broken server. RLS filters such
+/// a row out rather than raising, so "not there, or not yours" arrives here as an ordinary
+/// zero-row result, and each caller decides what that means for its own endpoint.
 pub async fn get_single<'a, T>(
     client: &Client,
     username: &'a str,
     params: &[&(dyn ToSql + Sync)],
-) -> Result<(T, Requester<'a>), Error>
+) -> Result<(Option<T>, Requester<'a>), Error>
 where
     T: DBPersistence + From<Row>,
 {
@@ -31,7 +38,7 @@ where
 
     let set_user_params: &[&(dyn ToSql + Sync)] = &[&username];
     let set_user_future = client.query_one(&set_user, set_user_params);
-    let stmt_future = client.query_one(&stmt, params);
+    let stmt_future = client.query_opt(&stmt, params);
 
     let commit_statement = client.prepare_cached("COMMIT").await?;
     let commit_future = client.execute(&commit_statement, &[]);
@@ -41,8 +48,12 @@ where
     let user_id = u.get::<_, i32>(0);
     let requester = Requester::new(user_id, username);
     debug!("Requester is {:?}", requester);
-    trace!("Received one row from database");
-    Ok((T::from(row), requester))
+    if row.is_some() {
+        trace!("Received one row from database");
+    } else {
+        trace!("Received no row from database");
+    }
+    Ok((row.map(T::from), requester))
 }
 
 pub async fn get_multiple<'a, T>(

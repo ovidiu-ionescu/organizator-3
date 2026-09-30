@@ -1,3 +1,14 @@
+organizator (0.1.21) UNRELEASED; urgency=medium
+
+  * improvements to the memo frontend
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 30 Sep 2026 23:04:00 +0200
+organizator (0.1.20) UNRELEASED; urgency=medium
+
+  * protect columns in memo with triggers. This changes the write_memo
+    function as well
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Wed, 30 Sep 2026 16:35:00 +0200
 organizator (0.1.19) UNRELEASED; urgency=medium
 
   * added memogroup management

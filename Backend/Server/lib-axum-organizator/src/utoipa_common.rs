@@ -22,9 +22,11 @@ impl Modify for SecurityAddon {
     }
 }
 
+/// The body `AppError` actually answers with. Both services route their errors through it, so
+/// the field is `error`; a schema that says `message` documents a response no handler sends.
 #[derive(Serialize, ToSchema)]
 pub struct ErrorMessage {
-    pub message: String,
+    pub error: String,
 }
 
 #[derive(IntoResponses)]

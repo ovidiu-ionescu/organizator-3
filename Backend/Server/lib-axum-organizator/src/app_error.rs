@@ -13,11 +13,19 @@ use crate::postgres::handle_pg_error_response;
 pub enum AppError {
     Internal(Box<dyn StdError>),
     BadRequest(String),
+    NotFound(String),
 }
 
 impl AppError {
     pub fn bad_request(msg: impl Into<String>) -> Self {
         AppError::BadRequest(msg.into())
+    }
+
+    /// A refusal the caller can read. Distinct from a bare status: the router's fallback
+    /// answers an unrouted path with a 404 that has no body at all, so a 404 carrying a
+    /// reason is a real answer about the resource rather than a missing endpoint.
+    pub fn not_found(msg: impl Into<String>) -> Self {
+        AppError::NotFound(msg.into())
     }
 }
 
@@ -26,6 +34,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, public_message) = match self {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.to_string()),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.to_string()),
             AppError::Internal(err) => {
                 // Log the actual error internally for debugging
                 tracing::error!("Internal server error: {:?}", err);

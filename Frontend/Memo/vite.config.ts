@@ -58,6 +58,13 @@ export default defineConfig({
                     if(url === '/password.html') {
                         req.url = '/build/main/password.html';
                     }
+                    // No page links an icon, so the browser asks for /favicon.ico by default. In
+                    // development that is the green tulip, so one glance at the tab says which
+                    // site you are on; the deployed one stays blue. configureServer only runs for
+                    // the dev server, so the build is untouched.
+                    if(url === '/favicon.ico') {
+                        req.url = '/favicon-green.ico';
+                    }
 
                     next();
                 });

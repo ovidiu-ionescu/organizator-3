@@ -90,7 +90,15 @@ export const server2local = (server_memo_reply: ServerMemoReply): Memo => {
   memo.memogroup = server_memo.memogroup;
   memo.timestamp = server_memo.savetime || undefined;
   memo.user = server_memo.user;
-  memo.readonly = server_memo.access_level != null && server_memo.access_level < 2;
+  // A memo that arrives without an access level is one we were not told we may write, so treat
+  // it as readable but not editable. The write path is the exception, and it knows better than
+  // this function does — see save_memo_after_saving_to_server.
+  memo.readonly = server_memo.access_level == null || server_memo.access_level < 2;
+
+  // Who owns it, which is a different question from what the requester may do with it: a memo
+  // shared at level 2 is writable by somebody who is not its owner, and only the owner may move
+  // it to another group. The reply answers it by naming both sides.
+  memo.owned = server_memo_reply.requester?.id === server_memo.user?.id;
 
   konsole.log(`OI: ${memo}`);
   return memo;
@@ -172,10 +180,17 @@ export const make_cache_memo = (
   }
 
   if (!cache_memo) {
+    // Nothing cached says what the server holds, so nothing here claims to know. A record with no
+    // server half counts as needing to be saved, which is the safe answer for a memo that has
+    // never been fetched — and the truthful one, since nobody has looked. It used to put the memo
+    // itself in both halves, which asserts the server already has exactly this text: a memo whose
+    // first write was local then read as in step with a server that had never seen it.
+    //
+    // A memo that really has just come from the server is recorded by make_synced_cache_memo,
+    // which is the one place both halves are known.
     return {
       id: memo.id,
       local: memo,
-      server: memo,
     };
   } else {
     // we update the local part in the cache
@@ -186,6 +201,20 @@ export const make_cache_memo = (
     };
   }
 };
+
+/**
+ * A record for a memo whose two halves agree: just fetched from the server, or just written to
+ * it.
+ *
+ * Two fields holding equal values, never one object held twice. The local half is the one that
+ * gets edited, and a memo edited through a shared object leaves the record looking as though the
+ * server already had the change — which is how an edit stops being queued for saving.
+ */
+export const make_synced_cache_memo = (memo: Memo): CacheMemo => ({
+  id: memo.id,
+  local: memo,
+  server: { ...memo },
+});
 
 const headerStartRegex = /^#+\s+/;
 

@@ -55,6 +55,25 @@
         display: flex;
         flex-flow: column;
       }
+      #titles_info {
+        margin: 5px 0;
+        padding: 5px;
+        border-bottom: 1px solid #555;
+        font-size: 0.9rem;
+      }
+      #titles_info summary {
+        cursor: pointer;
+      }
+      #titles_info summary a {
+        margin-left: 10px;
+        font-size: 0.85rem;
+      }
+      #titles_info p {
+        margin: 8px 0 4px 0;
+        color: #f1c40f; /* same amber as the dirty marker in the list */
+        /* a report of a save is one line per memo that was left behind */
+        white-space: pre-line;
+      }
       #memoTitlesList {
         list-style: none;
         padding-left: 0;
@@ -106,6 +125,19 @@
             <span style="display:inline-block; width: 48px;">&nbsp;</span>
             <a href="/memo/new">New</a>
         </nav>
+        <!-- Where the list came from, and why, when that is worth explaining. Kept behind a
+             summary because the list itself can be long enough that a standing banner costs
+             more room than the message is worth. The offer to cache everything sits on the
+             summary line, where it is visible with the fold closed, and only while the server is
+             the one answering. -->
+        <details id="titles_info">
+          <summary>
+            <span id="titles_info_summary">Memos from the server</span>
+            <a href="#" id="cache_all" hidden
+               title="fetch every memo into this device, so the app works with the server down">Cache all</a>
+          </summary>
+          <p id="titles_info_message"></p>
+        </details>
         <ul id="memoTitlesList"></ul>
         <footer style="text-align: right;"><a href="/memo/$$$admin">Admin</a><a href="/journal">Journal</a></footer>
       </section>

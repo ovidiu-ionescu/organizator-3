@@ -166,9 +166,17 @@ async fn get_memo(
     Extension(requester): Extension<User>,
     DbConn(db_client): DbConn,
 ) -> HandlerResponse {
-    let memo: (Memo, Requester) = db::get_single(&db_client, requester.id(), &[&memo_id]).await?;
+    let (memo, requester): (Option<Memo>, Requester) =
+        db::get_single(&db_client, requester.id(), &[&memo_id]).await?;
 
-    build_json_response(memo)
+    // A memo that does not exist and a memo the caller has no access to are the same answer on
+    // purpose: distinguishing them would let a caller probe which ids exist. The `memo` RLS
+    // policy already collapses both into "no row", so this is the only place the two could be
+    // told apart, and neither is a server fault.
+    match memo {
+        Some(memo) => build_json_response((memo, requester)),
+        None => Err(AppError::not_found(format!("memo {memo_id} not found"))),
+    }
 }
 
 #[derive(serde::Deserialize, Debug, Clone, ToSchema)]
@@ -210,7 +218,7 @@ async fn write_memo(
         uuids.len(),
         uuids
     );
-    let memo: (GetWriteMemo, Requester) = db::get_single(
+    let (memo, requester): (Option<GetWriteMemo>, Requester) = db::get_single(
         &db_client,
         username,
         &[
@@ -224,7 +232,12 @@ async fn write_memo(
         ],
     )
     .await?;
-    build_json_response(memo)
+
+    // `memo_write` reports a memo that was deleted mid-write by returning a row whose id is
+    // NULL, so it does not signal that case by returning no row — a missing row here means the
+    // statement failed to report at all, which is not something the caller can act on.
+    let memo = memo.ok_or_else(|| AppError::from("memo_write returned no row"))?;
+    build_json_response((memo, requester))
 }
 
 /// Get all memo groups for the current logged in user.
@@ -339,14 +352,21 @@ async fn file_auth(
         .as_str()
         .parse::<uuid::Uuid>()?;
     let level: i32 = 1;
-    let file_auth: (FilePermission, Requester) = db::get_single(
+    let (file_auth, requester): (Option<FilePermission>, Requester) = db::get_single(
         &db_client,
         requester.id(),
         &[&uuid, &requester.id(), &level],
     )
     .await?;
+
+    // `file_user_access` is defined in the database rather than in SQL/, so whether it reports
+    // "no access" as no row or as a row carrying no rights is not visible from here. Answering
+    // the zero-row case as a 500 keeps this endpoint's previous outcome rather than inventing a
+    // status for a condition whose meaning has not been established.
+    let file_auth =
+        file_auth.ok_or_else(|| AppError::from(format!("no file access row for {uuid}")))?;
     trace!("File auth for {uuid} is {:?}", file_auth);
-    build_json_response(file_auth)
+    build_json_response((file_auth, requester))
 }
 
 /// Explicit permissions for a memogroup.

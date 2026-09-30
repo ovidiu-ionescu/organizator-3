@@ -12,7 +12,7 @@
     "copy:images": "rsync -r images build/main/",
     "copy:worker": "rsync -r build_worker/ build",
     "worker:increment": "node src/build_tools/service_worker_versioner.js",
-    "build": "run-s build:dom build:worker copy:worker worker:increment copy:js copy:html copy:images",
+    "build": "run-s build:dom copy:js copy:html copy:images",
     "_test": "echo \"Error: no test specified\" && exit 1",
     "prettier": "prettier --require-pragma --write src",
     "test": "vitest",
@@ -21,7 +21,8 @@
     "coverage": "vitest run --coverage",
     "dev": "vite",
     "vite:build": "vite build",
-    "buildv": "run-s build vite:build"
+    "buildv": "run-s build vite:build",
+    "playwrite-firefox": "npx playwright install --with-deps firefox"
   },
   "author": "Ovidiu Ionescu",
   "license": "GPL-3.0-or-later",

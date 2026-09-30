@@ -30,7 +30,7 @@ pub fn check_ssl_header(request: &mut Request) -> bool {
             return false;
         }
         None => {
-            info!("No {SSL_HEADER_VERIFY} header, can not allow access without SSL verification");
+            debug!("No {SSL_HEADER_VERIFY} header, can not allow access without SSL verification");
             return false;
         }
     }

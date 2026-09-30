@@ -12,6 +12,7 @@ import {
   Memo,
   MemoGroups,
   MemoStats,
+  MemoTitleListDTO,
   PermissionDetailLine,
   ServerMemoReply,
   Undef,
@@ -23,14 +24,15 @@ import * as memo_processing from "./memo_processing.js";
 import {MemoEditor} from "./memo-editor.js";
 // @ts-ignore
 import {merge} from "../pkg/organizator_wasm.js";
+import {wasm_ready} from "./wasm.js";
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(public status: number, message: string) {
     super(`HTTP Error ${status}: ${message}`);
     this.name = 'HttpError';
   }
 }
-class UnauthenticatedError extends HttpError {
+export class UnauthenticatedError extends HttpError {
   constructor(message: string = `No session, need to log in`) {
     super(401, message);
     this.name = 'UnauthenticatedError';
@@ -79,85 +81,133 @@ export const save_to_server = async (memo: Memo): Promise<ServerMemoReply> => {
   }
 };
 
+/// What went wrong, for a reader rather than a log. Not everything thrown here is an Error:
+/// read_memo throws a plain object with a message on it.
+const describe_failure = (e: unknown): string => {
+  if (e instanceof Error) {
+    return e.message;
+  }
+  if (typeof e === "object" && e !== null && "message" in e) {
+    return String((e as { message: unknown }).message);
+  }
+  return String(e);
+};
+
+/// How many failures the report spells out before it stops listing them.
+const REPORTED_FAILURES = 5;
+
 export const save_all = async () => {
   const unsaved_memos = await db.unsaved_memos();
   if (unsaved_memos.length) {
-    events.save_all_status(events.SaveAllStatus.Processing);
+    events.save_all_status(events.SaveAllStatus.Dirty);
   }
-  // konsole.log({unsaved_memos});
-  let failed = false;
-  // save to server and get the server instance
-  for (const memo of unsaved_memos) {
-    const id = memo.id;
-    if (memo.id > -1) {
-      // this is an existing memo, might have changed on the server since we got it
-      const server_memo_reply = await read_memo(id);
-      const server_memo = server_memo_reply.memo;
-      if (!server_memo && !memo.local.text) {
-        konsole.log(
-          `The memo ${memo.id} is not present on the server and has no local content, delete it`
-        );
-        await db.delete_memo(memo.id);
-        continue;
-      }
-      if (
-        server_memo &&
-        server_memo.savetime &&
-        memo.server &&
-        memo.server.timestamp &&
-        server_memo.savetime > memo.server.timestamp
-      ) {
-        konsole.log(
-          `compute a merge, the server memo has been modified since last save`,
-          memo.id
-        );
-        const remote_memo = memo_processing.server2local(server_memo_reply);
-        memo.local.text = merge(memo.server.text, memo.local.text, remote_memo.text);
 
-        // if this is loaded in the current editor we need to swap in the new text
-        const editor = <MemoEditor>document.getElementById("editor");
-        if (editor.memoId === memo.id) {
-          konsole.log(
-            `Load into the editor the merged result for memo ${memo.id}`
-          );
-          await editor.set_memo(memo.local, true);
-        }
-        // events.save_all_status(events.SaveAllStatus.Failed);
-        // throw `Time conflict saving memo ${memo.id}`;
-      }
-    } else {
-      if (!memo.local.text) {
-        konsole.log(`New memo ${memo.id} has no content, delete it`);
-        await db.delete_memo(memo.id);
-        continue;
-      }
+  const failures: string[] = [];
+  let session_gone = false;
+  let local_failure = false;
+
+  // Save to the server and get the server instance, one memo at a time.
+  for (const memo of unsaved_memos) {
+    // A memo that will not save is no reason to leave the others unsaved: a refusal, a memo that
+    // has gone, or a fault says nothing about the next one, and stopping here would leave the
+    // rest dirty for no reason. The exception is a session that has gone — then none of them can
+    // save, and asking each one in turn would only produce the same failure a few more times.
+    // Everything is inside the try, including reading the server's copy: that read could throw
+    // out of the loop before, which is what made one bad memo abandon the run.
+    if (session_gone) {
+      failures.push(`memo ${memo.id}: not attempted, the session had expired`);
+      continue;
     }
 
+    const id = memo.id;
     try {
+      if (memo.id > -1) {
+        // this is an existing memo, might have changed on the server since we got it
+        const server_memo_reply = await read_memo(id);
+        const server_memo = server_memo_reply.memo;
+        if (!server_memo && !memo.local.text) {
+          konsole.log(
+            `The memo ${memo.id} is not present on the server and has no local content, delete it`
+          );
+          await db.delete_memo(memo.id);
+          continue;
+        }
+        if (
+          server_memo &&
+          server_memo.savetime &&
+          memo.server &&
+          memo.server.timestamp &&
+          server_memo.savetime > memo.server.timestamp
+        ) {
+          konsole.log(
+            `compute a merge, the server memo has been modified since last save`,
+            memo.id
+          );
+          const remote_memo = memo_processing.server2local(server_memo_reply);
+          await wasm_ready();
+          memo.local.text = merge(memo.server.text, memo.local.text, remote_memo.text);
+
+          // if this is loaded in the current editor we need to swap in the new text
+          const editor = <MemoEditor>document.getElementById("editor");
+          if (editor.memoId === memo.id) {
+            konsole.log(
+              `Load into the editor the merged result for memo ${memo.id}`
+            );
+            await editor.set_memo(memo.local, true);
+          }
+        }
+      } else {
+        if (!memo.local.text) {
+          konsole.log(`New memo ${memo.id} has no content, delete it`);
+          await db.delete_memo(memo.id);
+          continue;
+        }
+      }
+
       const server_memo = await save_to_server(memo.local);
       await db.save_memo_after_saving_to_server(id, server_memo);
     } catch (e) {
-      if(e instanceof UnauthenticatedError) {
-        throw e;
+      if (e instanceof UnauthenticatedError) {
+        session_gone = true;
       }
-      failed = true;
+      // A server that refused or a session that went leaves the memo where it was and it can be
+      // tried again. Anything else came out of this device's own database, and that is what the
+      // button is red for.
+      if (!(e instanceof HttpError)) {
+        local_failure = true;
+      }
+      konsole.error(`save_all: memo ${memo.id} was not saved`, e);
+      failures.push(`memo ${memo.id}: ${describe_failure(e)}`);
     }
   }
 
-  // .map(async memo => ({
-  //   id:          memo.id,
-  //   server_memo: await server_comm.save_to_server(memo.local)
-  // }))
-  // remove the old memo and save the new one into local cache
-  // .forEach(async m => {
-  //   const memo = await m;
-  //   if(memo.id < 0) {
-  //     db.delete_memo(id);
-  //   }
-  //   db.saveMemoAfterSavingToServer(memo.server_memo);
-  // });
+  const saved = unsaved_memos.length - failures.length;
+  konsole.log(`save_all: ${saved} of ${unsaved_memos.length} memos saved`);
 
-  if (!failed) events.save_all_status(events.SaveAllStatus.Success);
+  if (!failures.length) {
+    events.save_all_status(events.SaveAllStatus.Success);
+    return;
+  }
+
+  // The button says where the memos are, not how the run went. Orange means "not on the server
+  // yet", which is exactly where a run that could not sync leaves them: it was orange before the
+  // run and it stays orange. Red is for memos that are not on this device either — the one state
+  // a reader cannot recover from by trying again.
+  if (local_failure) {
+    events.save_all_status(events.SaveAllStatus.Failed);
+  }
+
+  // Say what happened rather than only colouring the button: which memos were left behind, and
+  // why, is the part a reader can act on.
+  const listed = failures.slice(0, REPORTED_FAILURES);
+  const rest = failures.length - listed.length;
+  events.save_all_report(
+    [
+      `${saved} of ${unsaved_memos.length} memos saved; ${failures.length} did not.`,
+      ...listed,
+      ...(rest > 0 ? [`and ${rest} more, see the journal`] : []),
+    ].join("\n")
+  );
 };
 
 const get_options: RequestInit = {
@@ -190,11 +240,109 @@ export const read_memo = async (id: number): Promise<ServerMemoReply> => {
       id,
       server_response.status
     );
-    throw {
-      errorCode: server_response.status,
-      message: `Failed to fetch memo ${id}`,
-    };
+    // Thrown as the same kinds a failed save throws, so a caller can tell "the server would not"
+    // from "this device could not", and so a session that has gone is recognised during a read
+    // as well as during a write.
+    if (server_response.status === 401) {
+      throw new UnauthenticatedError(`No session while reading memo ${id}`);
+    }
+    throw new HttpError(server_response.status, `Failed to fetch memo ${id}`);
   }
+};
+
+/**
+ * The memo titles the server holds for the reader.
+ */
+export const read_memo_titles = async (): Promise<MemoTitleListDTO> => {
+  konsole.log(`Fetching the memo titles from the server`);
+  const server_response = await fetch(
+    `/organizator/memo/?request.preventCache=${+new Date()}`,
+    get_options
+  );
+  if (server_response.status === 200) {
+    return await server_response.json();
+  }
+  konsole.error("Failed to fetch memo titles, server status", server_response.status);
+  if (server_response.status === 401) {
+    throw new UnauthenticatedError(`No session while listing the memos`);
+  }
+  throw new HttpError(server_response.status, `Failed to list the memos`);
+};
+
+/// What caching the whole library came to.
+export interface CacheAllResult {
+  cached: number;
+  total: number;
+  failures: string[];
+}
+
+/// How many memos are fetched at once. Each one is a request of its own, and a browser will only
+/// open about six connections to a host, so asking for more than that queues here rather than
+/// getting anything more done.
+export const SIMULTANEOUS_FETCHES = 6;
+
+/**
+ * Fetch every memo the server has and write it into the local database, so the data is here
+ * whether or not the server is.
+ *
+ * Each memo goes through save_memo_after_fetching_from_server, which is the strategy the rest of
+ * the app uses: a memo that has changed on both sides is merged rather than one version being
+ * dropped. That is the point of taking the whole library — anything edited here while offline
+ * survives the trip back to the server.
+ *
+ * Several memos are in flight at once. One at a time cost a full round trip, a transaction on the
+ * server and a transaction here for every memo, and with a library of any size that is the whole
+ * of the time it takes; a memo depends on no other, so there is nothing to serialise.
+ *
+ * One memo failing does not abandon the rest, for the same reason a save-all does not: a refusal
+ * or a fault for one says nothing about the next. A session that has gone does stop it, because
+ * then none of them can be fetched.
+ */
+export const cache_all_memos = async (
+  on_progress?: (done: number, total: number) => void
+): Promise<CacheAllResult> => {
+  const { memos } = await read_memo_titles();
+  const failures: string[] = [];
+  let done = 0;
+  let next = 0;
+  let session_gone: UnauthenticatedError | undefined;
+
+  const fetch_memos = async (): Promise<void> => {
+    while (!session_gone) {
+      const index = next++;
+      if (index >= memos.length) {
+        return;
+      }
+      const memo = memos[index];
+
+      try {
+        const server_memo_reply = await read_memo(memo.id);
+        await db.save_memo_after_fetching_from_server(server_memo_reply);
+      } catch (e) {
+        if (e instanceof UnauthenticatedError) {
+          // Nothing more can be fetched, and the caller sends the reader to log in. The memos
+          // already in flight or waiting here are left; they would only fail the same way.
+          session_gone = e;
+          return;
+        }
+        konsole.error(`cache_all_memos: memo ${memo.id} could not be cached`, e);
+        failures.push(`memo ${memo.id}: ${describe_failure(e)}`);
+      }
+      done++;
+      on_progress?.(done, memos.length);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(SIMULTANEOUS_FETCHES, memos.length) }, fetch_memos)
+  );
+
+  if (session_gone) {
+    throw session_gone;
+  }
+
+  konsole.log(`cache_all_memos: ${memos.length - failures.length} of ${memos.length} memos cached`);
+  return { cached: memos.length - failures.length, total: memos.length, failures };
 };
 
 export const read_memo_groups = async (): Promise<IdName[]> => {

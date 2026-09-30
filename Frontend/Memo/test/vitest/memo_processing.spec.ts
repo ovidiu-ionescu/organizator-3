@@ -38,11 +38,14 @@ describe("Testing memo processing", () => {
     expect(memo_processing.toggle_checkbox(text, 14)).to.be.equal(' - [ ] this - [ ] aha');
   });
 
-  it('should not return anything if clicked outside a checkbox', () => {
+  it('should not change anything if clicked outside a checkbox', () => {
     const text = ' - [ ] this - [x] aha';
-    expect(memo_processing.toggle_checkbox(text, text.indexOf('h'))).toEqual(text);
+    // null rather than the text back: the caller reads a falsy return as "nothing to do" and
+    // leaves the editor untouched, so the function says it did nothing rather than handing back
+    // a value that looks like an edit.
+    expect(memo_processing.toggle_checkbox(text, text.indexOf('h'))).to.be.null;
 
-    expect(memo_processing.toggle_checkbox(text, text.indexOf('a'))).toEqual(text);
+    expect(memo_processing.toggle_checkbox(text, text.indexOf('a'))).to.be.null;
   });
 
   it('should pick a memo to save from local if remote does not have a timestamp', async() => {
@@ -76,6 +79,62 @@ describe("Testing memo processing", () => {
         }
       };
       expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.true;
+  });
+
+  it('should not invent a server copy for a memo it has never fetched', () => {
+    const cache_memo = memo_processing.make_cache_memo({ id: 9, text: 'a memo' });
+
+    // Nothing has looked at the server for this memo, so the record says nothing about it — and
+    // a record with no server half counts as needing to be saved, which it does.
+    expect(cache_memo.server).to.be.undefined;
+    expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.true;
+  });
+
+  it('should keep the two halves of a synced record equal but separate', () => {
+    const cache_memo = memo_processing.make_synced_cache_memo({ id: 9, text: 'a memo' });
+
+    expect(cache_memo.local).to.deep.equal(cache_memo.server);
+    expect(cache_memo.local).not.toBe(cache_memo.server);
+    expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.false;
+
+    // The point of the separation: editing the memo must not edit what the record says the
+    // server holds, or the change looks already saved and is never queued.
+    cache_memo.local.text = 'edited locally';
+    expect(cache_memo.server?.text).to.be.equal('a memo');
+    expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.true;
+  });
+
+  it('should say a memo is owned when the requester is the user it belongs to', () => {
+    const memo = memo_processing.server2local({
+      memo: {
+        id:        7,
+        title:     'Mine\r\n',
+        memotext:  'body',
+        savetime:  100,
+        access_level: 3,
+        user: { id: 5, name: 'ovidiu' },
+      },
+      requester: { id: 5, name: 'ovidiu' },
+    });
+    expect(memo.owned).to.be.true;
+  });
+
+  it('should not say a memo is owned when it belongs to somebody else', () => {
+    // Access level 2 is writable, so this is the case the two questions differ on: the reader
+    // may write the body and still may not move the memo to another group.
+    const memo = memo_processing.server2local({
+      memo: {
+        id:        8,
+        title:     'Shared\r\n',
+        memotext:  'body',
+        savetime:  100,
+        access_level: 2,
+        user: { id: 5, name: 'ovidiu' },
+      },
+      requester: { id: 6, name: 'somebody' },
+    });
+    expect(memo.owned).to.be.false;
+    expect(memo.readonly).to.be.false;
   });
 
 });

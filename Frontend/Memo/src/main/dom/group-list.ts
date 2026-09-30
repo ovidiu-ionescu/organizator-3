@@ -10,6 +10,7 @@ import konsole from "./console_log.js";
 
 class SelectList extends HTMLElement {
   private _groups: IdName[] | undefined;
+  private _readonly = false;
   private readonly _fetch_elements: () => Promise<IdName[]>;
   constructor(fetch_elements: () => Promise<IdName[]>) {
     super();
@@ -80,8 +81,21 @@ class SelectList extends HTMLElement {
     return this._getSelect().value;
   }
 
+  /// A read-only list still shows which group the memo is in — it just cannot be changed. Used
+  /// for a memo the requester does not own: the server refuses that change for anybody else
+  /// (2F002, enforced by the trigger on memo), so an enabled control would offer nothing but a
+  /// refusal.
+  set readonly(readonly: boolean) {
+    this._readonly = readonly;
+    this._getSelect().disabled = readonly;
+  }
+
+  get readonly(): boolean {
+    return this._readonly;
+  }
+
   _getSelect() {
-    return this.shadowRoot!.querySelector("#main_select") as HTMLInputElement;
+    return this.shadowRoot!.querySelector("#main_select") as HTMLSelectElement;
   }
 }
 
