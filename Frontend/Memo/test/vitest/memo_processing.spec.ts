@@ -4,6 +4,9 @@
 import {describe, it, expect, beforeEach, afterEach, beforeAll, vi} from "vitest";
 import { Memo, ServerMemo, CacheMemo, AccessTime } from '@dom/memo_interfaces.js';
 import * as memo_processing from '@dom/memo_processing.js';
+import konsole from "@dom/console_log.js";
+
+const konsole_journal = () => konsole.journal();
 
 describe("Testing memo processing", () => {
 
@@ -46,6 +49,52 @@ describe("Testing memo processing", () => {
     expect(memo_processing.toggle_checkbox(text, text.indexOf('h'))).to.be.null;
 
     expect(memo_processing.toggle_checkbox(text, text.indexOf('a'))).to.be.null;
+  });
+
+  it('should not call a memo edited when only the line endings differ', () => {
+    // What the editor wrote, against what the server keeps and hands back: the same memo, one
+    // carriage return apart. The client used to hold its own form and compare it with the
+    // server's, so a memo pasted with Windows line endings read as edited for ever.
+    const cache_memo = {
+      id: 4243,
+      local: { id: 4243, text: 'Title\r\nbody' },
+      server: { id: 4243, text: 'Title\nbody' },
+    } as CacheMemo;
+    expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.false;
+
+    // And the blank line the server trims off the front of a memo is the same too.
+    const with_blank_line = {
+      id: 4244,
+      local: { id: 4244, text: '\n\nTitle\nbody' },
+      server: { id: 4244, text: 'Title\nbody' },
+    } as CacheMemo;
+    expect(memo_processing.should_save_memo_to_server(with_blank_line)).to.be.false;
+
+    // But a real difference is still a difference.
+    const edited = {
+      id: 4245,
+      local: { id: 4245, text: 'Title\nbody edited' },
+      server: { id: 4245, text: 'Title\nbody' },
+    } as CacheMemo;
+    expect(memo_processing.should_save_memo_to_server(edited)).to.be.true;
+  });
+
+  it('should say which field the two halves of a record disagree about', () => {
+    // A memo this device may not write cannot have been edited here, so a disagreement about it
+    // is the record's doing. The line names the field so the reason is not a guess: this is how a
+    // memo of the reader's own, marked read-only, was tracked down.
+    const cache_memo = {
+      id: 4242,
+      local: { id: 4242, text: 'one\ntwo' },
+      server: { id: 4242, text: 'one\nthree', readonly: true },
+    } as CacheMemo;
+
+    expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.false;
+
+    const said = konsole_journal().join("\n");
+    expect(said).to.contain("memo 4242 is dirty and readonly");
+    expect(said).to.contain("chars");
+    expect(said).to.contain("(differs)");
   });
 
   it('should pick a memo to save from local if remote does not have a timestamp', async() => {

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ztEpNKvenSjgrUmCNVNBMCydSdotxDW7UobAgNFs7gOXZ6u1LFGEcMn8GlVPoHr
+\restrict VAepallOO1U3jffQ3YjCaCSJGviwm1hnS8RzgvfihUzrafmvEkKqa0dczinDIWD
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -471,6 +471,16 @@ CREATE FUNCTION public.memo_write(INOUT io_memo_id integer, INOUT io_memo_title 
       o_user_id :=o_requester_id;
       o_username := io_requester_name;
 
+      -- A memo may only be filed into a group its owner owns, or into a public one. The update
+      -- path below has always applied this; creating a memo did not, so any group id a caller
+      -- could name was accepted — including a private group belonging to somebody else, whose
+      -- members would then see the memo. Group ids are a sequence, so they are easy to guess.
+      IF io_memo_group_id IS NOT NULL AND v_memo_group_user_id <> o_user_id AND (v_memo_group_public IS NOT TRUE) THEN
+        RAISE EXCEPTION 'Memo group % belongs to user %, not user % who is creating a memo',
+          io_memo_group_id, v_memo_group_user_id, o_user_id
+          USING ERRCODE = '2F002'; -- modifying_sql_data_not_permitted
+      END IF;
+
       -- create the new memo
       io_memo_id := nextval('memo_id_seq');
       INSERT INTO memo (id, title, memotext, group_id, user_id, saveuser_id, savetime)
@@ -505,9 +515,13 @@ CREATE FUNCTION public.memo_write(INOUT io_memo_id integer, INOUT io_memo_title 
 	  AND (io_memo_memotext IS NOT DISTINCT FROM v_old_memotext) 
 	  AND (io_memo_group_id IS NOT DISTINCT FROM v_old_memo_group_id)
 	 THEN
-	  -- 4) the previous memo is exactly the same, there's no need to save anything
-	  RAISE NOTICE 'Memo values for % did not change, not saving', io_memo_id;
-        RETURN;
+	  -- 4) the previous memo is exactly the same. This is refused rather than quietly skipped:
+	  -- the caller believed it had something to save, and answering success left it believing
+	  -- that. A memo saved unchanged is a client that has lost track of what the server holds,
+	  -- and it is worth telling it so. The caller shows this as "identical to the server", and
+	  -- the code is this application's own — see the mapping in postgres.rs.
+	  RAISE EXCEPTION 'Memo % is identical to the one on the server: there is nothing to save', io_memo_id
+	    USING ERRCODE = '2F006';
       END IF;
       IF io_memo_group_id IS NOT NULL AND v_memo_group_user_id <> o_user_id AND (v_memo_group_public IS NOT TRUE)THEN
         -- 5) Owner can only change group_id to another one he owns
@@ -1876,5 +1890,5 @@ GRANT SELECT ON TABLE public.users TO auth;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ztEpNKvenSjgrUmCNVNBMCydSdotxDW7UobAgNFs7gOXZ6u1LFGEcMn8GlVPoHr
+\unrestrict VAepallOO1U3jffQ3YjCaCSJGviwm1hnS8RzgvfihUzrafmvEkKqa0dczinDIWD
 

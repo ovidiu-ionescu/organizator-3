@@ -18,8 +18,6 @@ import {
 
 import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
-// @ts-ignore
-import {merge} from "../pkg/organizator_wasm.js";
 import {wasm_ready} from "./wasm.js";
 import konsole from "./console_log.js";
 
@@ -34,7 +32,13 @@ let connection: Promise<IDBDatabase> | undefined;
 
 export const get_db = (): Promise<IDBDatabase> => {
   if (!connection) {
-    connection = open_db();
+    // A failure is not kept: the browser can refuse to open the database once — storage busy, or
+    // the profile locked for a moment — and holding on to that rejection would leave every later
+    // read and write failing against a page that had one bad moment.
+    connection = open_db().catch((e) => {
+      connection = undefined;
+      throw e;
+    });
   }
   return connection;
 };
@@ -103,7 +107,12 @@ export const drop_database = async (): Promise<void> => {
     // Another tab still has the database open and only it can let go. Waiting cannot help, and
     // the wait would block this page's own reads, so report it instead.
     request.onblocked = () =>
-      reject(new Error("Another tab or window is still using the database"));
+      reject(
+        new Error(
+          "Another tab or window is still using the database. This page cannot read anything " +
+            "until it lets go: close the other tab, then reload this one."
+        )
+      );
   });
 };
 
@@ -131,14 +140,31 @@ const prepare_db_if_needed = (request: IDBOpenDBRequest) => {
   };
 };
 
+/**
+ * A request that is expected to answer, and the two ways it can fail instead.
+ *
+ * `onsuccess` was the only handler these used to carry, so a request that failed left its promise
+ * unsettled for ever: the caller waited for an answer that was never coming, and a save that had
+ * failed looked exactly like a save still in progress — no red button, no message, edits that
+ * reached nowhere. A request can fail on its own (the database refuses it) or be aborted when its
+ * transaction goes away (another request in it failed, or another tab closed the database).
+ */
+const answer = <T>(request: IDBRequest<T>): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () =>
+      reject(request.error ?? new Error("The database refused the request"));
+    // The abort event is fired at the request as well as at its transaction, but lib.dom only
+    // declares a handler for it on the transaction, so it is listened for by name.
+    request.addEventListener("abort", () =>
+      reject(request.error ?? new Error("The database abandoned the request"))
+    );
+  });
+
 const update_access_time = async (transaction: IDBTransaction, id: number) => {
   const access_store = transaction.objectStore("memo_access");
-  return new Promise((resolve) => {
-    access_store.put({
-      id: id,
-      last_access: +new Date(),
-    }).onsuccess = () => resolve(true);
-  });
+  await answer(access_store.put({ id, last_access: +new Date() }));
+  return true;
 };
 
 export const get_memo_write_transaction = async () => {
@@ -159,12 +185,8 @@ const get_memo_read_transaction = async () => {
  */
 const raw_read_memo = (transaction: IDBTransaction, id: number) => {
   const memo_store = transaction.objectStore("memo");
-  const request = memo_store.get(id);
-  return new Promise<CacheMemo>((resolve) => {
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-  });
+  // Nothing there is an ordinary answer, not a failure: the request succeeded and had no row.
+  return answer<CacheMemo | undefined>(memo_store.get(id));
 };
 
 /**
@@ -178,12 +200,8 @@ export const raw_write_memo = (
 ): Promise<CacheMemo> => {
   konsole.log("writing memo to local storage", db_memo.id);
   const memo_store = transaction.objectStore("memo");
-  const request = memo_store.put(JSON.parse(JSON.stringify(db_memo)));
-  return new Promise((resolve) => {
-    request.onsuccess = () => {
-      resolve(db_memo);
-    };
-  });
+  const written = answer(memo_store.put(JSON.parse(JSON.stringify(db_memo))));
+  return written.then(() => db_memo);
 };
 
 const write_memo_with_timestamp = (
@@ -242,18 +260,69 @@ export const save_memo_after_fetching_from_server = async (
     // if the server memo is not newer than the memo last fetched then skip the server one and return local
     if (!memo_processing.first_more_recent(server_memo, existing_db_memo.server)) {
       konsole.log(`server memo ${server_memo.id} timestamp ${server_memo.timestamp} is not more recent than cached memo ancestor ${existing_db_memo.server?.timestamp}`);
-      // The copy handed back came out of the cache, and a cached copy may predate the `owned`
-      // field or be stale about it. The reply just answered the question, so take it from there
-      // rather than leaving the editor to guess from what the cache happens to hold.
+      // The reply says who may write this memo, and that is not part of the text: a grant or a
+      // revocation arrives with the same savetime as before, so this branch is the only one that
+      // ever sees it. Taking only `owned` from it — and only into memory — left a reader who had
+      // just been given write access still locked out, and a change they made anyway queued
+      // nowhere, because the dirtiness of a record is measured against its server half.
+      existing_db_memo.local.readonly = server_memo.readonly;
       existing_db_memo.local.owned = server_memo.owned;
+      if (existing_db_memo.server) {
+        existing_db_memo.server.readonly = server_memo.readonly;
+        existing_db_memo.server.owned = server_memo.owned;
+      }
+      await raw_write_memo(transaction, existing_db_memo);
       return with_dirty(existing_db_memo);
     } else {
+      if (!existing_db_memo.server) {
+        // A record with no server half: a memo written here that was never sent, whose cached
+        // ancestor is gone — the cache was dropped while the editor held it, or it was cleared
+        // elsewhere. There is nothing to merge against, and merging against nothing calls any two
+        // texts a conflict and writes the markers out, which then get saved over the server's
+        // copy. What is here exists nowhere else, so it is kept and left to be sent; the version
+        // the server holds goes to memo_history when the save replaces it.
+        konsole.log(
+          `memo ${existing_db_memo.id} has no ancestor to merge with, keeping the text written ` +
+          `here and leaving it to be saved`
+        );
+        // The group is the one thing that can be taken from the reply without guessing. A local
+        // copy that names no group is not a copy that says "no group" — it is one that never knew
+        // — and saving it as it stands sends no group_id, which memo_write reads as "put it in no
+        // group": the memo leaves the group it was in. What the reply says about the *text* is
+        // left alone, because with no common ancestor that would be a guess between two versions.
+        if (!existing_db_memo.local.memogroup && server_memo.memogroup) {
+          konsole.log(
+            `memo ${existing_db_memo.id} was in group ${server_memo.memogroup.id} on the server; ` +
+            `the copy here never had one, so it takes the server's`
+          );
+          existing_db_memo.local.memogroup = server_memo.memogroup;
+          await raw_write_memo(transaction, existing_db_memo);
+        }
+        return with_dirty(existing_db_memo);
+      }
       if (memo_processing.first_more_recent(existing_db_memo.local, existing_db_memo.server)) {
         konsole.log(`both local and remote have been modified, we need to merge`);
 
-        const text = merge(existing_db_memo.server?.text ?? "", existing_db_memo.local.text, server_memo.text);
+        // The group the reply carries is the one the memo is in now. The local copy only
+        // disagrees when this device moved it — a change of its own, which is kept — and
+        // otherwise its group is simply the one from before a move made elsewhere. Keeping that
+        // one would mark the record dirty and move the memo back on the next save.
+        // Moved here means the local copy names a group the ancestor did not have. A local copy
+        // that names *no* group is not one that says "no group" — it is one that never knew, and
+        // a memo saved from it leaves the group it is really in.
+        const moved_here =
+          !!existing_db_memo.local.memogroup &&
+          existing_db_memo.local.memogroup?.id !== existing_db_memo.server.memogroup?.id;
+        const text = memo_processing.merge_memo_text(
+          existing_db_memo.server.text,
+          existing_db_memo.local.text,
+          server_memo.text
+        );
         existing_db_memo.local.text = text;
         existing_db_memo.local.timestamp = (+ new Date);
+        if (!moved_here) {
+          existing_db_memo.local.memogroup = server_memo.memogroup;
+        }
         existing_db_memo.server = server_memo;
         await raw_write_memo(transaction, existing_db_memo);
         return with_dirty(existing_db_memo);
@@ -308,11 +377,7 @@ export const save_local_only = async (memo: Memo): Promise<Memo> => {
 export const access_times = async () => {
   const db = await get_db();
   const transaction = db.transaction(["memo_access"], "readonly");
-  return new Promise<Array<AccessTime>>((resolve) => {
-    transaction.objectStore("memo_access").getAll().onsuccess = (event) => {
-      resolve((event.target as IDBRequest).result);
-    };
-  });
+  return answer<Array<AccessTime>>(transaction.objectStore("memo_access").getAll());
 };
 
 /**
@@ -321,12 +386,7 @@ export const access_times = async () => {
 export const cached_memos = async (): Promise<Array<CacheMemo>> => {
   const transaction = await get_memo_write_transaction();
   const memo_store = transaction.objectStore("memo");
-  const request = memo_store.getAll();
-  return new Promise<Array<CacheMemo>>((resolve) => {
-    request.onsuccess = (event) => {
-      resolve((<IDBRequest>event.target).result);
-    };
-  });
+  return answer<Array<CacheMemo>>(memo_store.getAll());
 };
 
 /**
@@ -351,14 +411,9 @@ export const delete_memo = async (id: number, new_id?: number) => {
   const transaction = await get_memo_write_transaction();
   const memo_store = transaction.objectStore("memo");
   const access_store = transaction.objectStore("memo_access");
-  return Promise.all([
-    new Promise((resolve) => {
-      memo_store.delete(id).onsuccess = () => resolve(true);
-    }),
-    new Promise((resolve) => {
-      access_store.delete(id).onsuccess = () => resolve(true);
-    }),
-  ]).then(() => {
+  // One transaction, so either both go or neither does — and the announcement below is made
+  // only when they did.
+  return Promise.all([answer(memo_store.delete(id)), answer(access_store.delete(id))]).then(() => {
     if (new_id) {
       konsole.log(`Memo id changed from ${id} to ${new_id}`);
       events.memo_change_id(id, new_id);
@@ -367,6 +422,28 @@ export const delete_memo = async (id: number, new_id?: number) => {
       events.memo_deleted(id);
     }
   });
+};
+
+/**
+ * The server refused a save because it already holds exactly this memo (409, from memo_write's
+ * 2F006 when a write would change nothing).
+ *
+ * Nothing was written and nothing changed, and the refusal is the server saying that what was
+ * sent is what it has. So the record is in step: the local copy *is* the server's copy. Without
+ * this the memo is called unsaved for ever — the record it comes from, or the text, never quite
+ * matches — and is sent again on every save.
+ */
+export const mark_memo_in_step = async (id: number): Promise<Memo | undefined> => {
+  const transaction = await get_memo_write_transaction();
+  const cache_memo = await raw_read_memo(transaction, id);
+  if (!cache_memo) {
+    return undefined;
+  }
+  // A copy, not the same object: the two halves are compared by value, and an alias would make
+  // every later change to one of them a change to both.
+  cache_memo.server = { ...cache_memo.local };
+  await raw_write_memo(transaction, cache_memo);
+  return with_dirty(cache_memo);
 };
 
 export const save_memo_after_saving_to_server = async (
@@ -415,9 +492,13 @@ const get_memo_titles = async (
   const transaction = await get_memo_read_transaction();
   const memo_store = transaction.objectStore("memo");
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const result: MemoTitle[] = [];
-    memo_store.openCursor().onsuccess = (event) => {
+    const request = memo_store.openCursor();
+    // A cursor is walked rather than awaited, so this one keeps its own three handlers — but it
+    // is still a request that can fail or be aborted, and the caller has to hear about that
+    // rather than waiting for a list that is never coming.
+    request.onsuccess = (event) => {
       const cursor: IDBCursorWithValue = (event.target as IDBRequest).result;
       if (cursor) {
         const cache_memo: CacheMemo = cursor.value;
@@ -430,6 +511,11 @@ const get_memo_titles = async (
         return resolve(result);
       }
     };
+    request.onerror = () =>
+      reject(request.error ?? new Error("The database refused to list the memos"));
+    request.addEventListener("abort", () =>
+      reject(request.error ?? new Error("The database abandoned the listing of memos"))
+    );
   });
 };
 
@@ -441,25 +527,25 @@ const store_put = async (id: string, value: any, store_name: string) => {
   const transaction = db.transaction([store_name], "readwrite");
   const memo_store = transaction.objectStore(store_name);
   const payload = { id, value };
-  const request = memo_store.put(payload);
-  return new Promise<CacheMemo>((resolve) => {
-    request.onsuccess = () => {
-      resolve(value);
-    };
-  });
+  return answer(memo_store.put(payload)).then(() => value);
 };
 
 const store_get = async (key: string, store_name: string) => {
   const db = await get_db();
   const transaction = db.transaction([store_name], "readonly");
   const request = transaction.objectStore(store_name).get(key);
-  return new Promise<any>((resolve) => {
+  return new Promise<any>((resolve, reject) => {
     request.onsuccess = () => {
       if (request.result) {
         resolve(request.result.value);
       }
       resolve(null);
     };
+    request.onerror = () =>
+      reject(request.error ?? new Error(`The database refused to read ${key}`));
+    request.addEventListener("abort", () =>
+      reject(request.error ?? new Error(`The database abandoned reading ${key}`))
+    );
   });
 };
 

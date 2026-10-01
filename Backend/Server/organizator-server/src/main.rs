@@ -41,6 +41,7 @@ use crate::model::{
 };
 use crate::response_utils::{
     build_json_response, build_simple_json_response, millis_since_epoch, split_and_trim,
+    split_title_for_column,
 };
 
 #[global_allocator]
@@ -205,6 +206,12 @@ async fn write_memo(
     Form(form): Form<WriteMemoForm>,
 ) -> HandlerResponse {
     let (title, body) = split_and_trim(&form.text);
+    // The title column holds 255 characters, and a longer first line used to reach it whole: the
+    // database refused the write (22001) and the caller was told the server had failed, with the
+    // column definition quoted back at it. The line is split instead — the memo keeps every
+    // character, because it is read back as its title followed by its body.
+    let (title, first_line_overflow) = split_title_for_column(title);
+    let body = format!("{first_line_overflow}{body}");
     let now = millis_since_epoch();
     let username = requester.id();
 
@@ -410,7 +417,7 @@ async fn get_usergroups(
 ) -> HandlerResponse {
     let json = db::get_json(
         &db_client,
-        requester.id(),
+        &requester,
         SQLstr(include_str!("sql/user_groups.sql")),
         &[],
     )
@@ -463,7 +470,7 @@ async fn add_user_group_member(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/add_user_group_member.sql")),
         &[&group_id, &member],
     )
@@ -493,7 +500,7 @@ async fn add_user_group_member(
     // committed, is what makes the member list the caller gets back include the new member.
     let (group_json, group_requester) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/get_user_group.sql")),
         &[&group_id],
     )
@@ -570,7 +577,7 @@ async fn create_user_group(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        requester.id(),
+        &requester,
         SQLstr(include_str!("sql/create_user_group.sql")),
         &[&name],
     )
@@ -627,7 +634,7 @@ async fn rename_user_group(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/rename_user_group.sql")),
         &[&group_id, &name],
     )
@@ -647,7 +654,7 @@ async fn rename_user_group(
 
     let (group_json, group_requester) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/get_user_group.sql")),
         &[&group_id],
     )
@@ -678,7 +685,7 @@ async fn delete_user_group(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        requester.id(),
+        &requester,
         SQLstr(include_str!("sql/delete_user_group.sql")),
         &[&group_id],
     )
@@ -729,7 +736,7 @@ async fn create_memo_group(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/create_memo_group.sql")),
         &[&name, &form.public],
     )
@@ -750,7 +757,7 @@ async fn create_memo_group(
 
     let (group_json, _) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/get_memo_group.sql")),
         &[&group_id],
     )
@@ -794,7 +801,7 @@ async fn rename_memo_group(
 
     memo_group_write(
         &db_client,
-        username,
+        &requester,
         include_str!("sql/rename_memo_group.sql"),
         &[&group_id, &name],
         group_id,
@@ -826,7 +833,7 @@ async fn delete_memo_group(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        requester.id(),
+        &requester,
         SQLstr(include_str!("sql/delete_memo_group.sql")),
         &[&group_id],
     )
@@ -874,7 +881,7 @@ async fn set_memo_group_access(
 
     memo_group_write(
         &db_client,
-        username,
+        &requester,
         include_str!("sql/set_memo_group_access.sql"),
         &[&group_id, &user_group_id, &form.access],
         group_id,
@@ -911,7 +918,7 @@ async fn revoke_memo_group_access(
 
     memo_group_write(
         &db_client,
-        username,
+        &requester,
         include_str!("sql/revoke_memo_group_access.sql"),
         &[&group_id, &user_group_id],
         group_id,
@@ -951,7 +958,7 @@ async fn set_memo_group_public(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/set_memo_group_public.sql")),
         &[&group_id, &form.public],
     )
@@ -963,7 +970,7 @@ async fn set_memo_group_public(
         "changed" => {
             let (group_json, _) = db::get_json(
                 &db_client,
-                username,
+                &requester,
                 SQLstr(include_str!("sql/get_memo_group.sql")),
                 &[&group_id],
             )
@@ -990,14 +997,14 @@ async fn set_memo_group_public(
 /// which each caller words for the outcomes its own statement can produce.
 async fn memo_group_write(
     db_client: &deadpool_postgres::Client,
-    username: &str,
+    requester: &User,
     query: &str,
     params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     group_id: i32,
     success: &str,
     conflict: &str,
 ) -> HandlerResponse {
-    let (outcome_json, _) = db::get_json(db_client, username, SQLstr(query), params).await?;
+    let (outcome_json, _) = db::get_json(db_client, requester, SQLstr(query), params).await?;
     let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
 
     if outcome.outcome != success {
@@ -1015,7 +1022,7 @@ async fn memo_group_write(
 
     let (group_json, _) = db::get_json(
         db_client,
-        username,
+        requester,
         SQLstr(include_str!("sql/get_memo_group.sql")),
         &[&group_id],
     )
@@ -1060,7 +1067,7 @@ async fn remove_user_group_member(
 
     let (outcome_json, _) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/remove_user_group_member.sql")),
         &[&group_id, &member],
     )
@@ -1085,7 +1092,7 @@ async fn remove_user_group_member(
     // member actually gone.
     let (group_json, group_requester) = db::get_json(
         &db_client,
-        username,
+        &requester,
         SQLstr(include_str!("sql/get_user_group.sql")),
         &[&group_id],
     )
@@ -1115,7 +1122,7 @@ async fn get_memogroups(
 ) -> HandlerResponse {
     let json = db::get_json(
         &db_client,
-        requester.id(),
+        &requester,
         SQLstr(include_str!("sql/memo_groups.sql")),
         &[],
     )
@@ -1188,11 +1195,12 @@ fn ls(path: &str) -> Result<Vec<FilestoreFile>, GenericError> {
 async fn get_memo_stats(
     State(_state): State<Arc<AppState>>,
     DbConn(db_client): DbConn,
+    Extension(requester): Extension<User>,
     _admin: RequireAdmin,
 ) -> HandlerResponse {
     let json = db::get_json(
         &db_client,
-        "admin",
+        &requester,
         SQLstr(include_str!("sql/admin/memo_stats.sql")),
         &[],
     )
@@ -1211,11 +1219,12 @@ async fn get_memo_stats(
 async fn get_all_usergroups(
     State(_state): State<Arc<AppState>>,
     DbConn(db_client): DbConn,
+    Extension(requester): Extension<User>,
     _admin: RequireAdmin,
 ) -> HandlerResponse {
     let json = db::get_json(
         &db_client,
-        "admin",
+        &requester,
         SQLstr(include_str!("sql/admin/all_user_groups.sql")),
         &[],
     )

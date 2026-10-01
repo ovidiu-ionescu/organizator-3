@@ -19,12 +19,6 @@ pub trait Named {
     }
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct User {
-    pub id: i32,
-    pub username: Option<String>,
-}
-
 #[derive(Serialize, ToSchema, Clone, Debug)]
 pub struct Requester<'a> {
     pub id: i32,
@@ -64,12 +58,6 @@ impl From<Row> for MemoTitle {
             savetime: row.get("savetime"),
         }
     }
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct MemoTitleList {
-    pub memos: Vec<MemoTitle>,
-    pub user: User,
 }
 
 impl Named for Vec<MemoTitle> {
@@ -371,7 +359,7 @@ impl Named for UploadResponse {
 response_with_requester!(MemoWithRequester, memo, Memo);
 response_with_requester!(GetWriteMemoWithRequester, memo, GetWriteMemo);
 response_with_requester!(MemoGroupsWithRequester, memogroups, Vec<MemoGroup>);
-response_with_requester!(MemoTitleListWithRequester, memos, MemoTitleList);
+response_with_requester!(MemoTitleListWithRequester, memos, Vec<MemoTitle>);
 response_with_requester!(FilestoreResultWithRequester, filestore, FilestoreResult<'a>);
 response_with_requester!(UploadResponseWithRequester, file, FilestoreResult<'a>);
 

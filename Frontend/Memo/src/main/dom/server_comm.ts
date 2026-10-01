@@ -22,8 +22,6 @@ import {
 import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
 import {MemoEditor} from "./memo-editor.js";
-// @ts-ignore
-import {merge} from "../pkg/organizator_wasm.js";
 import {wasm_ready} from "./wasm.js";
 
 export class HttpError extends Error {
@@ -75,6 +73,15 @@ export const save_to_server = async (memo: Memo): Promise<ServerMemoReply> => {
     case 401: // Not authenticated
       konsole.error(`Unauthenticated when trying to save memo ${memoId}`);
       throw new UnauthenticatedError();
+    case 409: // Conflict: the server holds exactly this memo already
+      // memo_write refuses a write that would change nothing, so this is not a save that went
+      // wrong — there was nothing to save. Said in those words, because "the save failed" sends
+      // the reader looking for a problem that is not there.
+      konsole.log(`Memo ${memoId} is already on the server exactly as it is here`);
+      throw new HttpError(
+        409,
+        `The memo is identical to the one on the server, so there was nothing to save`
+      );
     default:
       konsole.log(`Save to server failed for memo ${memoId} with status ${response.status}`);
       throw new HttpError(response.status, `Save to server failed for memo ${memoId}`);
@@ -98,11 +105,19 @@ const REPORTED_FAILURES = 5;
 
 export const save_all = async () => {
   const unsaved_memos = await db.unsaved_memos();
-  if (unsaved_memos.length) {
-    events.save_all_status(events.SaveAllStatus.Dirty);
+  if (!unsaved_memos.length) {
+    // Nothing is waiting to go to the server, so this run has nothing to say about where the
+    // memos are. Reporting success here used to repaint a red button — the colour that means the
+    // memo is in this device's database nowhere at all — with a claim that everything was saved.
+    konsole.log("save_all: nothing is waiting to be saved");
+    return;
   }
+  events.save_all_status(events.SaveAllStatus.Dirty);
 
   const failures: string[] = [];
+  // Memos the server turned out to be holding already. Not failures — nothing was left unsaved —
+  // but worth a line each, because a record only gets into that state by having lost track.
+  const already_there: string[] = [];
   let session_gone = false;
   let local_failure = false;
 
@@ -145,7 +160,11 @@ export const save_all = async () => {
           );
           const remote_memo = memo_processing.server2local(server_memo_reply);
           await wasm_ready();
-          memo.local.text = merge(memo.server.text, memo.local.text, remote_memo.text);
+          memo.local.text = memo_processing.merge_memo_text(
+            memo.server.text,
+            memo.local.text,
+            remote_memo.text
+          );
 
           // if this is loaded in the current editor we need to swap in the new text
           const editor = <MemoEditor>document.getElementById("editor");
@@ -170,6 +189,14 @@ export const save_all = async () => {
       if (e instanceof UnauthenticatedError) {
         session_gone = true;
       }
+      if (e instanceof HttpError && e.status === 409) {
+        // The server already holds exactly this memo, so there was nothing to save. The record
+        // is told so: it is in step, and calling it unsaved for ever is what made a memo that was
+        // already on the server look dirty and be re-sent on every save.
+        await db.mark_memo_in_step(id);
+        already_there.push(`memo ${memo.id}: identical to the one on the server — nothing to save`);
+        continue;
+      }
       // A server that refused or a session that went leaves the memo where it was and it can be
       // tried again. Anything else came out of this device's own database, and that is what the
       // button is red for.
@@ -185,16 +212,18 @@ export const save_all = async () => {
   konsole.log(`save_all: ${saved} of ${unsaved_memos.length} memos saved`);
 
   if (!failures.length) {
+    // Everything is on the server, including the ones that turned out to be there already.
     events.save_all_status(events.SaveAllStatus.Success);
-    return;
+  } else if (local_failure) {
+    // The button says where the memos are, not how the run went. Orange means "not on the server
+    // yet", which is exactly where a run that could not sync leaves them: it was orange before
+    // the run and it stays orange. Red is for memos that are not on this device either — the one
+    // state a reader cannot recover from by trying again.
+    events.save_all_status(events.SaveAllStatus.Failed);
   }
 
-  // The button says where the memos are, not how the run went. Orange means "not on the server
-  // yet", which is exactly where a run that could not sync leaves them: it was orange before the
-  // run and it stays orange. Red is for memos that are not on this device either — the one state
-  // a reader cannot recover from by trying again.
-  if (local_failure) {
-    events.save_all_status(events.SaveAllStatus.Failed);
+  if (!failures.length && !already_there.length) {
+    return;
   }
 
   // Say what happened rather than only colouring the button: which memos were left behind, and
@@ -203,8 +232,11 @@ export const save_all = async () => {
   const rest = failures.length - listed.length;
   events.save_all_report(
     [
-      `${saved} of ${unsaved_memos.length} memos saved; ${failures.length} did not.`,
+      failures.length
+        ? `${saved} of ${unsaved_memos.length} memos saved; ${failures.length} did not.`
+        : `All ${unsaved_memos.length} memos are on the server.`,
       ...listed,
+      ...already_there.slice(0, REPORTED_FAILURES),
       ...(rest > 0 ? [`and ${rest} more, see the journal`] : []),
     ].join("\n")
   );
@@ -219,6 +251,19 @@ const get_options: RequestInit = {
     "x-organizator-client-version": "3",
   },
   method: "GET",
+  mode: "cors",
+};
+
+const post_options: RequestInit = {
+  credentials: "include",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "X-Requested-With": "XMLHttpRequest",
+    Pragma: "no-cache",
+    "Cache-Control": "no-cache",
+    "x-organizator-client-version": "3",
+  },
+  method: "POST",
   mode: "cors",
 };
 
@@ -267,6 +312,28 @@ export const read_memo_titles = async (): Promise<MemoTitleListDTO> => {
     throw new UnauthenticatedError(`No session while listing the memos`);
   }
   throw new HttpError(server_response.status, `Failed to list the memos`);
+};
+
+/**
+ * The memo titles the reader has that match a full text search.
+ */
+export const search_memos = async (criteria: string): Promise<MemoTitleListDTO> => {
+  konsole.log(`Searching the memos for 「${criteria}」`);
+  const server_response = await fetch(
+    `/organizator/memo/search?request.preventCache=${+new Date()}`,
+    {
+      ...post_options,
+      body: `search=${encodeURIComponent(criteria)}`,
+    }
+  );
+  if (server_response.status === 200) {
+    return await server_response.json();
+  }
+  konsole.error("Failed to search the memos, server status", server_response.status);
+  if (server_response.status === 401) {
+    throw new UnauthenticatedError(`No session while searching the memos`);
+  }
+  throw new HttpError(server_response.status, `Failed to search the memos`);
 };
 
 /// What caching the whole library came to.

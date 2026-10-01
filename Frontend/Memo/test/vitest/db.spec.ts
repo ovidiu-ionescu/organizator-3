@@ -245,6 +245,207 @@ describe("Testing the database functions", () => {
     expect((await db.read_memo(5))?.dirty).to.be.true;
   });
 
+  it('should keep the text written here when there is no ancestor to merge it with', async () => {
+    // A memo written here that was never sent, whose cached ancestor is gone — the cache was
+    // dropped while the editor held the text, say. Merging against nothing turns any two texts
+    // into a conflict block, and that block is what would be written back and then saved over the
+    // server's copy. What is here exists nowhere else, so it is kept.
+    await db.save_local_only({ id: 62, text: 'Written here\nAnd never sent' });
+
+    const memo = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 62,
+        title: 'On the server',
+        memotext: '\nA different text',
+        savetime: 900,
+        user: { id: 1, name: 'root' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+
+    expect(memo.text).to.contain('Written here');
+    expect(memo.text).to.contain('And never sent');
+    expect(memo.text).not.to.contain('<<<<<<<');
+    // And it is still to be sent: nothing about it has reached the server.
+    expect(memo.dirty).to.be.true;
+  });
+
+  it('should take the group the server put a memo in while merging the text', async () => {
+    // Both sides changed the text, and the memo was moved on another device. The group that
+    // arrives is the one it is in now; keeping the local one — which is only the group from
+    // before the move — would mark the record dirty and move the memo back on the next save.
+    const transaction = await db.get_memo_write_transaction();
+    await db.raw_write_memo(transaction, {
+      id: 63,
+      local: { id: 63, text: 'Shared line\nwritten here', timestamp: 200, memogroup: { id: 1, name: 'one' } },
+      server: { id: 63, text: 'Shared line', timestamp: 100, memogroup: { id: 1, name: 'one' } },
+    });
+
+    const memo = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 63,
+        title: 'Shared line',
+        memotext: '\nwritten there',
+        savetime: 300,
+        user: { id: 1, name: 'root' },
+        memogroup: { id: 2, name: 'two' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+
+    // Both texts survive the merge, and the memo is in the group the server says it is in.
+    expect(memo.text).to.contain('written here');
+    expect(memo.text).to.contain('written there');
+    expect(memo.memogroup?.id).to.be.equal(2);
+  });
+
+  it('should keep a move made here while merging the text', async () => {
+    // The local group differs from the ancestor's, so this device is the one that moved it: that
+    // is a change of the reader's, and it must not be undone by the merge.
+    const transaction = await db.get_memo_write_transaction();
+    await db.raw_write_memo(transaction, {
+      id: 64,
+      local: { id: 64, text: 'Shared line\nwritten here', timestamp: 200, memogroup: { id: 2, name: 'two' } },
+      server: { id: 64, text: 'Shared line', timestamp: 100, memogroup: { id: 1, name: 'one' } },
+    });
+
+    const memo = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 64,
+        title: 'Shared line',
+        memotext: '\nwritten there',
+        savetime: 300,
+        user: { id: 1, name: 'root' },
+        memogroup: { id: 3, name: 'three' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+
+    expect(memo.text).to.contain('written here');
+    expect(memo.memogroup?.id).to.be.equal(2);
+  });
+
+  it('should take a new access level from a reply whose text has not changed', async () => {
+    // A grant changes who may write the memo, and nothing else: the savetime is the same, so the
+    // reply is not "more recent" and used to be skipped — leaving a reader who had just been
+    // given write access still locked out.
+    const shared = {
+      id: 61,
+      title: 'Shared',
+      memotext: 'Body',
+      savetime: 500,
+      user: { id: 1, name: 'alice' },
+      access_level: 1,
+    };
+    const from_bob = { id: 2, name: 'bob' };
+
+    expect((await db.save_memo_after_fetching_from_server({ memo: shared, requester: from_bob })).readonly).to.be.true;
+
+    const granted = { ...shared, access_level: 3 };
+    expect((await db.save_memo_after_fetching_from_server({ memo: granted, requester: from_bob })).readonly).to.be.false;
+
+    // And a change made here is queued now. It was not before: the record still said the server
+    // half was read-only, and a dirty read-only record is never sent.
+    await db.save_local_only({ id: 61, text: 'Shared\nBody, edited' });
+    expect((await db.unsaved_memos()).map((m) => m.id)).to.include(61);
+  });
+
+  it('should report a write whose transaction went away instead of waiting for it for ever', async () => {
+    // A transaction is aborted under its requests when another request in it fails, or when
+    // another tab closes the database. The promise used to be resolved only from onsuccess, so
+    // it never settled at all: the save waiting on it never finished, and nothing — no red
+    // button, no message — was said about an edit that reached nowhere.
+    const transaction = await db.get_memo_write_transaction();
+    const written = db.raw_write_memo(transaction, { id: 71, local: { id: 71, text: "a memo" } });
+    transaction.abort();
+
+    await expect(written).rejects.toThrow();
+    expect(await db.read_memo(71)).to.be.null;
+  });
+
+  it('should try the database again after a failed open', async () => {
+    // The browser can refuse to open it once — storage busy, or the profile locked for a moment.
+    // Keeping that rejection would leave every later read and write failing against a page that
+    // had one bad moment, until it was reloaded. Nothing is open when this starts, so the next
+    // call really does open it.
+    await db.drop_database();
+
+    const real_open = window.indexedDB.open.bind(window.indexedDB);
+    let attempts = 0;
+    const open = vi.spyOn(window.indexedDB, "open").mockImplementation((...args) => {
+      attempts++;
+      if (attempts === 1) {
+        throw new DOMException("the database is busy", "InvalidStateError");
+      }
+      return real_open(...args);
+    });
+
+    try {
+      await expect(db.get_db()).rejects.toThrow();
+      const opened = await db.get_db();
+      expect(opened.objectStoreNames.contains("memo")).to.be.true;
+    } finally {
+      // However this ends, the next test needs the real open.
+      open.mockRestore();
+    }
+  });
+
+  it('should take the group from the server when the copy here never had one', async () => {
+    // A record the cache lost while the editor held the memo: a positive id with only a local
+    // half, and no group in it. Saving it as it stands sends no group_id, which memo_write reads
+    // as "put it in no group" — so the memo leaves the group it is really in. The group is the
+    // one thing the reply can settle without guessing at the text.
+    await db.save_local_only({ id: 91, text: 'Written here\nbody' });
+    expect((await db.read_memo(91))?.memogroup).to.be.undefined;
+
+    await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 91,
+        title: 'On the server',
+        memotext: '\nbody',
+        savetime: 900,
+        user: { id: 1, name: 'root' },
+        memogroup: { id: 7, name: 'Work' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+
+    expect((await db.read_memo(91))?.memogroup?.id).to.be.equal(7);
+  });
+
+  it('should settle a memo whose local copy differs only in line endings', async () => {
+    // The shape of a memo that reads as dirty however often it is fetched: the local copy has a
+    // carriage return the server's does not, it has lost the group the memo is really in, and the
+    // memo has no savetime in the database at all — so the client believes its own copy is the
+    // newer one and goes down the merge path.
+    const transaction = await db.get_memo_write_transaction();
+    await db.raw_write_memo(transaction, {
+      id: 93,
+      local: { id: 93, text: 'Title\r\nbody', timestamp: 1790890077971 },
+      server: { id: 93, text: 'Title\nbody', memogroup: { id: 20, name: 'Work' }, readonly: true },
+    });
+
+    const memo = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 93,
+        title: 'Title',
+        memotext: '\nbody',
+        user: { id: 1, name: 'root' },
+        memogroup: { id: 20, name: 'Work' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+
+    expect(memo.text).to.contain('body');
+    expect(memo.text).not.to.contain('<<<<<<<');
+    expect(memo.dirty).to.be.false;
+  });
+
   it('should leave the database usable after dropping it', async () => {
     // A connection is open, as it is in use. That is the point: a delete waits for the open
     // connections to close, and the page's own connection is one of them, so a delete that does

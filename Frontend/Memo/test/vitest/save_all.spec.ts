@@ -97,6 +97,42 @@ describe("Saving everything that is dirty", () => {
     expect(statuses).to.deep.equal(["orange"]);
   });
 
+  it("should say nothing when there is nothing waiting to be saved", async () => {
+    // A memo whose local write failed leaves the button red and is in no database at all, so it
+    // is not one of the unsaved memos. A run that finds nothing to send must not repaint over
+    // that with a claim that everything reached the server.
+    await db.drop_database();
+    expect(await db.unsaved_memos()).to.be.empty;
+
+    const { statuses, stop } = record_report();
+    await server_comm.save_all();
+    stop();
+
+    expect(statuses).to.deep.equal([]);
+  });
+
+  it("should say a memo was not saved because the server already has it", async () => {
+    await seed(-113, "this one the server already has");
+
+    // What memo_write answers when a write would change nothing at all (SQLSTATE 2F006).
+    vi.stubGlobal("fetch", async () => new Response("no", { status: 409 }));
+
+    const { reports, stop } = record_report();
+    await server_comm.save_all();
+    stop();
+
+    // Not "the save failed" — there was nothing to save, and saying otherwise sends the reader
+    // looking for a problem that is not there.
+    expect(reports).to.have.lengthOf(1);
+    expect(reports[0]).to.contain("memo -113");
+    expect(reports[0]).to.contain("identical to the one on the server");
+
+    // And the record is in step now: the server said it has exactly this memo, so saying
+    // otherwise for ever — re-sending it on every save — is what the refusal is there to stop.
+    expect((await db.read_memo(-113))?.dirty).to.be.false;
+    expect((await db.unsaved_memos()).map((m) => m.id)).not.to.include(-113);
+  });
+
   it("should turn the button red only when the local database refused the memo", async () => {
     await seed(-121, "this one is fine");
 

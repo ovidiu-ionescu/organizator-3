@@ -21,6 +21,11 @@ import {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_
 import {MemoGroupList} from "./group-list";
 import {wasm_ready} from "./wasm.js";
 
+/// The characters that mark the part of a memo to be encrypted. What is between them is what the
+/// password is asked for.
+const ENCRYPTED_PART = "「";
+const ENCRYPTED_PART_END = "」";
+
 const template = `
     <style>
       :host {
@@ -236,9 +241,11 @@ Date.prototype.toIsoString = function () {
     ":" +
     pad(this.getSeconds()) +
     dif +
-    pad(tzo / 60) +
+    // Whole hours and the minutes left over, both unsigned: the sign is the dif above. Dividing
+    // 330 by 60 gives 5.5, which used to be padded into a timezone of "+5.5:30".
+    pad(Math.trunc(Math.abs(tzo) / 60)) +
     ":" +
-    pad(tzo % 60)
+    pad(Math.abs(tzo) % 60)
   );
 };
 
@@ -255,6 +262,10 @@ export class MemoEditor extends HTMLElement {
   private _uploading: Undef<boolean>;
   private _digest: Undef<string>;
   private _password: Undef<string>;
+  /// The text that was last encrypted and what it came to, kept so that saving the same text
+  /// again does not encrypt it again — see _encrypt.
+  private _encrypted_from: Undef<string>;
+  private _encrypted_to: Undef<string>;
   /// The text as it stood when it was last in step with the local database, and whether the
   /// cached record says that copy still holds changes the server has not seen. Between saves
   /// these two are what the save button's colour is decided from.
@@ -287,7 +298,18 @@ export class MemoEditor extends HTMLElement {
     this.$.decrypt_button.addEventListener("click", async () => {
       konsole.log(`Starting decryption of memo ${this._memoId}`);
       const password = await this._get_password();
-      const clear_text = memo_decrypt(this.$.source.value, password);
+      if (!password) {
+        this.$.status.innerText = "No password was given, so nothing was decrypted.";
+        return;
+      }
+      const stored = this.$.source.value;
+      const clear_text = memo_decrypt(stored, password);
+      // The pair is recorded because decrypting is not an edit: what was decrypted is the memo
+      // the server holds, and saving it again has to produce exactly that ciphertext. Encrypting
+      // afresh writes a new nonce, which makes a memo nobody touched look changed — marked dirty
+      // for ever, and sent back to the server on every save.
+      this._encrypted_from = clear_text;
+      this._encrypted_to = stored;
       if (this._edit) {
         this.value = clear_text;
       } else {
@@ -296,7 +318,12 @@ export class MemoEditor extends HTMLElement {
     });
 
     this.$.encrypt_button.addEventListener("click", async () => {
-      this.value = await this._encrypt();
+      try {
+        this.value = await this._encrypt();
+      } catch (e) {
+        this.$.status.innerText = `${e instanceof Error ? e.message : e}`;
+        return;
+      }
       this.save_local_only({ type: "Encryption button" });
     });
 
@@ -320,15 +347,15 @@ export class MemoEditor extends HTMLElement {
       if (!this._edit) return;
       await this._get_password();
 
-      const start_quote = "\u300c";
-      const end_quote = "\u300d";
-
       const start_offset = this.$.source.selectionStart ?? undefined;
       const end_offset = this.$.source.selectionEnd ?? undefined;
       let s = this.$.source.value;
-      s = s.slice(0, end_offset) + end_quote + s.slice(end_offset);
-      s = s.slice(0, start_offset) + start_quote + s.slice(start_offset);
+      s = s.slice(0, end_offset) + ENCRYPTED_PART_END + s.slice(end_offset);
+      s = s.slice(0, start_offset) + ENCRYPTED_PART + s.slice(start_offset);
       this.$.source.value = s;
+      // Writing the value in code raises no input event, and the memo has changed just as much as
+      // if it had been typed.
+      this.$.source.dispatchEvent(new Event("input"));
     });
 
     /**
@@ -341,8 +368,12 @@ export class MemoEditor extends HTMLElement {
       const editor = this.$.source;
       const start_offset = editor.selectionStart;
       const end_offset = editor.selectionEnd;
-      if(! start_offset || !end_offset) {
-        return;
+      // Nothing to insert into the moment there is no selection to work with. Zero is not that
+      // moment: a caret at the very start of the memo is at offset 0, and this used to be a
+      // truthiness test, which refused to insert anything for any memo the reader had not
+      // scrolled into.
+      if (start_offset === null || end_offset === null) {
+        return false;
       }
       const toInsert = (process instanceof Function) ?
         process(editor.value.substring(start_offset, end_offset))
@@ -355,7 +386,9 @@ export class MemoEditor extends HTMLElement {
         // Writing the value in code raises no input event, and the memo has changed just as much
         // as if it had been typed — the button should say so.
         editor.dispatchEvent(new Event("input"));
+        return true;
       }
+      return false;
     };
 
     this.$.today_button.addEventListener("click", () => {
@@ -398,8 +431,11 @@ export class MemoEditor extends HTMLElement {
     this.$.source.addEventListener("paste", (event) => {
       const text = event.clipboardData?.getData("text/plain");
       if (!text?.startsWith("http://") && !text?.startsWith("https://")) return;
-      event.preventDefault();
-      insertText(`[${new URL(text).hostname}](${text})`);
+      // Only take the paste over if the link can actually go in: a paste that is swallowed and
+      // then not replaced would leave the reader with nothing at all.
+      if (insertText(`[${new URL(text).hostname}](${text})`)) {
+        event.preventDefault();
+      }
     });
 
     this.$.source.addEventListener("click", (event) => {
@@ -579,13 +615,22 @@ export class MemoEditor extends HTMLElement {
     if (this.isConnected) this._resizeTextArea();
   }
 
-  async _get_password() {
+  /**
+   * The password to encrypt or decrypt with, asking for it if it is not known yet.
+   *
+   * Answers nothing when the reader cancels the prompt, and that has to be told apart from a
+   * password: what was stored before is kept, and the caller decides what to do without one
+   * rather than being handed an undefined to pass along to the encryption.
+   */
+  async _get_password(): Promise<Undef<string>> {
     if (this._password) {
-      return Promise.resolve<string>(this._password);
+      return this._password;
     }
     const pwd = await promptPassword(this._password);
-    this._password = pwd ? pwd : this._password;
-    return pwd;
+    if (pwd) {
+      this._password = pwd;
+    }
+    return this._password;
   }
   __get_password() {
     if (this.$.password.value) {
@@ -598,13 +643,29 @@ export class MemoEditor extends HTMLElement {
   }
 
   async _encrypt() {
-    let src = this.$.source.value;
-    if (src.indexOf("\u300c") > -1) {
-      const password = await this._get_password();
-      return memo_encrypt(this.$.source.value, password, +new Date());
-    } else {
+    const src = this.$.source.value;
+    if (src.indexOf(ENCRYPTED_PART) === -1) {
       return src;
     }
+    // Encrypting is not repeatable — each call writes a new nonce — so the same text encrypted
+    // twice gives different bytes. Doing that on every save would make a memo nobody had touched
+    // look changed for ever: dirty in the list, uploaded again on every save. The last result is
+    // kept for as long as the text it was made from is what the editor still holds.
+    const encrypted_already = this._encrypted_to;
+    if (this._encrypted_from === src && encrypted_already !== undefined) {
+      return encrypted_already;
+    }
+    const password = await this._get_password();
+    if (!password) {
+      // The text asks to be encrypted and there is nothing to encrypt it with. Handing the text
+      // back as it stands would write the secret out in the clear, so the save is refused;
+      // save_local_only reports that and leaves the memo where it is, in the editor.
+      throw new Error(`${ENCRYPTED_PART}…${ENCRYPTED_PART_END} needs a password, and none was given`);
+    }
+    const encrypted = memo_encrypt(src, password, +new Date());
+    this._encrypted_from = src;
+    this._encrypted_to = encrypted;
+    return encrypted;
   }
 
   async save_local_only(event: HasType) {
@@ -613,7 +674,18 @@ export class MemoEditor extends HTMLElement {
       konsole.log("save_local_only, triggered by", cause, "; no memo in the editor, nothing to save");
       return;
     }
-    const current_memo = await this.get_memo();
+    let current_memo: Undef<Memo>;
+    try {
+      current_memo = await this.get_memo();
+    } catch (e) {
+      // get_memo refuses when the text asks to be encrypted and there is no password to do it
+      // with. Nothing is written, the text stays in the editor where the reader can copy it out,
+      // and the button says it has not reached anywhere.
+      konsole.error(`save_local_only ${this._memoId} could not prepare the memo for saving`, e);
+      this.$.status.innerText = `${e instanceof Error ? e.message : e} — the memo was not saved.`;
+      events.save_all_status(events.SaveAllStatus.Edited);
+      return;
+    }
     if(current_memo === undefined) {
       konsole.log("Current memo is undefined, probably has no id, not saving");
       return
@@ -623,6 +695,7 @@ export class MemoEditor extends HTMLElement {
       konsole.log("save_local_only, triggered by", cause, "; digest and memogroup are identical, no need to save");
       // Nothing was written, so nothing about the record has changed — but the reader may have
       // typed and undone since the button was last coloured, so let it catch up.
+      this._saved_text = this.$.source.value;
       this._show_save_colour();
       return;
     }
@@ -665,9 +738,10 @@ export class MemoEditor extends HTMLElement {
         `Save local of memo ${this._memoId} did not happen, we didn't get a new timestamp, old ${this._timestamp}, new ${saved_memo.timestamp}`
       );
     }
-    // Whatever the database made of it, this is what the editor has written and what the record
-    // now says about it — so this is what the button should be coloured from.
-    this._saved_text = current_memo.text;
+    // What the editor holds is what the button is coloured from, and it is the text the reader
+    // typed: the encrypted form the database was given is not what is on screen, so comparing the
+    // two left every memo with an encrypted part claiming an edit that was not there.
+    this._saved_text = this.$.source.value;
     this._dirty = saved_memo.dirty;
     this._show_save_colour();
   }
@@ -680,6 +754,7 @@ export class MemoEditor extends HTMLElement {
     this._user = undefined;
     this.$.edit_user.innerText = "";
     this._timestamp = 0;
+    this._display_timestamp();
     this.$.source.value = "";
     this.$.edit_memogroup.value = "-1";
     this._readonly = false;
@@ -707,7 +782,9 @@ export class MemoEditor extends HTMLElement {
     return {
       id: this._memoId,
       memogroup: (this.$.edit_memogroup as unknown as GroupList).memogroup,
-      text: encrypted_source,
+      // In the form the server stores, so that what is written here and what comes back from a
+      // fetch are the same text — see canonical_memo_text.
+      text: memo_processing.canonical_memo_text(encrypted_source),
       user: this._user,
       timestamp: this._timestamp,
       readonly: this._readonly,
@@ -728,7 +805,9 @@ export class MemoEditor extends HTMLElement {
     this.$.edit_user.innerText = memo?.user?.name ?? "";
     await (this.$.edit_memogroup as unknown as MemoGroupList).build_options(!from_local);
     if (memo.memogroup) {
-      this.$.edit_memogroup.value = memo.memogroup.id.toString();
+      // Not `value = ...`: a memo shared with the reader is in the group of whoever shared it,
+      // which is not among their own groups and has no option in this control to hold it.
+      (this.$.edit_memogroup as unknown as MemoGroupList).show_group(memo.memogroup);
     } else {
       this.$.edit_memogroup.value = "-1";
     }
@@ -772,10 +851,12 @@ export class MemoEditor extends HTMLElement {
   }
 
   _display_timestamp() {
-    if (!this._timestamp) {
-      return "";
-    }
-    this.$.edit_timestamp.innerText = new Date(this._timestamp).toIsoString();
+    // Nothing of its own to show — a memo that has never been saved, or a page showing something
+    // that is not a memo at all. The header is cleared rather than left with the last memo's time
+    // over it.
+    this.$.edit_timestamp.innerText = this._timestamp
+      ? new Date(this._timestamp).toIsoString()
+      : "";
   }
 
   /**

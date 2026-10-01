@@ -298,6 +298,45 @@ describe("The title list", () => {
     });
   });
 
+  it("should show a memo written here when the reader comes back to the list", async () => {
+    titles_page();
+    load_route();
+    await vi.waitFor(() => {
+      expect(marker_for(7)).not.to.be.null;
+    });
+
+    // A memo written here has no server id yet, which is what makes it new — and the list on
+    // screen was drawn from the server's answer, which will never mention it.
+    await seed({ id: -6, local: { id: -6, text: "written here just now" } });
+
+    load_route();
+
+    await vi.waitFor(() => {
+      expect(marker_for(-6)).to.be.equal("new");
+    });
+  });
+
+  it("should say a new memo is not on this device rather than loading for ever", async () => {
+    document.body.innerHTML = `
+      <section id="memoTitles" page>
+        <nav><input id="searchCriteria"></nav>
+        <ul id="memoTitlesList"></ul>
+      </section>
+      <section id="singleMemo" page><memo-editor id="editor"></memo-editor></section>`;
+    const editor = document.getElementById("editor") as MemoEditor;
+
+    // An id from somewhere else — a bookmark, another device, or a list drawn before this
+    // device's copy was dropped. There is nothing here to show and nothing to fetch.
+    history.pushState(null, "", "/memo/-9");
+    load_route();
+
+    // The editor shows what it has to say where the memo would be, which is the textarea.
+    await vi.waitFor(() => {
+      const source = editor.shadowRoot?.querySelector("#source") as HTMLTextAreaElement | null;
+      expect(source?.value).to.contain("No memo -9");
+    });
+  });
+
   // These empty the database every spec file shares, so they run last.
   it("should redraw the markers when the local cache is dropped", async () => {    titles_page();
 

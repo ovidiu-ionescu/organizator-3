@@ -89,10 +89,11 @@ export const load_route = () => {
   if (window.location.pathname === "/memo/search") {
     activatePage("memoTitles");
     searchMemos();
+    return;
   }
-
   if (window.location.pathname === "/journal") {
     activatePage("journal");
+    return;
   }
 
   konsole.error('load_route found no match to activate')
@@ -121,32 +122,6 @@ window.addEventListener("popstate", () => {
 });
 raspandac.on("navigate", navigate);
 
-const options: RequestInit = {
-  credentials: "include",
-  headers: {
-    Pragma: "no-cache",
-    "Cache-Control": "no-cache",
-    "X-Requested-With": "XMLHttpRequest",
-    "x-organizator-client-version": "3",
-  },
-  referrer: "https://ionescu.net/organizator/2/memo.html",
-  method: "GET",
-  mode: "cors",
-};
-
-const postOptions: RequestInit = {
-  credentials: "include",
-  headers: {
-    "Content-Type": "application/x-www-form-urlencoded",
-    "X-Requested-With": "XMLHttpRequest",
-    Pragma: "no-cache",
-    "Cache-Control": "no-cache",
-  },
-  referrer: "https://ionescu.net/organizator/2/memo.html",
-  method: "POST",
-  mode: "cors",
-};
-
 /**
  * Fetches the memo in the url from local storage and server
  */
@@ -162,38 +137,53 @@ async function loadMemo() {
   }
   const id = m[1];
   konsole.log("check local storage for memo", id);
-  const local_memo = await db.read_memo(parseInt(id));
+  let local_memo: Memo | null = null;
+  try {
+    local_memo = await db.read_memo(parseInt(id));
+  } catch (e) {
+    // This device's copy could not be read at all. The memo may still be on the server, so the
+    // fetch below is still tried; what is not done is leaving the page on "Loading..." because a
+    // rejected promise went nowhere.
+    konsole.error(`Could not read memo ${id} from this device`, e);
+    set_status_in_editor(`# Could not read this device's copy of memo ${id}`);
+  }
   konsole.log(`Fetched memo from local storage ${id}`, local_memo);
   if (local_memo) {
     await set_memo_in_editor(local_memo, true);
   } else {
     konsole.log("Failed to get memo from local storage", id);
+    if (parseInt(id) < 0) {
+      // A new memo that is not on this device. Its id came from somewhere else — another device,
+      // or a list drawn before this device's copy was dropped — and there is nowhere to fetch it
+      // from, so say so rather than leaving the page on "# Loading..." for ever.
+      set_status_in_editor(`# No memo ${id} on this device`);
+      return;
+    }
   }
 
   if (parseInt(id) < 0) {
     konsole.log("Memo ${id} is new, not fetching from server");
     return;
   }
-  const response = await fetch(
-    `/organizator/memo/${id}?request.preventCache=${+new Date()}`,
-    options
-  );
-  if (response.status === 401) {
-    // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
-    window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
-    return;
-  } else if (response.status === 200) {
-    const json = await response.json();
-    if (!json.memo) {
+  try {
+    const reply = await server_comm.read_memo(parseInt(id));
+    if (!reply.memo) {
       konsole.log(`memo ${id} does not exist on server`);
       set_status_in_editor(`# No memo ${id} on server`);
     } else {
-      const memo = await db.save_memo_after_fetching_from_server(json);
+      const memo = await db.save_memo_after_fetching_from_server(reply);
       await set_memo_in_editor(memo, false);
     }
-  } else {
-    const message = failure_message(response.status, `memo ${id}`);
-    konsole.error(message);
+  } catch (e) {
+    if (e instanceof server_comm.UnauthenticatedError) {
+      // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
+      window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+    const message = e instanceof server_comm.HttpError
+      ? failure_message(e.status, `memo ${id}`)
+      : `# Could not reach the server for memo ${id}`;
+    konsole.error(message, e);
     // A cached copy already on screen stays there: it is what the user came for, and the memo
     // is perfectly usable from the cache. Replacing it with the error would take the screen
     // away to report a server problem.
@@ -201,15 +191,6 @@ async function loadMemo() {
       set_status_in_editor(message);
     }
   }
-
-  /*
-console.log(response);
-const reader = response.body.getReader();
-const chunk = await reader.read();
-console.log(chunk);
-const text = new TextDecoder("utf-8").decode(chunk.value);
-console.log(text);
-*/
 }
 
 async function display_synthetic_memo(id: string) {
@@ -367,7 +348,12 @@ const redraw_titles = async () => {
   } else if (list_is_local) {
     displayMemoTitles(await db.get_all_memos(), false, false);
   } else {
-    displayMemoTitles(await with_local_statuses(titles_from_server), false, false);
+    // The server's list is a snapshot of when it was fetched, and memos have been written here
+    // since: those belong in it, and the ones that were only ever here — never sent, and gone
+    // now that the cache has been dropped — do not.
+    const written_here = await db.get_new_memos();
+    const still_on_the_server = titles_from_server.filter((title) => title.id > 0);
+    displayMemoTitles(await with_local_statuses([...written_here, ...still_on_the_server]), false, false);
   }
 };
 
@@ -408,45 +394,39 @@ async function loadMemoTitles(force_reload?: boolean) {
     }
   }
   try {
-    const response = await fetch(
-      `/organizator/memo/?request.preventCache=${+new Date()}`,
-      options
-    );
-    if (response.status === 401) {
+    const responseJson: MemoTitleListDTO = await server_comm.read_memo_titles();
+    const new_memos = await db.get_new_memos();
+    await db.general_store_put("user", responseJson.requester);
+    titles_from_server = [...new_memos, ...responseJson.memos.map(mt => memo_title_dto_to_memo_title(mt, responseJson.requester.id))];
+    list_is_local = false;
+    // The whole list is what is about to be drawn, whatever was searched for before.
+    search_hits = undefined;
+    show_list_info("Memos from the server");
+    show_cache_all(true);
+    // The server's answer says nothing about the memos edited here since they were fetched;
+    // the cache does, and its markers win.
+    displayMemoTitles(await with_local_statuses(titles_from_server), false, false);
+    //console.log(responseJson);
+    return;
+  } catch (e) {
+    if (e instanceof server_comm.UnauthenticatedError) {
       // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
       window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
       return;
-    } else if (response.status === 200) {
-      const responseJson: MemoTitleListDTO = await response.json();
-      const new_memos = await db.get_new_memos();
-      await db.general_store_put("user", responseJson.requester);
-      titles_from_server = [...new_memos, ...responseJson.memos.map(mt => memo_title_dto_to_memo_title(mt, responseJson.requester.id))];
-      list_is_local = false;
-      // The whole list is what is about to be drawn, whatever was searched for before.
-      search_hits = undefined;
-      show_list_info("Memos from the server");
-      show_cache_all(true);
-      // The server's answer says nothing about the memos edited here since they were fetched;
-      // the cache does, and its markers win.
-      displayMemoTitles(await with_local_statuses(titles_from_server), false, false);
-      //console.log(responseJson);
-      return;
-    } else {
-      konsole.error(
-        "Failed to fetch memo list, server status",
-        response.status
-      );
+    }
+    if (e instanceof server_comm.HttpError) {
+      konsole.error("Failed to fetch memo list, server status", e.status);
       show_list_info(
         "Local memos",
-        `# The server answered ${response.status} for the memo list. These are the memos cached on this device, and searching them searches those.`
+        `# The server answered ${e.status} for the memo list. These are the memos cached on this device, and searching them searches those.`
+      );
+    } else {
+      konsole.error("Failed to fetch memo list", e);
+      show_list_info(
+        "Local memos",
+        `# Could not reach the server for the memo list. These are the memos cached on this device, and searching them searches those.`
       );
     }
-  } catch (e) {
-    konsole.error("Failed to fetch memo list", e);
-    show_list_info(
-      "Local memos",
-      `# Could not reach the server for the memo list. These are the memos cached on this device, and searching them searches those.`
-    );
   }
   list_is_local = true;
   search_hits = undefined;
@@ -473,8 +453,15 @@ const displayMemoTitles = async (
   const dest = document.getElementById("memoTitlesList");
   dest!.innerText = "";
 
+  // The access times only decide the order of the list; failing to read them is no reason to
+  // leave the list empty, which is what an uncaught failure here would do — the line above has
+  // already cleared it.
+  const access_times = await db.access_times().catch((e) => {
+    konsole.error("Could not read the access times, listing the memos without them", e);
+    return [];
+  });
   memo_processing
-    .make_title_list(memoTitles, await db.access_times())
+    .make_title_list(memoTitles, access_times)
     .map((memoTitle) => {
       const a = document.createElement("a");
       a.style.display = "inline-block";
@@ -538,9 +525,10 @@ const cache_everything = async () => {
       );
     }
     // The run is over and the status no longer says the list came from the server. What it left
-    // behind is here either way, so the offer goes with it; it comes back with the next list the
-    // server answers.
-    show_cache_all(false);
+    // behind is here either way, so the offer goes with it — unless some of it did not come, when
+    // asking again is exactly what the reader wants to do. It comes back with the next list the
+    // server answers in any case.
+    show_cache_all(result.failures.length > 0);
   } catch (e) {
     if (e instanceof server_comm.UnauthenticatedError) {
       window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
@@ -692,28 +680,24 @@ export async function searchMemos() {
     return;
   }
 
-  const response = await fetch(
-    `/organizator/memo/search?request.preventCache=${+new Date()}`,
-    {
-      ...postOptions,
-      body: `search=${encodeURIComponent(criteria)}`,
-    }
-  );
-  if (response.status === 401) {
-    // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
-    window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
-    return;
-  } else if (response.status === 200) {
-    const responseJson: MemoTitleListDTO = await response.json();
+  try {
+    const responseJson: MemoTitleListDTO = await server_comm.search_memos(criteria);
     const hits = responseJson.memos.map(mt => memo_title_dto_to_memo_title(mt, responseJson.requester.id))
     search_hits = hits;
     displayMemoTitles(hits, true, false);
     //console.log(responseJson);
-  } else {
+  } catch (e) {
+    if (e instanceof server_comm.UnauthenticatedError) {
+      // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
+      window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
     // The previous list is still on screen and the search did not touch it, so leaving this
     // unsaid would let a failed search pass for a search that matched what is already listed.
-    const message = `# Search failed, server status ${response.status}`;
-    konsole.error(message);
+    const message = e instanceof server_comm.HttpError
+      ? `# Search failed, server status ${e.status}`
+      : `# Search failed, could not reach the server`;
+    konsole.error(message, e);
     show_list_info("Memos from the server", message);
   }
 }

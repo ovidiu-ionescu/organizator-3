@@ -127,15 +127,36 @@ pub fn handle_pg_error_response(e: &PgError) -> impl IntoResponse {
                 StatusCode::UNAUTHORIZED,
                 "Data access unauthorized".to_string(),
             ),
+            // The application's own code: SQL/Updates/005 makes memo_write raise 2F006 when a
+            // write would change nothing at all. It is not a fault and not a permission
+            // problem — the caller asked to save a memo the server already holds — so it gets
+            // Conflict, which the client words for the reader rather than a failure to retry.
+            "2F006" => (
+                StatusCode::CONFLICT,
+                "The memo is identical to the one on the server".to_string(),
+            ),
             // No data found (returned by FETCH, SELECT INTO, etc.)
             "02000" => (StatusCode::NOT_FOUND, "No data found".to_string()),
+            // Too long for a column, or not a value the column takes at all: the request was
+            // the thing that was wrong. reporting these as server faults sent the caller looking
+            // for a fault that was not there.
+            "22001" | "22P02" => (
+                StatusCode::BAD_REQUEST,
+                "The database would not accept that value".to_string(),
+            ),
             // Default case for other known SQLSTATE codes - return generic server error
             _ => {
+                // The database's own words stay in the log: they name columns and constraints,
+                // and a caller has no use for them beyond being told the save did not happen.
                 warn!(
-                    "Unhandled SQLSTATE code: {}, treating as internal server error",
-                    code.code()
+                    "Unhandled SQLSTATE code: {}, treating as internal server error: {}",
+                    code.code(),
+                    e
                 );
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "The database refused the request".to_string(),
+                )
             }
         }
     } else {

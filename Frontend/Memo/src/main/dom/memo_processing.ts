@@ -1,3 +1,5 @@
+// @ts-ignore
+import {merge} from "../pkg/organizator_wasm.js";
 /**
  * @prettier
  *
@@ -274,6 +276,39 @@ const to_zero = (u?: number) => {
   return u;
 }
 
+/**
+ * The memo text as this application stores it, which is the form the server gives back.
+ *
+ * Two differences creep in between what the reader typed and what comes back from the server:
+ * carriage returns are stripped when a reply is read (see server2local), and the server trims
+ * the start of the text when it writes it (split_and_trim). A client that kept its own form
+ * therefore held a text the server would never hand back — one character longer, for a memo
+ * pasted with Windows line endings — and every comparison of the two said the memo had been
+ * edited, for ever, on a memo nobody had touched.
+ *
+ * Comparing in this form is also what predicts the next save: whatever this returns is what the
+ * server will have after the memo is written.
+ */
+export const canonical_memo_text = (text: string): string =>
+  text.split("\r").join("").trimStart();
+
+/**
+ * Merge three versions of a memo: what both sides started from, what is here, what is there.
+ *
+ * The merge itself is wasm (see merge.rs), and it works in lines: it ends its answer with a
+ * newline whether or not the memo it was given had one. A memo that did not end with a blank
+ * line therefore came back from a merge with an extra character, differing from what the server
+ * holds — and read as edited for ever, because every fetch of it merged again. The newline is
+ * dropped when neither version had one; when either did, it is part of the memo and stays.
+ */
+export const merge_memo_text = (base: string, ours: string, theirs: string): string => {
+  const merged = merge(base, ours, theirs);
+  if (merged.endsWith("\n") && !ours.endsWith("\n") && !theirs.endsWith("\n")) {
+    return merged.slice(0, -1);
+  }
+  return merged;
+};
+
 export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
   // no server correspondent, must be a new memo, save it
   if(!cache_memo.server) {
@@ -282,17 +317,49 @@ export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
   // if the timestamp has not changed, do not save
   //const timestamp_changed = to_zero(cache_memo.local.timestamp) > to_zero(cache_memo.server.timestamp);
   //if(!timestamp_changed) return false;
-  let dirty = false;
-  if(cache_memo.server.text !== cache_memo.local.text) {
-    dirty = true;
+  const text_differs =
+    canonical_memo_text(cache_memo.server.text) !==
+    canonical_memo_text(cache_memo.local.text);
+  const group_differs =
+    cache_memo.server.memogroup?.id !== cache_memo.local.memogroup?.id;
+  const dirty = text_differs || group_differs;
+
+  if (dirty) {
+    // Which field the two halves disagree about, once per memo per page: a memo that was never
+    // edited being called dirty is a record that has lost track of what the server holds, and
+    // the answer to "lost track of what, exactly" is in these numbers.
+    report_once(cache_memo.server.id, () =>
+      konsole.error(
+        `memo ${cache_memo.server?.id} is dirty` +
+          `${cache_memo.server?.readonly ? " and readonly" : ""}: ` +
+          `text ${cache_memo.server?.text.length} vs ${cache_memo.local.text.length} chars` +
+          `${text_differs ? " (differs)" : ""}, ` +
+          `group ${cache_memo.server?.memogroup?.id ?? "none"} vs ${cache_memo.local.memogroup?.id ?? "none"}` +
+          `${group_differs ? " (differs)" : ""}, ` +
+          `readonly ${cache_memo.server?.readonly} vs ${cache_memo.local.readonly}, ` +
+          `savetime ${cache_memo.server?.timestamp ?? "none"} vs ${cache_memo.local.timestamp ?? "none"}`
+      )
+    );
   }
-  dirty ||= cache_memo.server.memogroup?.id !== cache_memo.local.memogroup?.id;
+
   if(dirty && cache_memo.server.readonly) {
-    konsole.error(`memo ${cache_memo.server.id} is dirty and readonly`);
+    // A memo this device may not write cannot have been edited here, so a disagreement about it
+    // is the record's fault and not the reader's: it is reported rather than queued.
     return false;
   }
   return dirty;
 }
+
+/// Memos already reported by `report_once`, so the console says it once and not on every redraw.
+const reported = new Set<number>();
+
+const report_once = (id: number, report: () => void) => {
+  if (reported.has(id)) {
+    return;
+  }
+  reported.add(id);
+  report();
+};
 
 /**
  * Make a list of memo titles from cached memos. Useful to show what is in cache
