@@ -290,7 +290,7 @@ const to_zero = (u?: number) => {
  * server will have after the memo is written.
  */
 export const canonical_memo_text = (text: string): string =>
-  text.split("\r").join("").trimStart();
+  text.replaceAll('\r', '').trimStart();
 
 /**
  * Merge three versions of a memo: what both sides started from, what is here, what is there.

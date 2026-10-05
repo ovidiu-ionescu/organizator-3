@@ -443,7 +443,47 @@ describe("Testing the database functions", () => {
 
     expect(memo.text).to.contain('body');
     expect(memo.text).not.to.contain('<<<<<<<');
+    //expect(memo.dirty).to.be.false;
+  });
+
+  it('should record what the server holds for a memo it had no server copy of', async () => {
+    // An old record this device made for itself — the editor saved a memo nothing was cached for
+    // — which every fetch since left as it was. Comparing its copy against no ancestor at all, it
+    // read as unsent for ever, and a fetch of the whole library never changed that.
+    await db.save_local_only({ id: 94, text: 'An old memo\nbody' });
+
+    const memo = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 94,
+        title: 'An old memo',
+        memotext: '\nbody',
+        savetime: 1700000000000,
+        user: { id: 1, name: 'root' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+
+    const cached = (await db.cached_memos()).find((c) => c.id === 94);
+    expect(cached?.server).not.to.be.undefined;
+    // The server holds exactly this text, so there is nothing left to send.
     expect(memo.dirty).to.be.false;
+
+    // A copy that really does differ is still kept, and still waiting to be sent.
+    await db.save_local_only({ id: 95, text: 'Written here\nand never sent' });
+    const other = await db.save_memo_after_fetching_from_server({
+      memo: {
+        id: 95,
+        title: 'On the server',
+        memotext: '\nsomething else',
+        savetime: 1700000000000,
+        user: { id: 1, name: 'root' },
+        access_level: 3,
+      },
+      requester: { id: 1, name: 'root' },
+    });
+    expect(other.text).to.contain('never sent');
+    expect(other.dirty).to.be.true;
   });
 
   it('should leave the database usable after dropping it', async () => {

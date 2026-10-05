@@ -238,7 +238,91 @@ export const read_memo = async (id: number) => {
   return cache_memo ? with_dirty(cache_memo) : null;
 };
 
+/**
+ * Caches a memo that was just fetched from the server
+ * @param server_memo_reply
+ * @return memo to be used locally
+ */
 export const save_memo_after_fetching_from_server = async (
+    server_memo_reply: ServerMemoReply
+): Promise<Memo> => {
+  // sanitize the input first
+  const server_memo = memo_processing.server2local(server_memo_reply);
+  konsole.log("Save memo after fetching from server", server_memo);
+  // only needed for merge, should we wait here?
+  await wasm_ready();
+  const transaction = await get_memo_write_transaction();
+  const cached_memo = await raw_read_memo(transaction, server_memo.id);
+  // collect the conditions we need processing
+  const is_cache_present = !! cached_memo;
+  const has_server_memogroup_changed = cached_memo?.server?.memogroup?.id !== server_memo.memogroup?.id;
+  const has_local_memogroup_changed = cached_memo?.local?.memogroup?.id !== cached_memo?.server?.memogroup?.id;
+  const has_server_text_changed = cached_memo?.server?.text !== server_memo.text;
+  const has_local_text_changed = !(cached_memo?.local?.text && memo_processing.canonical_memo_text(cached_memo?.local?.text) === memo_processing.canonical_memo_text(server_memo.text));
+  const has_server_access_level_changed = cached_memo?.server?.readonly !== server_memo.readonly;
+
+  const has_local_changes = has_local_memogroup_changed || has_local_text_changed;
+  const has_server_changes = has_server_memogroup_changed || has_server_text_changed;
+
+  if(!is_cache_present) {
+    const cache_memo = memo_processing.make_synced_cache_memo(server_memo);
+    await raw_write_memo(transaction, cache_memo);
+    return with_dirty(cache_memo);
+  }
+  if(!cached_memo.server) {
+    const msg = `Server memo should be in cache but only local is present ${server_memo_reply.memo.id}`;
+    console.error(msg);
+    throw msg;
+  }
+  // from now on we no longer check for is_cache_present, we can't reach if it is not
+
+  // if no change on server, nothing to see, carry on
+  if(!has_server_changes && !has_server_access_level_changed) {
+    return with_dirty(cached_memo);
+  }
+  debugger
+  // server says memo turned readonly, drop changes
+  // ATTENTION: we might be dropping data
+  if(server_memo.readonly && has_server_access_level_changed) {
+    const cache_memo = memo_processing.make_synced_cache_memo(server_memo);
+    await raw_write_memo(transaction, cache_memo);
+    return with_dirty(cache_memo);
+  }
+  if(!server_memo.readonly && has_server_access_level_changed && !has_server_changes)  {
+    // we were readonly before now we allow changes. Just move to writeable
+    cached_memo.local.readonly = false
+    cached_memo.server.readonly = false
+    await raw_write_memo(transaction, cached_memo);
+    return with_dirty(cached_memo);
+  }
+  // from now on, server says writable
+  // we don't have local changes but server has changed
+  if(!has_local_changes && has_server_changes) {
+    const cache_memo = memo_processing.make_synced_cache_memo(server_memo);
+    await raw_write_memo(transaction, cache_memo);
+    return with_dirty(cache_memo);
+  }
+  debugger
+
+  if(has_server_text_changed) {
+    cached_memo.local.text = memo_processing.merge_memo_text(
+        cached_memo!.server!.text,
+        cached_memo.local.text,
+        server_memo.text
+    );
+  }
+  cached_memo.local.readonly = false
+  cached_memo.server.readonly = false
+
+  if (has_server_memogroup_changed  && !has_local_memogroup_changed) {
+    cached_memo.local.memogroup = server_memo.memogroup;
+  }
+  await raw_write_memo(transaction, cached_memo);
+  return with_dirty(cached_memo);
+};
+
+
+export const save_memo_after_fetching_from_server_old = async (
   server_memo_reply: ServerMemoReply
 ): Promise<Memo> => {
   // sanitize the input first
@@ -252,29 +336,30 @@ export const save_memo_after_fetching_from_server = async (
   await wasm_ready();
 
   const transaction = await get_memo_write_transaction();
+  const cached_memo = await raw_read_memo(transaction, server_memo.id);
 
-  await update_access_time(transaction, server_memo.id);
+  // FIXME this is really bad when caching the whole data
+  //await update_access_time(transaction, server_memo.id);
 
-  const existing_db_memo = await raw_read_memo(transaction, server_memo.id);
-  if (existing_db_memo) {
+  if (cached_memo) {
     // if the server memo is not newer than the memo last fetched then skip the server one and return local
-    if (!memo_processing.first_more_recent(server_memo, existing_db_memo.server)) {
-      konsole.log(`server memo ${server_memo.id} timestamp ${server_memo.timestamp} is not more recent than cached memo ancestor ${existing_db_memo.server?.timestamp}`);
+    if (!memo_processing.first_more_recent(server_memo, cached_memo.server)) {
+      konsole.log(`server memo ${server_memo.id} timestamp ${server_memo.timestamp} is not more recent than cached memo ancestor ${cached_memo.server?.timestamp}`);
       // The reply says who may write this memo, and that is not part of the text: a grant or a
       // revocation arrives with the same savetime as before, so this branch is the only one that
       // ever sees it. Taking only `owned` from it — and only into memory — left a reader who had
       // just been given write access still locked out, and a change they made anyway queued
       // nowhere, because the dirtiness of a record is measured against its server half.
-      existing_db_memo.local.readonly = server_memo.readonly;
-      existing_db_memo.local.owned = server_memo.owned;
-      if (existing_db_memo.server) {
-        existing_db_memo.server.readonly = server_memo.readonly;
-        existing_db_memo.server.owned = server_memo.owned;
+      cached_memo.local.readonly = server_memo.readonly;
+      cached_memo.local.owned = server_memo.owned;
+      if (cached_memo.server) {
+        cached_memo.server.readonly = server_memo.readonly;
+        cached_memo.server.owned = server_memo.owned;
       }
-      await raw_write_memo(transaction, existing_db_memo);
-      return with_dirty(existing_db_memo);
+      await raw_write_memo(transaction, cached_memo);
+      return with_dirty(cached_memo);
     } else {
-      if (!existing_db_memo.server) {
+      if (!cached_memo.server) {
         // A record with no server half: a memo written here that was never sent, whose cached
         // ancestor is gone — the cache was dropped while the editor held it, or it was cleared
         // elsewhere. There is nothing to merge against, and merging against nothing calls any two
@@ -282,7 +367,7 @@ export const save_memo_after_fetching_from_server = async (
         // copy. What is here exists nowhere else, so it is kept and left to be sent; the version
         // the server holds goes to memo_history when the save replaces it.
         konsole.log(
-          `memo ${existing_db_memo.id} has no ancestor to merge with, keeping the text written ` +
+          `memo ${cached_memo.id} has no ancestor to merge with, keeping the text written ` +
           `here and leaving it to be saved`
         );
         // The group is the one thing that can be taken from the reply without guessing. A local
@@ -290,17 +375,25 @@ export const save_memo_after_fetching_from_server = async (
         // — and saving it as it stands sends no group_id, which memo_write reads as "put it in no
         // group": the memo leaves the group it was in. What the reply says about the *text* is
         // left alone, because with no common ancestor that would be a guess between two versions.
-        if (!existing_db_memo.local.memogroup && server_memo.memogroup) {
+        if (!cached_memo.local.memogroup && server_memo.memogroup) {
           konsole.log(
-            `memo ${existing_db_memo.id} was in group ${server_memo.memogroup.id} on the server; ` +
+            `memo ${cached_memo.id} was in group ${server_memo.memogroup.id} on the server; ` +
             `the copy here never had one, so it takes the server's`
           );
-          existing_db_memo.local.memogroup = server_memo.memogroup;
-          await raw_write_memo(transaction, existing_db_memo);
+          cached_memo.local.memogroup = server_memo.memogroup;
         }
-        return with_dirty(existing_db_memo);
+        // And the reply is recorded as what the server holds. Leaving the record without it —
+        // which is what this used to do — made every later fetch of that memo a fetch of nothing:
+        // the copy was compared against no ancestor at all, so it read as unsent for ever and was
+        // ready to be pushed over whatever the server really had. With the reply recorded the two
+        // halves can be compared, and only a memo that really differs is left to send.
+        cached_memo.server = server_memo;
+        await raw_write_memo(transaction, cached_memo);
+        return with_dirty(cached_memo);
       }
-      if (memo_processing.first_more_recent(existing_db_memo.local, existing_db_memo.server)) {
+      if (memo_processing.first_more_recent(cached_memo.local, cached_memo.server)) {
+        // this makes no sense. You want to merge if the server was modified. How do you know?
+        // it should be different from server instance you based your changes.
         konsole.log(`both local and remote have been modified, we need to merge`);
 
         // The group the reply carries is the one the memo is in now. The local copy only
@@ -311,21 +404,21 @@ export const save_memo_after_fetching_from_server = async (
         // that names *no* group is not one that says "no group" — it is one that never knew, and
         // a memo saved from it leaves the group it is really in.
         const moved_here =
-          !!existing_db_memo.local.memogroup &&
-          existing_db_memo.local.memogroup?.id !== existing_db_memo.server.memogroup?.id;
+          !!cached_memo.local.memogroup &&
+          cached_memo.local.memogroup?.id !== cached_memo.server.memogroup?.id;
         const text = memo_processing.merge_memo_text(
-          existing_db_memo.server.text,
-          existing_db_memo.local.text,
+          cached_memo.server.text,
+          cached_memo.local.text,
           server_memo.text
         );
-        existing_db_memo.local.text = text;
-        existing_db_memo.local.timestamp = (+ new Date);
+        cached_memo.local.text = text;
+        cached_memo.local.timestamp = (+ new Date);
         if (!moved_here) {
-          existing_db_memo.local.memogroup = server_memo.memogroup;
+          cached_memo.local.memogroup = server_memo.memogroup;
         }
-        existing_db_memo.server = server_memo;
-        await raw_write_memo(transaction, existing_db_memo);
-        return with_dirty(existing_db_memo);
+        cached_memo.server = server_memo;
+        await raw_write_memo(transaction, cached_memo);
+        return with_dirty(cached_memo);
       } else {
         konsole.log(`local memo has not been modified, remote will replace it`);
         const cache_memo = memo_processing.make_synced_cache_memo(server_memo);

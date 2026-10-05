@@ -22,11 +22,13 @@
     "dev": "vite",
     "vite:build": "vite build",
     "buildv": "run-s build vite:build",
-    "playwrite-firefox": "npx playwright install --with-deps firefox"
+    "playwrite-firefox": "npx playwright install --with-deps firefox",
+    "test:browser": "vitest --config=vitest.browser.config.ts"
   },
   "author": "Ovidiu Ionescu",
   "license": "GPL-3.0-or-later",
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
     "@types/node": "^25.9.3",
     "@vitest/browser": "^4.1.2",
     "@vitest/browser-playwright": "^4.1.2",
