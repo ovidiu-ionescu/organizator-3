@@ -8,18 +8,17 @@
 -- means.
 
 WITH current_user_row AS (
-  SELECT
-    (current_setting('organizator.current_user'))::INTEGER AS user_id,
-    ((current_setting('organizator.current_user'))::INTEGER = 0) AS is_admin
+  SELECT (current_setting('organizator.current_user'))::INTEGER AS user_id
 ),
 owned_group AS (
-  -- The caller's own memo group, or any of them for the admin, who owns the seeded public
-  -- ones. A group that does not exist and one that is not the caller's are one answer.
+  -- The caller's own memo group, and only that: the admin role is for defining the public
+  -- groups everyone uses, not for withdrawing access on somebody else's. A group that does not
+  -- exist and one that is not the caller's are one answer.
   SELECT memo_group.id
   FROM memo_group
   CROSS JOIN current_user_row
   WHERE memo_group.id = $1
-    AND (current_user_row.is_admin OR memo_group.user_id = current_user_row.user_id)
+    AND memo_group.user_id = current_user_row.user_id
 ),
 revoked AS (
   DELETE FROM memo_acl

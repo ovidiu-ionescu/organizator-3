@@ -1,12 +1,9 @@
-SELECT json_build_object(
-  'data', json_agg(row_to_json(t)),
-  'total', (SELECT count(*) FROM memo)
-)::text AS json
-FROM (
-SELECT
-  username, user_id, count(*) total, count(group_id) shared
-  FROM memo INNER JOIN users
-    ON memo.user_id = users.id
-  GROUP BY user_id, username
-  ORDER BY user_id
-) t;
+-- Counts of memos per user, for the admin screen.
+--
+-- The counting itself is in the database rather than here: memo is under FORCE ROW LEVEL
+-- SECURITY and this runs as the application's own role, so a query written here could only
+-- count the caller's own memos. public.memo_stats() is SECURITY DEFINER and sees every row,
+-- and returns nothing but the counts. See
+-- SQL/Updates/010_memo_stats_counts_without_reading.sql.
+
+SELECT memo_stats() AS json;

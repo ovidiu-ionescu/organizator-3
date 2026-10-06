@@ -52,7 +52,8 @@ async fn main() {
     //Setup tracing
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+            .add_directive("tokio_postgres::connection=warn".parse().unwrap())
         )
         .init();
 
@@ -112,6 +113,13 @@ async fn main() {
         .routes(routes!(set_memo_group_access))
         .routes(routes!(revoke_memo_group_access))
         .routes(routes!(set_memo_group_public))
+        .routes(routes!(list_odates))
+        .routes(routes!(create_odate))
+        .routes(routes!(update_odate))
+        .routes(routes!(list_locations))
+        .routes(routes!(create_location))
+        .routes(routes!(list_odate_types))
+        .routes(routes!(create_odate_type))
         .routes(routes!(file_list))
         .routes(routes!(get_memo_stats))
         .routes(routes!(get_all_usergroups))
@@ -546,6 +554,54 @@ struct PublicForm {
     public: bool,
 }
 
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct OdateForm {
+    /// Epoch milliseconds, the unit `odate` stores and the rest of this schema keeps time in.
+    start_time: i64,
+    end_time: i64,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    memo_text: Option<String>,
+    /// Optional: an entry need not have a location.
+    #[serde(default)]
+    location_id: Option<i32>,
+    /// The column is called `type`, which is why the field is renamed rather than named.
+    #[serde(default, rename = "type")]
+    odate_type: Option<i32>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone, ToSchema)]
+struct LocationForm {
+    name: String,
+    /// Optional: a location with no coordinates is still somewhere to say an entry happened.
+    #[serde(default)]
+    latitude: Option<f64>,
+    #[serde(default)]
+    longitude: Option<f64>,
+    #[serde(default)]
+    timezone: Option<String>,
+}
+
+/// What `create_location.sql` and `create_odate_type.sql` report. Each builds its payload from
+/// RETURNING, so the row is never read back.
+#[derive(serde::Deserialize, Debug)]
+struct PlaceOutcome {
+    outcome: String,
+    #[serde(default)]
+    location: Option<serde_json::Value>,
+    #[serde(default)]
+    odate_type: Option<serde_json::Value>,
+}
+
+/// What `create_odate.sql` reports about the entry it tried to make.
+#[derive(serde::Deserialize, Debug)]
+struct OdateOutcome {
+    outcome: String,
+    #[serde(default)]
+    id: Option<i32>,
+}
+
 /// Create a user group of the caller's own.
 #[utoipa::path(
     post,
@@ -566,7 +622,8 @@ async fn create_user_group(
     Json(form): Json<NameForm>,
 ) -> HandlerResponse {
     let name = form.name.trim();
-    debug!("Creating user group 「{name}」 for {}", requester.id());
+    let username = requester.id();
+    debug!("Creating user group 「{name}」 for {username}");
 
     if name.is_empty() {
         return Ok(refused(
@@ -584,6 +641,10 @@ async fn create_user_group(
     .await?;
 
     let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome == "no_owner" {
+        return Ok(no_owner("user group"));
+    }
 
     if outcome.outcome != "created" {
         return Ok(refused(
@@ -743,6 +804,10 @@ async fn create_memo_group(
     .await?;
 
     let outcome: GroupWriteOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome == "no_owner" {
+        return Ok(no_owner("memo group"));
+    }
 
     if outcome.outcome != "created" {
         return Ok(refused(
@@ -1037,6 +1102,382 @@ fn build_json_body(json: String) -> Result<Json<serde_json::Value>, AppError> {
     Ok(Json(serde_json::from_str(&json)?))
 }
 
+/// The caller's own locations, by name.
+#[utoipa::path(
+    get,
+    path = "/locations",
+    responses(
+        (status = 200, description = "The caller's locations", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn list_locations(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+) -> HandlerResponse {
+    let username = requester.id();
+    trace!("Listing locations for {username}");
+
+    let json = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/list_locations.sql")),
+        &[],
+    )
+    .await?;
+
+    build_simple_json_response(json)
+}
+
+/// Create a location of the caller's own.
+#[utoipa::path(
+    post,
+    path = "/locations",
+    request_body = LocationForm,
+    responses(
+        (status = 201, description = "The location that was created", body = Object),
+        (status = 409, description = "The caller already has a location by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn create_location(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    // last extractor consumes the body
+    Json(form): Json<LocationForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    let username = requester.id();
+    debug!("Creating location 「{name}」 for {username}");
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A location needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/create_location.sql")),
+        &[
+            &name,
+            &form.latitude,
+            &form.longitude,
+            &form.timezone,
+        ],
+    )
+    .await?;
+
+    let outcome: PlaceOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "created" => {
+            let place = outcome
+                .location
+                .ok_or_else(|| AppError::bad_request("The location was created but not reported"))?;
+            Ok((StatusCode::CREATED, Json(place)).into_response())
+        }
+        "no_owner" => Ok(no_owner("location")),
+        _ => Ok(refused(
+            StatusCode::CONFLICT,
+            format!("You already have a location called 「{name}」"),
+        )),
+    }
+}
+
+/// The caller's own date types, by name.
+#[utoipa::path(
+    get,
+    path = "/odate_types",
+    responses(
+        (status = 200, description = "The caller's date types", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn list_odate_types(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+) -> HandlerResponse {
+    let username = requester.id();
+    trace!("Listing odate types for {username}");
+
+    let json = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/list_odate_types.sql")),
+        &[],
+    )
+    .await?;
+
+    build_simple_json_response(json)
+}
+
+/// Create a date type of the caller's own.
+#[utoipa::path(
+    post,
+    path = "/odate_types",
+    request_body = NameForm,
+    responses(
+        (status = 201, description = "The date type that was created", body = Object),
+        (status = 409, description = "The caller already has a date type by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn create_odate_type(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    // last extractor consumes the body
+    Json(form): Json<NameForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    let username = requester.id();
+    debug!("Creating odate type 「{name}」 for {username}");
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A date type needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/create_odate_type.sql")),
+        &[&name],
+    )
+    .await?;
+
+    let outcome: PlaceOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "created" => {
+            let place = outcome
+                .odate_type
+                .ok_or_else(|| AppError::bad_request("The date type was created but not reported"))?;
+            Ok((StatusCode::CREATED, Json(place)).into_response())
+        }
+        "no_owner" => Ok(no_owner("date type")),
+        _ => Ok(refused(
+            StatusCode::CONFLICT,
+            format!("You already have a date type called 「{name}」"),
+        )),
+    }
+}
+
+/// Update one of the caller's own calendar entries.
+///
+/// The body is the whole entry, the same shape `POST /odates` takes: the form holds every field
+/// anyway, so sending only the changes would be a second way of saying the same thing.
+#[utoipa::path(
+    put,
+    path = "/odates/{id}",
+    params(("id" = i32, Path, description = "odate.id")),
+    request_body = OdateForm,
+    responses(
+        (status = 200, description = "The entry as it is now", body = Object),
+        (status = 404, description = "No such entry, or not the caller's", body = Object),
+        (status = 422, description = "The interval is backwards, or a location or type is not the caller's", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn update_odate(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(entry_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<OdateForm>,
+) -> HandlerResponse {
+    let username = requester.id();
+    debug!(
+        "Updating odate {entry_id} for {username}: {}..{}",
+        form.start_time, form.end_time
+    );
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/update_odate.sql")),
+        &[
+            &entry_id,
+            &form.start_time,
+            &form.end_time,
+            &form.description,
+            &form.memo_text,
+            &form.location_id,
+            &form.odate_type,
+        ],
+    )
+    .await?;
+
+    let outcome: OdateOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "updated" {
+        return Ok(match outcome.outcome.as_str() {
+            "no_owner" => no_owner("calendar entry"),
+            // An entry that is not the caller's gives the same answer as one that is not there,
+            // so ids cannot be probed by trying to change them.
+            "no_entry" => refused(StatusCode::NOT_FOUND, "No such entry".to_string()),
+            "bad_interval" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "An entry has to end after it starts".to_string(),
+            ),
+            "bad_location" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "No such location of yours".to_string(),
+            ),
+            "bad_type" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "No such date type of yours".to_string(),
+            ),
+            _ => refused(StatusCode::BAD_REQUEST, "Could not change the entry".to_string()),
+        });
+    }
+
+    // A second statement, for the reason the create gives: the UPDATE and a SELECT beside it
+    // share one snapshot, so only a read after the transaction commits shows the new values.
+    let now = millis_since_epoch();
+    let (entry_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/get_odate.sql")),
+        &[&entry_id, &now],
+    )
+    .await?;
+
+    Ok(build_json_body(entry_json)?.into_response())
+}
+
+/// The caller's calendar entries that have not started yet, soonest first.
+///
+/// "Now" is read here rather than taken from the caller: a clock the server does not control
+/// would let a wrong one hide entries, and the server already has the time.
+#[utoipa::path(
+    get,
+    path = "/odates",
+    responses(
+        (status = 200, description = "The caller's upcoming entries, soonest first", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn list_odates(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+) -> HandlerResponse {
+    let now = millis_since_epoch();
+    let username = requester.id();
+    trace!("Listing odates from {now} for {username}");
+
+    let json = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/list_odates.sql")),
+        &[&now],
+    )
+    .await?;
+
+    build_simple_json_response(json)
+}
+
+/// Create a calendar entry of the caller's own.
+#[utoipa::path(
+    post,
+    path = "/odates",
+    request_body = OdateForm,
+    responses(
+        (status = 201, description = "The entry that was created", body = Object),
+        (status = 422, description = "The interval is backwards, or a location or type is not the caller's", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn create_odate(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    // last extractor consumes the body
+    Json(form): Json<OdateForm>,
+) -> HandlerResponse {
+    let username = requester.id();
+    debug!(
+        "Creating odate for {username}: {}..{}",
+        form.start_time, form.end_time
+    );
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/create_odate.sql")),
+        &[
+            &form.start_time,
+            &form.end_time,
+            &form.description,
+            &form.memo_text,
+            &form.location_id,
+            &form.odate_type,
+        ],
+    )
+    .await?;
+
+    let outcome: OdateOutcome = serde_json::from_str(&outcome_json)?;
+
+    if outcome.outcome != "created" {
+        // A location or type that is not the caller's and one that does not exist are the same
+        // answer, so guessing an id tells the caller nothing about whose it is.
+        return Ok(match outcome.outcome.as_str() {
+            "no_owner" => no_owner("calendar entry"),
+            "bad_interval" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "An entry has to end after it starts".to_string(),
+            ),
+            "bad_location" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "No such location of yours".to_string(),
+            ),
+            "bad_type" => refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "No such date type of yours".to_string(),
+            ),
+            _ => refused(
+                StatusCode::BAD_REQUEST,
+                "Could not create the entry".to_string(),
+            ),
+        });
+    }
+
+    let id = outcome
+        .id
+        .ok_or_else(|| AppError::bad_request("The entry was created but not reported"))?;
+
+    // A second statement, for the reason the group writes give: the INSERT and a SELECT beside
+    // it share one snapshot, so only a read after the transaction commits shows the new row.
+    // "Now" goes along so the entry is described the same way the list would describe it.
+    let now = millis_since_epoch();
+    let (entry_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/get_odate.sql")),
+        &[&id, &now],
+    )
+    .await?;
+
+    Ok((StatusCode::CREATED, build_json_body(entry_json)?).into_response())
+}
+
 /// Remove a user from one of the caller's own user groups.
 ///
 /// The member is named by username, like the endpoint that adds one, and for the same reason.
@@ -1099,6 +1540,17 @@ async fn remove_user_group_member(
     .await?;
 
     build_simple_json_response((group_json, group_requester))
+}
+
+/// Refused because the caller's name did not resolve to a user, so there is nobody to own what
+/// was asked for. The name comes from the token rather than from the caller, so this is a fault
+/// on our side; saying so beats writing a row owned by nobody, which nobody could then see or
+/// delete.
+fn no_owner(what: &str) -> Response {
+    refused(
+        StatusCode::FORBIDDEN,
+        format!("Could not tell who you are, so the {what} was not created"),
+    )
 }
 
 /// A refusal the caller is meant to read, in the same `{"error": "..."}` shape `AppError`

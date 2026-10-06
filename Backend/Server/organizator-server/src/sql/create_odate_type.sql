@@ -1,12 +1,12 @@
--- Create a user group owned by the caller.
+-- Create a date type of the caller's own.
 --
--- $1 the new group's name
+-- $1 the name
 --
--- Refuses a name the caller already has a group under, so the list cannot fill up with two
--- rows the admin cannot tell apart. Anything else about the row comes from RETURNING rather
--- than from a read: a data-modifying statement and everything around it share one snapshot,
--- so a SELECT here could not see the row the INSERT just added (see add_user_group_member.sql).
--- A group that has just been created has nobody in it, which is what the response says.
+-- The owner is the id set_current_user placed in the session. db.rs has already resolved the
+-- token into it for every statement of the request, so there is no name to resolve again here.
+--
+-- Refuses a name the caller already has a type under, the same rule the groups and locations
+-- keep. The whole response comes from RETURNING, for the snapshot reason in create_location.sql.
 --
 -- The parameters are given their types in `requested`, once, and the rest of the statement
 -- reads named columns. Left to inference this fails: the name compared against the varchar
@@ -23,9 +23,6 @@
 -- TEXT rather than the column's own VARCHAR(255): casting to that width would cut a too-long
 -- name down to fit in silence.
 --
--- The owner is the id set_current_user placed in the session. db.rs has already resolved the
--- token into it for every statement of the request, so there is no name to resolve again here.
-
 WITH requested AS (
   SELECT $1::TEXT AS name
 ),
@@ -33,21 +30,19 @@ current_user_row AS (
   SELECT (current_setting('organizator.current_user'))::INTEGER AS user_id
 ),
 created AS (
-  -- No id: user_group.id is serial, so the column default draws the next value (DDL/user_group.sql).
-  INSERT INTO user_group (user_group_name, user_id)
-  SELECT
-    requested.name,
-    current_user_row.user_id
+  -- No id: odate_type.id is serial, so the column default draws the next value.
+  INSERT INTO odate_type (name, user_id)
+  SELECT requested.name, current_user_row.user_id
   FROM current_user_row
   CROSS JOIN requested
   WHERE current_user_row.user_id IS NOT NULL
     AND NOT EXISTS (
       SELECT 1
-      FROM user_group
-      WHERE user_group.user_id = current_user_row.user_id
-        AND user_group.user_group_name = requested.name
+      FROM odate_type
+      WHERE odate_type.user_id = current_user_row.user_id
+        AND odate_type.name = requested.name
     )
-  RETURNING id, user_group_name
+  RETURNING id, name
 )
 SELECT
   json_build_object(
@@ -59,14 +54,9 @@ SELECT
       WHEN EXISTS (SELECT 1 FROM created) THEN 'created'
       ELSE 'name_taken'
     END,
-    'group',
+    'odate_type',
     (
-      SELECT
-        json_build_object(
-          'id', created.id,
-          'name', created.user_group_name,
-          'users', '[]'::JSON
-        )
+      SELECT json_build_object('id', created.id, 'name', created.name)
       FROM created
     )
   )::TEXT AS json;
