@@ -1,0 +1,65 @@
+<h2>{{ heading() }}</h2>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+}
+
+<ul class="entries">
+  @for (entry of odates(); track entry.id) {
+    <!-- Read once: it is asked for by three bindings below, and answers with one of them. -->
+    @let soon = howSoon(entry);
+    <li
+      class="entry"
+      [class.happening]="soon === 'happening'"
+      [class.today]="soon === 'today'"
+      [class.this-week]="soon === 'week'"
+    >
+      <p class="when">
+        <!-- The server decides what "now" is, so the marker comes from it and not from a clock
+             this screen would have to have of its own. -->
+        @if (entry.ongoing) {
+          <span class="badge">Happening now</span>
+        }
+        <time [attr.datetime]="entry.start_time">{{ entry.start_time | date: 'EEE d MMM, HH:mm' }}</time>
+        <span class="until">→ {{ entry.end_time | date: 'HH:mm' }}</span>
+      </p>
+
+      <p class="what">{{ entry.description || 'No description' }}</p>
+
+      @if (entry.memo_text) {
+        @let note = noteHtml(entry.memo_text);
+        @if (note !== null) {
+          <div class="notes markdown" [innerHTML]="note"></div>
+        } @else {
+          <p class="notes">{{ entry.memo_text }}</p>
+        }
+      }
+
+      @if (entry.location || entry.type) {
+        <p class="about">
+          @if (entry.location) {
+            <span>{{ entry.location.name }}</span>
+            <!-- Where it is, when the location has been put on the earth. The same plain Maps
+                 link the locations panel offers, so an entry answers "where" on its own. -->
+            @if (coordinatesOf(entry); as at) {
+              <a class="map-link" [href]="mapUrl(at)" target="_blank" rel="noopener noreferrer">
+                Map<span class="visually-hidden"> of {{ entry.location.name }}, on Google Maps</span>
+              </a>
+            }
+          }
+          @if (entry.type) {
+            <span class="type">{{ entry.type.name }}</span>
+          }
+        </p>
+      }
+
+      <button type="button" class="row-action" (click)="edit.emit(entry)">
+        Edit<span class="visually-hidden"> {{ entry.description || 'this entry' }}</span>
+      </button>
+    </li>
+  } @empty {
+    @if (!loading() && !failed()) {
+      <li class="muted">{{ emptyText() }}</li>
+    }
+  }
+</ul>

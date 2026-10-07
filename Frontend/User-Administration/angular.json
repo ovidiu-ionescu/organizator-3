@@ -65,7 +65,11 @@
             }
           },
           "defaultConfiguration": "development",
-          "options": { "allowedHosts": [ "pillow.organizator.ro" ] }
+          "options": {
+            "allowedHosts": [
+              "pillow.organizator.ro"
+            ]
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"

@@ -1,3 +1,21 @@
+organizator (0.1.28) UNRELEASED; urgency=medium
+
+  * fixes for urls
+  * colors for odate depending or time distance
+  * reordered tabs
+  * default end datetime for events is now 1 hour after start datetime
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 8 Oct 2026 01:03:00 +0200
+organizator (0.1.27) UNRELEASED; urgency=medium
+
+  * added location for events
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Tue, 6 Oct 2026 22:07:00 +0200
+organizator (0.1.26) UNRELEASED; urgency=medium
+
+  * fixes in backend
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Tue, 6 Oct 2026 22:07:00 +0200
 organizator (0.1.25) UNRELEASED; urgency=medium
 
   * redid the code that processes getting a memo from the server

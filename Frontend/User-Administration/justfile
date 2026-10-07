@@ -1,11 +1,18 @@
+# The markdown renderer is a wasm package that lives outside this workspace, which Angular
+# refuses to copy in as an asset, so it is staged into public/ first — the way the memo app
+# copies it into its build. public/pkg is ignored by git; without it the app still runs, it just
+# shows notes as they were written rather than rendering them.
+pkg:
+  mkdir -p public/pkg
+  cp -r ../organizator-wasm/pkg/. public/pkg/
+
 # default
-run:
+run: pkg
   ng serve --host=0.0.0.0 --serve-path=/angular-dev-server/ --configuration development
 
 deploy: build
   mkdir -p /var/www/organizator.ro/user-admin
   cp -r dist/user-administration/browser/* /var/www/organizator.ro/user-admin/
 
-build:
+build: pkg
   ng build --base-href=/user-admin/
-

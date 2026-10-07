@@ -1,0 +1,94 @@
+<!-- At the top because it decides what the list below shows. Either field may be left empty:
+     that is "everything since" or "everything up to", which are both worth asking. -->
+<section class="panel">
+  <form class="search-row" (submit)="search(searchFrom, searchUntil, $event)">
+    <label for="search-from">From</label>
+    <input
+      #searchFrom
+      id="search-from"
+      class="field"
+      name="from"
+      type="date"
+      [disabled]="loading()"
+    />
+
+    <label for="search-until">To</label>
+    <input
+      #searchUntil
+      id="search-until"
+      class="field"
+      name="until"
+      type="date"
+      [disabled]="loading()"
+    />
+
+    <button type="submit" class="btn">Search</button>
+    <button type="button" class="btn" (click)="clearSearch(searchFrom, searchUntil)" [disabled]="!searching()">
+      Clear
+    </button>
+  </form>
+</section>
+
+<p class="status" [class.error]="status()?.error" role="status" aria-live="polite">
+  {{ status()?.text }}
+</p>
+
+<section class="panel">
+  <app-odate-form
+    [locations]="locations()"
+    [types]="types()"
+    [saving]="saving()"
+    [(editing)]="editing"
+    (create)="createOdate($event)"
+    (update)="updateOdate($event)"
+  />
+</section>
+
+<section class="panel">
+  <app-odate-list
+    [odates]="odates()"
+    [heading]="listHeading()"
+    [emptyText]="listEmptyText()"
+    [loading]="loading()"
+    [failed]="listFailed()"
+    (edit)="editing.set($event)"
+  />
+</section>
+
+<!-- The two lists the form above picks from. They are below the entries because that is what the
+     page is for; they are here at all because a name typed wrong on the form had no other way
+     to be put right. -->
+<section class="panel">
+  <app-place-list-panel
+    heading="Locations"
+    newLabel="New location"
+    placeholder="Office"
+    emptyText="You have no locations yet. Add one above, then choose it on an entry."
+    idPrefix="loc"
+    [withCoordinates]="true"
+    [places]="locations()"
+    [loading]="loadingLocations()"
+    [saving]="savingLocations()"
+    [status]="locationStatus()"
+    (create)="createLocation($event)"
+    (edit)="updateLocation($event)"
+    (remove)="deleteLocation($event)"
+  />
+</section>
+
+<section class="panel">
+  <app-place-list-panel
+    heading="Date types"
+    newLabel="New date type"
+    placeholder="Meeting"
+    emptyText="You have no date types yet. Add one above, then choose it on an entry."
+    idPrefix="ot"
+    [places]="types()"
+    [loading]="loadingTypes()"
+    [saving]="savingTypes()"
+    [status]="typeStatus()"
+    (create)="createOdateType($event)"
+    (edit)="renameOdateType($event)"
+    (remove)="deleteOdateType($event)"
+  />
+</section>

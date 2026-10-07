@@ -1,0 +1,172 @@
+<div class="panel-body">
+  <!-- h2, not h3: the shell owns the only h1, and a page that jumps from h1 to h3 fails the
+       heading-order check that docs/best-practices.md requires. Every id is built from this
+       panel's own prefix, because a location and a date type can share a number. -->
+  <h2 #panelHeading tabindex="-1">{{ heading() }}</h2>
+
+  <p class="status" [class.error]="panelFailed()" role="status" aria-live="polite">
+    {{ panelStatus() }}
+  </p>
+
+  <!-- Always open: a name is added in order to be picked on an entry, and the two belong together. -->
+  <form class="create-row" (submit)="createPlace(newName, $event)">
+    <label [attr.for]="controlIdOfNewField('name')">{{ newLabel() }}</label>
+    <input
+      #newName
+      class="field"
+      [id]="controlIdOfNewField('name')"
+      name="name"
+      type="text"
+      autocomplete="off"
+      [placeholder]="placeholder()"
+      [disabled]="saving()"
+    />
+
+    @if (withCoordinates()) {
+      <!-- The pair a map copies, pasted as it comes. One field rather than two, because that is
+           the shape it arrives in and nobody reads a latitude off a map by hand. -->
+      <label [attr.for]="controlIdOfNewField('coordinates')">Coordinates</label>
+      <input
+        #coordinates
+        class="field"
+        [id]="controlIdOfNewField('coordinates')"
+        name="coordinates"
+        type="text"
+        autocomplete="off"
+        placeholder="44.4268, 26.1025"
+        [disabled]="saving()"
+      />
+    }
+
+    <button type="submit" class="btn" [disabled]="saving()">Create</button>
+  </form>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  }
+
+  <ul class="places">
+    @for (place of places(); track place.id) {
+      <li class="place">
+        @if (editingId() === place.id) {
+          <form class="edit-row" (submit)="submitEdit(place, editName, $event)">
+            <label class="visually-hidden" [attr.for]="controlId('edit', place)">
+              New name for {{ place.name }}
+            </label>
+            <input
+              #editName
+              #editField
+              class="field"
+              [id]="controlId('edit', place)"
+              name="name"
+              type="text"
+              autocomplete="off"
+              [value]="place.name"
+              [disabled]="saving()"
+            />
+
+            @if (withCoordinates()) {
+              <!-- Filled from the row so that saving writes back what was there: the server
+                   replaces the whole location, so an empty box here would take the coordinates
+                   away rather than leave them alone. -->
+              <label class="visually-hidden" [attr.for]="controlId('edit-coordinates', place)">
+                Coordinates of {{ place.name }}
+              </label>
+              <input
+                #editCoordinates
+                class="field"
+                [id]="controlId('edit-coordinates', place)"
+                name="coordinates"
+                type="text"
+                autocomplete="off"
+                placeholder="44.4268, 26.1025"
+                [value]="coordinatesText(place)"
+                [disabled]="saving()"
+              />
+            }
+
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">Save</button>
+            <button type="button" class="btn" (click)="cancelEdit()" [disabled]="saving()">
+              Cancel
+            </button>
+          </form>
+        } @else {
+          <div class="place-head">
+            <strong class="place-name">{{ place.name }}</strong>
+            <span class="controls">
+              <button
+                #editButton
+                type="button"
+                class="row-action"
+                [id]="controlId('edit', place)"
+                (click)="openEdit(place)"
+                [disabled]="saving()"
+              >
+                {{ actionLabel() }}<span class="visually-hidden"> {{ place.name }}</span>
+              </button>
+
+              @if (confirmingDeleteId() === place.id) {
+                <span class="confirm">
+                  <span>Delete {{ place.name }}?</span>
+                  <button
+                    #confirmDeleteButton
+                    type="button"
+                    class="row-action danger"
+                    [id]="controlId('confirm-delete', place)"
+                    (click)="confirmDelete(place)"
+                    [disabled]="saving()"
+                  >
+                    Yes, delete<span class="visually-hidden"> {{ place.name }}</span>
+                  </button>
+                  <button type="button" class="row-action" (click)="cancelDelete()">Cancel</button>
+                </span>
+              } @else {
+                <button
+                  #deleteButton
+                  type="button"
+                  class="row-action danger"
+                  [id]="controlId('delete', place)"
+                  (click)="confirmDelete(place)"
+                  [disabled]="saving()"
+                >
+                  Delete<span class="visually-hidden"> {{ place.name }}</span>
+                </button>
+              }
+            </span>
+          </div>
+
+          @if (coordinatesOf(place); as at) {
+            <p class="where">
+              <span class="coordinates">{{ formatCoordinates(at) }}</span>
+              <!-- A link and not an embedded map: reading where somewhere is means opening it,
+                   and this needs no API key and no third-party script in the page. -->
+              <a
+                class="map-link"
+                [href]="mapUrl(at)"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Map<span class="visually-hidden"> for {{ place.name }}, on Google Maps</span>
+              </a>
+            </p>
+          }
+        }
+
+        <!-- Always in the page, even when empty: a live region has to exist before the text it
+             announces is put into it, or the first message is never read out. -->
+        <p
+          class="status row-status"
+          [class.error]="statusFor(place)?.error"
+          role="status"
+          aria-live="polite"
+        >
+          {{ statusFor(place)?.text }}
+        </p>
+      </li>
+    } @empty {
+      @if (!loading() && !loadFailed()) {
+        <li class="muted">{{ emptyText() }}</li>
+      }
+    }
+  </ul>
+</div>

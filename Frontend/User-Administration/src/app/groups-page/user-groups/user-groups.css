@@ -81,36 +81,6 @@
   font-size: 0.875rem;
 }
 
-/* A secondary action on the row: no box, just accent-coloured text. The vertical padding
-   lifts the hit area over the 24px WCAG 2.5.8 minimum, as it does on the user list. */
-.row-action {
-  font: inherit;
-  font-size: 0.875rem;
-  padding: 0.125rem 0;
-  border: none;
-  background: none;
-  color: var(--accent-text);
-  cursor: pointer;
-}
-
-.row-action:hover:not(:disabled) {
-  text-decoration: underline;
-}
-
-.row-action:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.row-action.danger {
-  color: var(--danger);
-}
-
-.row-action:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;

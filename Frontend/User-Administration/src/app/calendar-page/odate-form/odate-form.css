@@ -1,0 +1,94 @@
+.entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 30rem;
+}
+
+/* Names what is being changed, above the fields it is about. */
+.editing {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A fixed width, so the fields line up whatever the label says. */
+.row label {
+  flex: 0 0 5rem;
+  font-size: 0.875rem;
+}
+
+.row input,
+.row select,
+.row textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row textarea {
+  resize: vertical;
+}
+
+/* The notes are the one field tall enough to need the whole column, so its control and its
+   preview stack rather than sitting beside the label. */
+.notes-row {
+  align-items: flex-start;
+}
+
+.notes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.preview-toggle {
+  align-self: flex-end;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Matches the field it replaces, so the form does not jump when the preview is opened. */
+.markdown,
+.notes-plain {
+  min-height: 4.5rem;
+  white-space: normal;
+}
+
+.notes-plain {
+  white-space: pre-wrap;
+  color: var(--text-muted);
+}
+
+.actions {
+  margin-top: 0.25rem;
+  margin-left: 5.5rem; /* clears the label column, so the button sits under the fields */
+}
+
+/* Narrow enough that the label column takes more of the row than the field does: on a phone a
+   date field is left about 200px, which its own value does not fit in comfortably. The labels
+   go above their fields instead, and the buttons start at the edge rather than indented under a
+   column that is no longer there. */
+@media (max-width: 30rem) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .row label {
+    flex: none;
+  }
+
+  .actions {
+    margin-left: 0;
+  }
+}

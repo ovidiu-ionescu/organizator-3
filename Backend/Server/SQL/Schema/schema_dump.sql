@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict VAepallOO1U3jffQ3YjCaCSJGviwm1hnS8RzgvfihUzrafmvEkKqa0dczinDIWD
+\restrict p0wxJw3wnDtaPx4GrmGkeIyPfFyAxwQJEDdWbBBLcuWa5LP4mnijhfsTo0FcFri
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -422,6 +422,30 @@ CREATE FUNCTION public.memo_read(p_memo_id integer, p_username character varying
 ALTER FUNCTION public.memo_read(p_memo_id integer, p_username character varying, OUT o_id integer, OUT o_title character varying, OUT o_memotext text, OUT o_savetime bigint, OUT o_memo_group_id integer, OUT o_memo_group_name character varying, OUT o_user_id integer, OUT o_username character varying, OUT o_requester_id integer, OUT o_requester_name character varying) OWNER TO organizator_prod;
 
 --
+-- Name: memo_stats(); Type: FUNCTION; Schema: public; Owner: organizator_stats
+--
+
+CREATE FUNCTION public.memo_stats() RETURNS text
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  SELECT json_build_object(
+    'data', json_agg(row_to_json(t)),
+    'total', (SELECT count(*) FROM memo)
+  )::TEXT
+  FROM (
+    SELECT username, user_id, count(*) total, count(group_id) shared
+    FROM memo INNER JOIN users
+      ON memo.user_id = users.id
+    GROUP BY user_id, username
+    ORDER BY user_id
+  ) t
+$$;
+
+
+ALTER FUNCTION public.memo_stats() OWNER TO organizator_stats;
+
+--
 -- Name: memo_write(integer, character varying, text, bigint, integer, character varying, uuid[]); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -617,16 +641,30 @@ BEGIN
     BEGIN
     -- Look up the user's ID in the users table
     SELECT users.id INTO STRICT o_user_id FROM users WHERE users.username = p_username;
-    EXCEPTION 
+    EXCEPTION
       WHEN NO_DATA_FOUND THEN
         RAISE EXCEPTION 'user % not found', p_username USING ERRCODE = '28000'; -- invalid_authorization_specification
       WHEN TOO_MANY_ROWS THEN
         RAISE EXCEPTION 'fetched more than one user for %', p_username USING ERRCODE = '28000'; -- invalid_authorization_specification
     END;
 	--o_username := p_username;
-    
+
     -- Set the session variable
     PERFORM set_config('organizator.current_user', o_user_id::TEXT, true);
+
+    -- Whether that user is an admin. Roles live in user_roles, so this is a lookup rather than a
+    -- test on the id above.
+    PERFORM set_config(
+        'organizator.current_user_is_admin',
+        EXISTS (
+            SELECT 1
+            FROM user_roles
+            JOIN roles ON roles.id = user_roles.role_id
+            WHERE user_roles.user_id = o_user_id
+              AND roles.name = 'orgadm'
+        )::TEXT,
+        true
+    );
 END;
 $$;
 
@@ -1827,6 +1865,13 @@ CREATE POLICY insert_memo_policy ON public.memo FOR INSERT WITH CHECK (((current
 
 
 --
+-- Name: users insert_policy; Type: POLICY; Schema: public; Owner: organizator_prod
+--
+
+CREATE POLICY insert_policy ON public.users FOR INSERT WITH CHECK ((current_setting('organizator.current_user_is_admin'::text))::boolean);
+
+
+--
 -- Name: memo; Type: ROW SECURITY; Schema: public; Owner: organizator_prod
 --
 
@@ -1843,7 +1888,7 @@ CREATE POLICY select_policy ON public.users FOR SELECT USING (true);
 -- Name: users update_policy; Type: POLICY; Schema: public; Owner: organizator_prod
 --
 
-CREATE POLICY update_policy ON public.users FOR UPDATE USING ((((current_setting('organizator.current_user'::text))::integer = id) OR ((current_setting('organizator.current_user'::text))::integer = 1)));
+CREATE POLICY update_policy ON public.users FOR UPDATE USING ((((current_setting('organizator.current_user'::text))::integer = id) OR (current_setting('organizator.current_user_is_admin'::text))::boolean));
 
 
 --
@@ -1860,7 +1905,7 @@ CREATE POLICY update_policy_owner ON public.memo FOR UPDATE USING (((user_id = (
 -- Name: memo user_policy; Type: POLICY; Schema: public; Owner: organizator_prod
 --
 
-CREATE POLICY user_policy ON public.memo FOR SELECT USING ((((current_setting('organizator.current_user'::text))::integer = user_id) OR ((current_setting('organizator.current_user'::text))::integer = 0) OR ((current_setting('organizator.current_user'::text))::integer IN ( SELECT user_group_detail.user_id
+CREATE POLICY user_policy ON public.memo FOR SELECT USING ((((current_setting('organizator.current_user'::text))::integer = user_id) OR ((current_setting('organizator.current_user'::text))::integer IN ( SELECT user_group_detail.user_id
    FROM public.memo_acl,
     public.user_group_detail
   WHERE ((memo_acl.memo_group_id = memo.group_id) AND (memo_acl.access > 0) AND (user_group_detail.user_group_id = memo_acl.user_group_id))))));
@@ -1871,6 +1916,28 @@ CREATE POLICY user_policy ON public.memo FOR SELECT USING ((((current_setting('o
 --
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
+--
+
+GRANT USAGE ON SCHEMA public TO organizator_stats;
+
+
+--
+-- Name: FUNCTION memo_stats(); Type: ACL; Schema: public; Owner: organizator_stats
+--
+
+REVOKE ALL ON FUNCTION public.memo_stats() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.memo_stats() TO organizator_prod;
+
+
+--
+-- Name: TABLE memo; Type: ACL; Schema: public; Owner: organizator_prod
+--
+
+GRANT SELECT ON TABLE public.memo TO organizator_stats;
+
 
 --
 -- Name: TABLE user_group; Type: ACL; Schema: public; Owner: organizator_prod
@@ -1884,11 +1951,12 @@ GRANT SELECT ON TABLE public.user_group TO auth;
 --
 
 GRANT SELECT ON TABLE public.users TO auth;
+GRANT SELECT ON TABLE public.users TO organizator_stats;
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict VAepallOO1U3jffQ3YjCaCSJGviwm1hnS8RzgvfihUzrafmvEkKqa0dczinDIWD
+\unrestrict p0wxJw3wnDtaPx4GrmGkeIyPfFyAxwQJEDdWbBBLcuWa5LP4mnijhfsTo0FcFri
 

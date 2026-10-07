@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of } from 'rxjs';
+import { serverReason } from './panel-status';
 
 /** A user as the group endpoints name one. `name` is the username, which is what they key on. */
 export interface GroupMember {
@@ -73,17 +74,9 @@ export interface UserGroupsPerUser {
   groups: UserGroup[];
 }
 
-/**
- * A message a panel shows about one group, or about the panel as a whole when `id` is null
- * — the same split the user list makes between its toolbar status and its per-row password
- * status. It lives here rather than beside the page so the panels that render it do not
- * have to import the component that owns them.
- */
-export interface PanelStatus {
-  id: number | null;
-  text: string;
-  error: boolean;
-}
+// Re-exported from its own file so the panels and pages that already take it from here keep
+// working; it belongs to no one screen.
+export type { PanelStatus } from './panel-status';
 
 /**
  * The levels this screen can grant. There is no 0 here on purpose: no access at all is the
@@ -214,7 +207,10 @@ export class GroupsApi {
     );
   }
 
-  /** `isPublic` is only honoured for an admin; anyone else gets a group of their own. */
+  /**
+   * `isPublic` is honoured only for an admin. The group is the caller's own either way: the
+   * server resolves the owner from the token, so an admin owns what they publish.
+   */
   createMemoGroup(name: string, isPublic: boolean): Observable<MemoGroup> {
     return this.memoGroupWrite(
       this.http.post<MemoGroup>('/organizator/memogroups', { name, public: isPublic }, this.options)
@@ -338,24 +334,3 @@ export function groupChangeFailed(err: HttpErrorResponse, what: string): string 
   return `Failed to change ${what}.`;
 }
 
-/**
- * The reason the server gave, if it gave one. It answers with either `{"error": "..."}` or a
- * bare string depending on which layer refused, so both are read; anything else — an HTML
- * page from a proxy, a body that is not text, an empty one — is not a reason and is left to
- * the caller's own wording rather than shown to the visitor.
- */
-function serverReason(err: HttpErrorResponse): string | null {
-  const body: unknown = err.error;
-
-  const reason =
-    typeof body === 'string'
-      ? body
-      : body !== null && typeof body === 'object' && 'error' in body
-        ? (body as { error: unknown }).error
-        : null;
-
-  if (typeof reason !== 'string') return null;
-
-  const trimmed = reason.trim();
-  return trimmed === '' || trimmed.includes('<') ? null : trimmed;
-}

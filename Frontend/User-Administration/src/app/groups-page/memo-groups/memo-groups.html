@@ -21,7 +21,9 @@
       [disabled]="saving()"
     />
 
-    <!-- Only an admin may publish a memo group to everyone, so only an admin is offered it. -->
+    <!-- Only an admin may publish a memo group to everyone, so only an admin is offered it.
+         The group is theirs either way: the server resolves the owner from the token, not from
+         the admin sentinel the session carries. -->
     @if (isAdmin()) {
       <label class="checkbox">
         <input #newGroupPublic id="new-memo-group-public" type="checkbox" [disabled]="saving()" />

@@ -1,0 +1,97 @@
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  margin-bottom: 1rem;
+  padding-left: 0.75rem;
+  /* A rule down the side marks where one entry ends. Entries are several lines each, so the
+     whitespace alone is not enough to tell them apart. */
+  border-left: 3px solid var(--border-subtle);
+}
+
+/* The line says how soon, so the colour ranks the list rather than decorating it: red while it
+   is happening, orange for today, green for the seven days after that, and the quiet border for
+   anything further off.
+
+   The three never overlap — `howSoon` answers with exactly one of them — so the order these are
+   written in does not decide anything. */
+.entry.happening {
+  border-left-color: var(--happening);
+}
+
+.entry.today {
+  border-left-color: var(--today);
+}
+
+.entry.this-week {
+  border-left-color: var(--this-week);
+}
+
+.entry p {
+  margin: 0;
+}
+
+.when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.until {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.badge {
+  padding: 0 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.what {
+  font-weight: 600;
+}
+
+.notes {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+/* The rendered form is its own block, so it does not inherit the plain text's wrapping. */
+.notes.markdown {
+  margin-top: 0.125rem;
+  white-space: normal;
+}
+
+.about {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.type {
+  padding: 0 0.4rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+}

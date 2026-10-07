@@ -8,7 +8,7 @@ import { App } from './app';
 import { routes } from './app.routes';
 
 /**
- * The shell: the heading, the theme toggle, and the menu that gets you between the two
+ * The shell: the heading, the theme toggle, and the menu that gets you between the three
  * screens. The screens themselves are tested where they live, so this navigates the real
  * route table and answers whatever the pages it reaches ask the server for.
  */
@@ -75,6 +75,15 @@ describe('App', () => {
     if (url === '/organizator/memogroups') {
       return { memogroups: [], requester: { id: 1, name: 'admin' } };
     }
+    if (url === '/organizator/odates') {
+      return { odates: [], requester: { id: 1, name: 'admin' } };
+    }
+    if (url === '/organizator/locations') {
+      return { locations: [], requester: { id: 1, name: 'admin' } };
+    }
+    if (url === '/organizator/odate_types') {
+      return { odate_types: [], requester: { id: 1, name: 'admin' } };
+    }
     return []; // /user-roles, /admin/all_user_groups
   }
 
@@ -82,24 +91,37 @@ describe('App', () => {
     return Array.from(fixture.nativeElement.querySelectorAll('nav a'));
   }
 
-  it('shows the heading, the theme toggle and both menu entries', async () => {
+  /** The menu entry for a path, found by where it goes rather than by where it sits. */
+  function linkTo(href: string): HTMLAnchorElement {
+    const link = navLinks().find(candidate => candidate.getAttribute('href') === href);
+    if (link === undefined) throw new Error(`No menu entry for ${href}`);
+    return link;
+  }
+
+  it('shows the heading, the theme toggle and every menu entry, calendar first', async () => {
     await go('/');
 
     expect(fixture.nativeElement.querySelector('h1')?.textContent).toContain(
-      'User administration'
+      'Organizator'
     );
+    // The order is the point of this one: the screen the app opens on leads the menu.
     expect(navLinks().map(link => link.textContent?.trim())).toEqual([
+      'Calendar',
       'Users & roles',
       'Groups',
     ]);
-    expect(navLinks().map(link => link.getAttribute('href'))).toEqual(['/users', '/groups']);
+    expect(navLinks().map(link => link.getAttribute('href'))).toEqual([
+      '/calendar',
+      '/users',
+      '/groups',
+    ]);
   });
 
-  it('opens on the users screen', async () => {
+  it('opens on the calendar screen', async () => {
     await go('/');
 
-    expect(fixture.nativeElement.querySelector('app-users-page')).toBeTruthy();
-    expect(fixture.nativeElement.querySelector('app-groups-page')).toBeNull();
+    expect(fixture.nativeElement.querySelector('app-calendar-page')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-users-page')).toBeNull();
   });
 
   it('reaches the groups screen through the menu', async () => {
@@ -109,22 +131,29 @@ describe('App', () => {
     expect(fixture.nativeElement.querySelector('app-users-page')).toBeNull();
   });
 
-  it('sends an unknown path to the users screen rather than nowhere', async () => {
+  it('reaches the calendar screen through the menu', async () => {
+    await go('/calendar');
+
+    expect(fixture.nativeElement.querySelector('app-calendar-page')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-groups-page')).toBeNull();
+  });
+
+  it('sends an unknown path to the calendar rather than nowhere', async () => {
     await go('/no-such-screen');
 
-    expect(fixture.nativeElement.querySelector('app-users-page')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-calendar-page')).toBeTruthy();
   });
 
   it('marks the entry you are on, and only that one', async () => {
     await go('/');
 
-    expect(navLinks()[0].getAttribute('aria-current')).toBe('page');
-    expect(navLinks()[1].getAttribute('aria-current')).toBeNull();
+    expect(linkTo('/calendar').getAttribute('aria-current')).toBe('page');
+    expect(linkTo('/users').getAttribute('aria-current')).toBeNull();
 
     await go('/groups');
 
-    expect(navLinks()[0].getAttribute('aria-current')).toBeNull();
-    expect(navLinks()[1].getAttribute('aria-current')).toBe('page');
+    expect(linkTo('/calendar').getAttribute('aria-current')).toBeNull();
+    expect(linkTo('/groups').getAttribute('aria-current')).toBe('page');
   });
 
   it('shows the menu to a non-admin too, who has their own groups to manage', async () => {
@@ -135,7 +164,7 @@ describe('App', () => {
     // The groups screen is theirs as well — the endpoint returns only their own — so the
     // entry is not hidden from them the way the user list's filter is. The admin report on
     // that screen is, though.
-    expect(navLinks()).toHaveLength(2);
+    expect(navLinks()).toHaveLength(3);
     expect(fixture.nativeElement.querySelector('app-groups-page')).toBeTruthy();
   });
 

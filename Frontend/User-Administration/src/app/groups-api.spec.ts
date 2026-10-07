@@ -205,7 +205,7 @@ describe('GroupsApi', () => {
       request.flush({ id: 25, name: 'Family', users: [] });
     });
 
-    it('creates a private memo group, which is what anyone but an admin gets', () => {
+    it('creates a private memo group', () => {
       const { request } = call(api.createMemoGroup('RO', false), {
         id: 39,
         name: 'RO',

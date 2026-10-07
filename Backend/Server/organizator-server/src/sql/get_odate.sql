@@ -21,9 +21,16 @@ SELECT
     'ongoing', odate.start_time <= $2,
     'description', odate.description,
     'memo_text', odate.memo_text,
+    -- The point as well as the name, the same shape list_odates.sql gives, so an entry is
+    -- described the same way whichever call returned it.
     'location', CASE
       WHEN location.id IS NULL THEN NULL
-      ELSE json_build_object('id', location.id, 'name', location.name)
+      ELSE json_build_object(
+        'id', location.id,
+        'name', location.name,
+        'latitude', location.latitude,
+        'longitude', location.longitude
+      )
     END,
     'type', CASE
       WHEN odate_type.id IS NULL THEN NULL

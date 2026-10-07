@@ -46,3 +46,6 @@ Thumbs.db
 # Diverse
 Gunoi
 resume.txt
+
+# Staged by `just pkg` from ../organizator-wasm/pkg
+/public/pkg

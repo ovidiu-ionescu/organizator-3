@@ -216,9 +216,9 @@ export class MemoGroups {
     const name = field.value.trim();
     if (!name) return;
 
-    // The checkbox only exists for an admin — it is behind an @if, which puts it out of the
-    // form's reach as a template variable — so a query is how it is read. Its absence is a
-    // group of one's own, which is what a non-admin creates.
+    // The checkbox sits behind an @if, which puts it out of the form's reach as a template
+    // variable, so it is read through a query. Its absence means the visitor is not an admin,
+    // and a group of their own is private.
     const publicField = this.newGroupPublic()?.nativeElement;
 
     this.create.emit({ name, public: publicField?.checked === true });

@@ -1,0 +1,115 @@
+@if (!expanded()) {
+  <button #trigger type="button" class="btn" aria-expanded="false" aria-controls="new-entry-form" (click)="open()">
+    Add an entry
+  </button>
+} @else {
+  <form id="new-entry-form" class="entry-form" (submit)="submit($event)">
+    <!-- Said in words, so it is clear which of the two things this form is doing — and which
+         entry it is doing it to. -->
+    @if (isEditing()) {
+      <p class="editing">
+        Editing <strong>{{ editing()?.description || 'this entry' }}</strong>
+      </p>
+    }
+
+    <div class="row">
+      <label for="new-start">Starts</label>
+      <input #newStart id="new-start" class="field" name="start_time" type="datetime-local" required [disabled]="saving()" />
+    </div>
+
+    <div class="row">
+      <label for="new-end">Ends</label>
+      <input
+        #newEnd
+        id="new-end"
+        class="field"
+        name="end_time"
+        type="datetime-local"
+        required
+        [disabled]="saving()"
+        (focus)="fillEndFromStart()"
+      />
+    </div>
+
+    <div class="row">
+      <label for="new-description">What</label>
+      <input
+        #newDescription
+        id="new-description"
+        class="field"
+        name="description"
+        type="text"
+        autocomplete="off"
+        placeholder="Dentist"
+        [disabled]="saving()"
+      />
+    </div>
+
+    <div class="row notes-row">
+      <label for="new-notes">Notes</label>
+      <div class="notes">
+        <!-- Markdown, so the button swaps what is written for what it looks like. The textarea is
+             hidden rather than removed: what has been typed has to survive the look. -->
+        <button
+          type="button"
+          class="row-action preview-toggle"
+          [attr.aria-pressed]="previewing()"
+          (click)="togglePreview()"
+          [disabled]="saving()"
+        >
+          {{ previewing() ? 'Write' : 'Preview' }}
+        </button>
+
+        <textarea
+          #newNotes
+          id="new-notes"
+          class="field"
+          name="memo_text"
+          rows="3"
+          placeholder="Markdown is welcome"
+          [class.hidden]="previewing()"
+          [disabled]="saving()"
+        ></textarea>
+
+        @if (previewing()) {
+          @let rendered = previewHtml();
+          @if (rendered !== null) {
+            <div class="field markdown" [innerHTML]="rendered"></div>
+          } @else {
+            <!-- The renderer is a wasm file fetched on demand; until it arrives the text as it
+                 stands beats an empty box. -->
+            <div class="field notes-plain">{{ previewSource() }}</div>
+          }
+        }
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="new-location">Where</label>
+      <select #newLocation id="new-location" class="field" [disabled]="saving()">
+        <!-- Optional, so an entry with nowhere to be said about is allowed. -->
+        <option value="">No location</option>
+        @for (place of locationOptions(); track place.id) {
+          <option [value]="place.id">{{ place.name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="row">
+      <label for="new-type">Type</label>
+      <select #newType id="new-type" class="field" [disabled]="saving()">
+        <option value="">No type</option>
+        @for (type of typeOptions(); track type.id) {
+          <option [value]="type.id">{{ type.name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : isEditing() ? 'Save' : 'Add entry' }}
+      </button>
+      <button type="button" class="btn" (click)="close()" [disabled]="saving()">Cancel</button>
+    </div>
+  </form>
+}

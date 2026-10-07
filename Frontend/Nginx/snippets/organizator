@@ -84,3 +84,8 @@
     try_files $uri $uri/ /user-admin/index.html;
   }
 
+  location /user-admin/ {
+    alias $base_path/user-admin/;
+    index index.html;
+    try_files $uri $uri/ /user-admin/index.html;
+  }

@@ -1,0 +1,27 @@
+/* Reserves its line while there is nothing to say, so the lists below do not jump down when a
+   message arrives. */
+.status {
+  min-height: 1.25rem;
+  margin: 0 0 0.5rem;
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.panel + .panel {
+  margin-top: 2rem;
+}
+
+/* The two ends of the range, on one line while there is room for one. The labels are read by a
+   screen reader either way, so they are not hidden just because the fields show dates. */
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.search-row label {
+  font-size: 0.875rem;
+}

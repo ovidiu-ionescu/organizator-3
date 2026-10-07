@@ -1,4 +1,4 @@
-use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Form, Json};
@@ -118,8 +118,12 @@ async fn main() {
         .routes(routes!(update_odate))
         .routes(routes!(list_locations))
         .routes(routes!(create_location))
+        .routes(routes!(update_location))
+        .routes(routes!(delete_location))
         .routes(routes!(list_odate_types))
         .routes(routes!(create_odate_type))
+        .routes(routes!(rename_odate_type))
+        .routes(routes!(delete_odate_type))
         .routes(routes!(file_list))
         .routes(routes!(get_memo_stats))
         .routes(routes!(get_all_usergroups))
@@ -583,8 +587,9 @@ struct LocationForm {
     timezone: Option<String>,
 }
 
-/// What `create_location.sql` and `create_odate_type.sql` report. Each builds its payload from
-/// RETURNING, so the row is never read back.
+/// What the location and date-type statements report. Each builds its payload from RETURNING, so
+/// the row is never read back; `used_by` is the count a delete answers with when the row is still
+/// spoken for.
 #[derive(serde::Deserialize, Debug)]
 struct PlaceOutcome {
     outcome: String,
@@ -592,6 +597,19 @@ struct PlaceOutcome {
     location: Option<serde_json::Value>,
     #[serde(default)]
     odate_type: Option<serde_json::Value>,
+    #[serde(default)]
+    used_by: Option<i64>,
+}
+
+/// The stretch of time `GET /odates` was asked to look at, as the screen's two date fields send
+/// it. Both are epoch milliseconds, and both are optional: no `from` means from now, and no
+/// `until` means no end, which together are the list the screen shows before anyone searches.
+#[derive(serde::Deserialize, Debug)]
+struct OdateRange {
+    #[serde(default)]
+    from: Option<i64>,
+    #[serde(default)]
+    until: Option<i64>,
 }
 
 /// What `create_odate.sql` reports about the entry it tried to make.
@@ -1275,6 +1293,243 @@ async fn create_odate_type(
     }
 }
 
+/// Replace one of the caller's own locations.
+///
+/// The body is the whole location, the same shape `POST /locations` takes: the panel holds every
+/// field anyway, and sending only what changed would take the rest away — an absent parameter is
+/// a NULL here, so a rename that carried only the name would drop the coordinates.
+#[utoipa::path(
+    put,
+    path = "/locations/{id}",
+    request_body = LocationForm,
+    params(
+        ("id" = i32, Path, description = "location.id")
+    ),
+    responses(
+        (status = 200, description = "The location, as it is now", body = Object),
+        (status = 404, description = "No such location, or not the caller's", body = Object),
+        (status = 409, description = "The caller already has a location by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn update_location(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(location_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<LocationForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    debug!("Updating location {location_id} to 「{name}」");
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A location needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/update_location.sql")),
+        &[
+            &location_id,
+            &name,
+            &form.latitude,
+            &form.longitude,
+            &form.timezone,
+        ],
+    )
+    .await?;
+
+    let outcome: PlaceOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "updated" => {
+            let place = outcome
+                .location
+                .ok_or_else(|| AppError::bad_request("The location was updated but not reported"))?;
+            Ok(Json(place).into_response())
+        }
+        "no_owner" => Ok(no_owner("location")),
+        "name_taken" => Ok(refused(
+            StatusCode::CONFLICT,
+            format!("You already have a location called 「{name}」"),
+        )),
+        // A location that is not the caller's and one that does not exist are the same answer,
+        // so an id cannot be probed for whose it is.
+        _ => Ok(refused(
+            StatusCode::NOT_FOUND,
+            "No such location".to_string(),
+        )),
+    }
+}
+
+/// Delete one of the caller's own locations.
+///
+/// Refused while an entry still points at it, finished or not: `odate.location_id` carries no
+/// foreign key, so the delete would succeed and leave the entry holding an id for a row that is
+/// gone, which the calendar would show as an entry with no location rather than as a change.
+#[utoipa::path(
+    delete,
+    path = "/locations/{id}",
+    params(
+        ("id" = i32, Path, description = "location.id")
+    ),
+    responses(
+        (status = 204, description = "The location was deleted"),
+        (status = 404, description = "No such location, or not the caller's", body = Object),
+        (status = 409, description = "An entry still uses this location", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn delete_location(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(location_id): Path<i32>,
+) -> HandlerResponse {
+    debug!("Deleting location {location_id}");
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/delete_location.sql")),
+        &[&location_id],
+    )
+    .await?;
+
+    let outcome: PlaceOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "removed" => Ok(StatusCode::NO_CONTENT.into_response()),
+        "no_owner" => Ok(no_owner("location")),
+        "in_use" => Ok(refused(
+            StatusCode::CONFLICT,
+            still_in_use(outcome.used_by.unwrap_or(0), "location"),
+        )),
+        _ => Ok(refused(
+            StatusCode::NOT_FOUND,
+            "No such location".to_string(),
+        )),
+    }
+}
+
+/// Rename one of the caller's own date types.
+#[utoipa::path(
+    put,
+    path = "/odate_types/{id}",
+    request_body = NameForm,
+    params(
+        ("id" = i32, Path, description = "odate_type.id")
+    ),
+    responses(
+        (status = 200, description = "The date type, as it is now", body = Object),
+        (status = 404, description = "No such date type, or not the caller's", body = Object),
+        (status = 409, description = "The caller already has a date type by that name", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn rename_odate_type(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(type_id): Path<i32>,
+    // last extractor consumes the body
+    Json(form): Json<NameForm>,
+) -> HandlerResponse {
+    let name = form.name.trim();
+    debug!("Renaming odate type {type_id} to 「{name}」");
+
+    if name.is_empty() {
+        return Ok(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "A date type needs a name".to_string(),
+        ));
+    }
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/rename_odate_type.sql")),
+        &[&type_id, &name],
+    )
+    .await?;
+
+    let outcome: PlaceOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "renamed" => {
+            let place = outcome.odate_type.ok_or_else(|| {
+                AppError::bad_request("The date type was renamed but not reported")
+            })?;
+            Ok(Json(place).into_response())
+        }
+        "no_owner" => Ok(no_owner("date type")),
+        "name_taken" => Ok(refused(
+            StatusCode::CONFLICT,
+            format!("You already have a date type called 「{name}」"),
+        )),
+        _ => Ok(refused(
+            StatusCode::NOT_FOUND,
+            "No such date type".to_string(),
+        )),
+    }
+}
+
+/// Delete one of the caller's own date types. Refused on the same terms as a location: see
+/// `delete_location`.
+#[utoipa::path(
+    delete,
+    path = "/odate_types/{id}",
+    params(
+        ("id" = i32, Path, description = "odate_type.id")
+    ),
+    responses(
+        (status = 204, description = "The date type was deleted"),
+        (status = 404, description = "No such date type, or not the caller's", body = Object),
+        (status = 409, description = "An entry still uses this date type", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn delete_odate_type(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(type_id): Path<i32>,
+) -> HandlerResponse {
+    debug!("Deleting odate type {type_id}");
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/delete_odate_type.sql")),
+        &[&type_id],
+    )
+    .await?;
+
+    let outcome: PlaceOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "removed" => Ok(StatusCode::NO_CONTENT.into_response()),
+        "no_owner" => Ok(no_owner("date type")),
+        "in_use" => Ok(refused(
+            StatusCode::CONFLICT,
+            still_in_use(outcome.used_by.unwrap_or(0), "date type"),
+        )),
+        _ => Ok(refused(
+            StatusCode::NOT_FOUND,
+            "No such date type".to_string(),
+        )),
+    }
+}
+
 /// Update one of the caller's own calendar entries.
 ///
 /// The body is the whole entry, the same shape `POST /odates` takes: the form holds every field
@@ -1360,15 +1615,22 @@ async fn update_odate(
     Ok(build_json_body(entry_json)?.into_response())
 }
 
-/// The caller's calendar entries that have not started yet, soonest first.
+/// The caller's calendar entries, soonest first — everything that has not finished, unless a
+/// range is asked for.
 ///
 /// "Now" is read here rather than taken from the caller: a clock the server does not control
-/// would let a wrong one hide entries, and the server already has the time.
+/// would let a wrong one decide what is happening, and the server already has the time. It is
+/// also what `from` defaults to, so the plain `GET /odates` the screen makes on arrival means
+/// "coming up" with nothing else said.
 #[utoipa::path(
     get,
     path = "/odates",
+    params(
+        ("from" = Option<i64>, Query, description = "Epoch milliseconds to look from, inclusive. Absent means now."),
+        ("until" = Option<i64>, Query, description = "Epoch milliseconds to look up to, exclusive. Absent means no end.")
+    ),
     responses(
-        (status = 200, description = "The caller's upcoming entries, soonest first", body = Object),
+        (status = 200, description = "The caller's entries in that range, soonest first", body = Object),
         CommonError
     ),
     security(("bearer_auth" = []))
@@ -1377,16 +1639,21 @@ async fn list_odates(
     State(_state): State<Arc<AppState>>,
     Extension(requester): Extension<User>,
     DbConn(db_client): DbConn,
+    Query(range): Query<OdateRange>,
 ) -> HandlerResponse {
     let now = millis_since_epoch();
     let username = requester.id();
-    trace!("Listing odates from {now} for {username}");
+    // No range given is the reading the screen wants by default: everything not yet finished.
+    let from = range.from.unwrap_or(now);
+    debug!("Listing odates for {username} from {from} until {:?}", range.until);
 
+    // A range the caller got backwards is an empty one and answers an empty list, which is what
+    // asking for nothing should say. Refusing it would only be a second way to say the same.
     let json = db::get_json(
         &db_client,
         &requester,
         SQLstr(include_str!("sql/list_odates.sql")),
-        &[&now],
+        &[&now, &from, &range.until],
     )
     .await?;
 
@@ -1557,6 +1824,15 @@ fn no_owner(what: &str) -> Response {
 /// answers in, so the app has one thing to parse whatever refused it.
 fn refused(status: StatusCode, message: String) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
+}
+
+/// Why a location or a date type would not be deleted, said the way a visitor would read it.
+/// One entry is not "1 entries", and the count is the only thing that tells them what to change.
+fn still_in_use(count: i64, what: &str) -> String {
+    match count {
+        1 => format!("1 entry still uses this {what}"),
+        n => format!("{n} entries still use this {what}"),
+    }
 }
 
 /// Get all memo groups for the current logged in user with full details.

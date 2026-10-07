@@ -463,7 +463,7 @@ describe('GroupsPage', () => {
   });
 
   describe('public memo groups', () => {
-    it('offers the choice to an admin', () => {
+    it('offers the choice to an admin, who owns what they publish', () => {
       load({ admin: true, memoGroups: [RO] });
 
       expect(query('#new-memo-group-public')).toBeTruthy();
@@ -495,7 +495,7 @@ describe('GroupsPage', () => {
     });
 
     it('creates a private group when the box is left alone', () => {
-      load({ admin: true, memoGroups: [] });
+      load({ memoGroups: [] });
 
       submit(
         'app-memo-groups .create-row',
