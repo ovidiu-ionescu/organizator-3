@@ -82,6 +82,19 @@ describe("The title list", () => {
     });
   });
 
+  it("should show the list for a path without the trailing slash", async () => {
+    // nginx redirects organizator.ro/memo to /memo/, so this path only reaches the app from the
+    // service worker, whose clean-URL handling finds the precached /memo.html for it. With no
+    // route for it the reader would get the shell with every section hidden.
+    history.pushState(null, "", "/memo");
+    await seed({ id: 7, local: { id: 7, text: "a memo" }, server: { id: 7, text: "a memo" } });
+
+    load_route();
+    await vi.waitFor(() => {
+      expect(marker_for(7)).to.be.equal("server");
+    });
+  });
+
   // The status bar, with the offer to cache everything on its summary line.
   const status_bar = (): { info: HTMLDetailsElement; cache: HTMLElement } => {
     document.body.innerHTML = `

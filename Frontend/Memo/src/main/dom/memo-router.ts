@@ -81,7 +81,10 @@ export const load_route = () => {
 
     return;
   }
-  if (window.location.pathname === "/memo/") {
+  // With and without the trailing slash: nginx redirects the bare one, but the service worker
+  // answers it from the precache when there is no server to redirect (its clean-URL handling
+  // finds /memo.html for it), and the app has to know what to do with what it is handed.
+  if (window.location.pathname === "/memo/" || window.location.pathname === "/memo") {
     activatePage("memoTitles");
     loadMemoTitles();
     return;

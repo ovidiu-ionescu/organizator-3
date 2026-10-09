@@ -12,8 +12,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
     <script type="module">
-      //import "/worker/app.js";
-
       import * as router from "./dom/memo-router.js";
       window.load_route = router.load_route;
       window.searchMemos = router.searchMemos;
@@ -21,6 +19,7 @@
     <script type="module">
       import "./dom/memo-editor.js";
       import "./dom/journal.js";
+      import "./dom/pwa.js";
     </script>
     <script type="text/javascript"></script>
     <style>
@@ -102,6 +101,18 @@
       #search_button {
         vertical-align: middle;
       }
+      /* The service worker's line, at the top of whichever page is showing: a new version is
+         ready, or the app can now be opened with the server unreachable. Not the editor's
+         #status, which belongs to the memo being edited — that one is written by show_status(),
+         which replaces the memo, and the editor is not even on screen while the list is up. */
+      #pwa_bar {
+        padding: 6px 8px;
+        background-color: #2c3e50;
+        font-size: 0.9rem;
+      }
+      #pwa_bar a {
+        margin-left: 10px;
+      }
       a {
         color: steelblue;
       }
@@ -113,6 +124,13 @@
   </head>
   <body onload="load_route()">
     <main>
+      <!-- Outside the [page] sections on purpose: the service worker's messages are about the
+           whole app, and the sections are hidden and shown as the router moves between them. -->
+      <div id="pwa_bar" hidden>
+        <span id="pwa_bar_message"></span>
+        <a href="#" id="pwa_bar_action" hidden></a>
+        <a href="#" id="pwa_bar_dismiss" hidden>dismiss</a>
+      </div>
       <section id="singleMemo" page><memo-editor id="editor"></memo-editor></section>
       <section id="memoTitles" page>
         <nav>

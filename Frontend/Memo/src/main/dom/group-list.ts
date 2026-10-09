@@ -48,7 +48,17 @@ class SelectList extends HTMLElement {
   async build_options(force_refresh: boolean = false) {
     konsole.log("Build options");
     if (!this._groups ||force_refresh) {
-      this._groups = await this._fetch_elements();
+      try {
+        this._groups = await this._fetch_elements();
+      } catch (e) {
+        // Offline, or the server would not say: the reader's groups are not known and the
+        // control goes on showing what it was showing. This is called while a memo is being
+        // opened — show_group puts that memo's own group in a moment later — and an error here
+        // used to cost the memo the rest of its setup: its group, who owns it, whether it is
+        // read only, and the colour of the save button.
+        konsole.log("Could not fetch the groups, keeping the control as it is", e);
+        return;
+      }
     }
     const sel = this.shadowRoot!.querySelector("#main_select") as HTMLSelectElement;
     // What the control is showing survives being filled again. It is where the editor reads the

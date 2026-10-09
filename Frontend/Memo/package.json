@@ -5,13 +5,9 @@
   "main": "index.js",
   "scripts": {
     "build:dom": "tsc --build src",
-    "build:worker": "tsc --build src/main/worker",
-    "build:tests": "tsc --build src/test",
     "copy:js": "rsync -r src/main/dom/*.js build/main/dom",
     "copy:html": "rsync -r src/html/ build/main",
     "copy:images": "rsync -r images build/main/",
-    "copy:worker": "rsync -r build_worker/ build",
-    "worker:increment": "node src/build_tools/service_worker_versioner.js",
     "build": "run-s build:dom copy:js copy:html copy:images",
     "_test": "echo \"Error: no test specified\" && exit 1",
     "prettier": "prettier --require-pragma --write src",
@@ -36,6 +32,7 @@
     "playwright": "^1.58.2",
     "prettier": "^2.0.1",
     "typescript": "^6.0.2",
+    "vite-plugin-pwa": "^2.0.0",
     "vitest": "^4.1.2"
   }
 }

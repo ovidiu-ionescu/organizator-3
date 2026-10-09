@@ -41,6 +41,24 @@ const stub_the_server = () => {
 // falls back to the browser's defaults. Reading the computed style is what tells the two apart,
 // which is the only reason this test exists.
 
+/// Forget the groups this browser has cached. `read_memo_groups` answers from that cache before
+/// it gives up, so a fetch that fails is only an error when there is nothing cached to fall back
+/// on — which is the state a first run with the server unreachable is in.
+const forget_cached_memogroups = async () => {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(db.DBName, 2);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(["general_store"], "readwrite");
+    transaction.objectStore("general_store").delete("memogroups");
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+};
+
 const make_editor = (): MemoEditor => {
   const editor = document.createElement("memo-editor") as MemoEditor;
   document.body.appendChild(editor);
@@ -237,6 +255,43 @@ describe("The memo editor", () => {
 
     expect(group_control.value).to.be.equal("3");
     expect((await editor.get_memo())?.memogroup?.id).to.be.equal(3);
+  });
+
+  it("should finish opening a memo when the groups cannot be fetched", async () => {
+    // The service worker lets the app start with the server unreachable, and then the fetch the
+    // group control makes on the way into a memo fails. It is made in the middle of set_memo:
+    // an error out of it left the editor holding the memo but not its group, not its read-only
+    // state and with nothing said about the save button.
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target.includes("memogroup")) {
+        throw new TypeError("NetworkError when attempting to fetch resource.");
+      }
+      if (target.endsWith(".svg")) {
+        return new Response("<svg></svg>", { headers: { "Content-Type": "image/svg+xml" } });
+      }
+      return real_fetch(url, init);
+    });
+    await forget_cached_memogroups();
+
+    const editor = make_editor();
+    await editor.set_memo(
+      {
+        id: 27,
+        text: "# a shared memo",
+        timestamp: 100,
+        memogroup: { id: 20, name: "someone else's" },
+        owned: false,
+        readonly: true,
+      },
+      false
+    );
+
+    // Everything after the fetch in set_memo, which is what the throw used to skip.
+    const group_control = editor.shadowRoot?.querySelector("#edit_memogroup") as MemoGroupList;
+    expect(group_control.value).to.be.equal("20");
+    expect((await editor.get_memo())?.memogroup?.id).to.be.equal(20);
+    expect(group_control.readonly).to.be.true;
   });
 
   it("should refuse to save a memo that asks for encryption when no password is given", async () => {

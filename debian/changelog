@@ -1,3 +1,13 @@
+organizator (0.1.30) UNRELEASED; urgency=medium
+
+  * fix for service worker on Chrome
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Fri, 9 Oct 2026 19:53:00 +0200
+organizator (0.1.29) UNRELEASED; urgency=medium
+
+  * added service worker for memo plus image cache
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Fri, 9 Oct 2026 13:43:00 +0200
 organizator (0.1.28) UNRELEASED; urgency=medium
 
   * fixes for urls

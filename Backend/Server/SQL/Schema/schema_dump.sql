@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict p0wxJw3wnDtaPx4GrmGkeIyPfFyAxwQJEDdWbBBLcuWa5LP4mnijhfsTo0FcFri
+\restrict MShuhWF2LLmVWGuOrSg8us0rXnqArnsJd65N8rNBx9rSt8NZfGjdHgbNqzVIcjd
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -1958,5 +1958,5 @@ GRANT SELECT ON TABLE public.users TO organizator_stats;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict p0wxJw3wnDtaPx4GrmGkeIyPfFyAxwQJEDdWbBBLcuWa5LP4mnijhfsTo0FcFri
+\unrestrict MShuhWF2LLmVWGuOrSg8us0rXnqArnsJd65N8rNBx9rSt8NZfGjdHgbNqzVIcjd
 

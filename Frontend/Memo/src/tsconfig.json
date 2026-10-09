@@ -3,6 +3,5 @@
   "compilerOptions": {
     "target": "ES2024",
   },
-  "include": ["**/*.ts"],
-  "exclude": ["main/worker"]
+  "include": ["**/*.ts"]
 }
