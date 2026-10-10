@@ -1,9 +1,11 @@
 pkg
 *.bk
 *.png
+# The manifest's icons are generated once from images/tulip-blue.svg and are needed on a machine
+# that never ran the generator, so unlike the rest of the pngs they are tracked.
+!images/pwa-icon-*.png
 Old
 build
-build_worker
 types
 node_modules
 *.swp

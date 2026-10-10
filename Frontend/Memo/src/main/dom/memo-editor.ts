@@ -12,6 +12,8 @@ import {raspandac} from "./events.js";
 import * as events from "./events.js";
 import "./img-inline-svg.js";
 import "./group-list.js";
+import "./theme-list.js";
+import { current_theme } from "./theme.js";
 import * as memo_processing from "./memo_processing.js";
 import {alignedText, digestMessage} from "./util.js";
 import { promptPassword} from "./password.js";
@@ -38,6 +40,10 @@ const template = `
         flex-flow: column;
         flex: 1;
       }
+      /* The textarea takes the theme's colours and type, so writing on Paper looks like reading
+         on it. Only those: a textarea is plain text, so nothing of a theme's layout can apply
+         here. The fallbacks are the values this file used to hard-code, which is what a page that
+         never loaded themes.css still gets (the tests, and the app before the stylesheet). */
       #source {
         resize: none;
         width: 100%;
@@ -46,29 +52,55 @@ const template = `
         overflow: scroll;
         box-sizing: border-box;
         flex: 1;
-        font-size: 16px;
+        font-size: var(--memo-font-size, 16px);
+        font-family: var(--memo-font, sans-serif);
+        background-color: var(--memo-bg, #1F1F1F);
+        color: var(--memo-fg, white);
       }
       * {
         font-family: sans-serif;
         background-color: #1F1F1F;
         color: white;
       }
+      /* The memo follows the theme; the app around it — toolbars, status line, this row — does
+         not. The variables are set on <html> by src/html/themes.css: a shadow root is a boundary
+         for selectors, but custom properties inherit across it, which is the whole mechanism.
+
+         The selector names #presentation * and not just #presentation: the * rule above puts a
+         background and a colour on every element in here, so a rule on the container alone would
+         leave every heading, cell and paragraph dark grey. */
+      #presentation,
+      #presentation * {
+        background-color: var(--memo-bg, #1F1F1F);
+        color: var(--memo-fg, white);
+        font-family: var(--memo-font, sans-serif);
+      }
       #presentation {
         padding: 0;
         flex: 1;
         margin-top: 10px;
+        /* Size on the container rather than on everything inside it: headings are sized in em,
+           so setting it on each element would flatten them all to the body size. */
+        font-size: var(--memo-font-size, 1rem);
+        line-height: var(--memo-line-height, normal);
+        /* And no max-width: the memo takes the whole width, whatever the theme. A narrower column
+           with the margins around it was tried — it is what a reading theme usually does — and it
+           is not wanted here, so no variable offers it. */
       }
       #presentation del {
-        color: gray;
+        color: var(--memo-del, gray);
       }
       #presentation  a {
-        color: steelblue;
+        color: var(--memo-link, steelblue);
       }
       #presentation img {
         max-width: 100%;
       }
+      #presentation pre {
+        background-color: var(--memo-pre-bg, #1F1F1F);
+      }
       #presentation pre code {
-        color: yellow;
+        color: var(--memo-code, yellow);
       }
       #container {
         position: relative;
@@ -136,7 +168,7 @@ const template = `
         border-bottom: 1px solid white;
       }
       #presentation table, #presentation th, #presentation td {
-        border: 1px solid grey;
+        border: 1px solid var(--memo-border, grey);
         border-collapse: collapse;
       }
       #presentation th, #presentation td {
@@ -164,7 +196,14 @@ const template = `
       div[data-gen="barcode128"], div[data-gen="barcode13"] {
         text-align: center;
       }
-      div[data-gen="barcode128"] span, div[data-gen="barcode13"] span  {
+      /* All four of these under #presentation, so that they stay in front of the theme rule that
+         colours and *sets the font of* everything in the memo. That rule would otherwise paint the
+         plate in the theme's colours and, worse, take the barcode face away from the digits, which
+         is what turns a barcode back into a line of numbers.
+
+         A barcode is read by a scanner: white behind black bars, in the font that draws those bars,
+         whatever the reader chose to read in. */
+      #presentation div[data-gen="barcode128"] span, #presentation div[data-gen="barcode13"] span  {
         border-width: 10px 40px 10px 40px;
         border-style: solid;
         border-color: white;
@@ -173,13 +212,79 @@ const template = `
         margin: 10px;
         display: inline-block;
       }
-      div[data-gen="barcode128"] span {
+      #presentation div[data-gen="barcode128"] span {
         font-family: "Libre Barcode 128 Text", system-ui;
         font-size: 65px;
       }
-      div[data-gen="barcode13"] span {
+      #presentation div[data-gen="barcode13"] span {
         font-family: "Libre Barcode EAN13 Text", system-ui;
         font-size: 200px;
+      }
+      /* The compact link display, and it belongs to the Links theme alone: these are the only
+         rules in this file that name a list, so every other theme lays lists out exactly as the
+         app always has. Each top-level list that holds a link becomes a box, and the list's first
+         item becomes the box's title — one box per group of links, packed across the width. Only
+         top-level lists: a nested one stays inside its box rather than becoming a box of its own.
+         A list of plain text stays a list even here.
+
+         Keyed off this element's own attribute rather than the page's: the :host-context()
+         selector would read the page directly, and Firefox does not have it. _follow_theme keeps
+         the attribute in step. */
+      :host([data-theme="links"]) #presentation > ul:has(a),
+      :host([data-theme="links"]) #presentation > ol:has(a) {
+        display: inline-block;
+        vertical-align: top;
+        position: relative;
+        min-width: 7em;
+        max-width: 20em;
+        margin: 0 6px 6px 0;
+        /* Room at the top for the title bar, which is taken out of the flow. */
+        padding: 2em 0.5em 0.4em 0.5em;
+        border: 1px solid var(--memo-border, grey);
+        border-radius: 4px;
+        line-height: 1.25;
+        list-style: none;
+      }
+      :host([data-theme="links"]) #presentation > ul:has(a) > li,
+      :host([data-theme="links"]) #presentation > ol:has(a) > li {
+        list-style: none;
+        /* Air between the links: a box of them is read by scanning down it. (The title above them
+           keeps its own padding — that rule is the more specific of the two.) */
+        padding: 2px 0;
+      }
+      :host([data-theme="links"]) #presentation > ul:has(a) > li:first-child,
+      :host([data-theme="links"]) #presentation > ol:has(a) > li:first-child {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        padding: 2px 4px;
+        text-align: center;
+        font-weight: bold;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        background-color: var(--memo-group-title-bg, #333);
+        color: var(--memo-group-title-fg, white);
+      }
+      /* Links inside a box only: a link in a sentence is still a link in a sentence, and making
+         every one of them a block would break the prose around it into pieces. */
+      :host([data-theme="links"]) #presentation > ul:has(a) a,
+      :host([data-theme="links"]) #presentation > ol:has(a) a {
+        display: block;
+        text-decoration: none;
+      }
+      /* The link under the pointer, banded in the theme's highlight colour — the arrangement at
+         list.organizator.ro. It is the whole width of the box, since the link fills it.
+
+         Only where there is a pointer to hover with: on a touch screen a hover style is applied
+         by the first tap, and a link that has to be tapped twice is worse than no band at all. */
+      @media (hover: hover) {
+        :host([data-theme="links"]) #presentation > ul:has(a) a:hover,
+        :host([data-theme="links"]) #presentation > ol:has(a) a:hover {
+          background-color: var(--memo-link-hover-bg, yellow);
+          color: var(--memo-link-hover-fg, black);
+        }
       }
     </style>
     
@@ -212,6 +317,10 @@ const template = `
           <span id="edit_user"></span>
           <time id="edit_timestamp"></time>
           <memogroup-list id="edit_memogroup" title="sharing"></memogroup-list>
+          <!-- Here rather than in one of the toolbars: this row is on screen in both the reading
+               view and the editor — it is moved between the two — so one control is enough, and
+               the theme can be changed without leaving what is being read or written. -->
+          <theme-list id="edit_theme" title="theme"></theme-list>
         </div>
         <textarea id="source" autocomplete="off" ></textarea>
       </div>
@@ -515,6 +624,11 @@ export class MemoEditor extends HTMLElement {
       this.$.status.innerText = event.detail;
     });
 
+    raspandac.on("themeChanged", (event: CustomEvent<string>) => {
+      konsole.log(`Received themeChanged event, detail ${event.detail}`);
+      this.setAttribute("data-theme", event.detail);
+    });
+
     raspandac.on("memoChangeId", (event: CustomEvent) => {
       konsole.log(
         `Received memoChangeId event, detail ${event.detail}`
@@ -589,6 +703,15 @@ export class MemoEditor extends HTMLElement {
 
   connectedCallback() {
     this._resizeTextArea();
+    this._follow_theme();
+  }
+
+  /// Mirror the page's theme onto this element, which is what the `:host([data-theme="…"])` rules
+  /// above read. The colours need nothing of this — they arrive through the custom properties —
+  /// but the layout a theme brings has to be written here, inside the shadow root, and this is how
+  /// it learns which theme is on. See theme.ts and events.ts ("themeChanged").
+  _follow_theme() {
+    this.setAttribute("data-theme", current_theme());
   }
 
   set memoId(memoId: number) {

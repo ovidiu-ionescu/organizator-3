@@ -6,6 +6,11 @@ import type {MemoEditor} from "@dom/memo-editor.js";
 import {raspandac} from "@dom/events.js";
 import * as db from "@dom/memo_db.js";
 import type {MemoGroupList} from "@dom/group-list.js";
+import type {ThemeList} from "@dom/theme-list.js";
+import {apply_theme} from "@dom/theme.js";
+// The palettes, as the page loads them: without this the variables the editor reads are undefined
+// and every colour falls back to the hard-coded default.
+import "../../src/html/themes.css";
 import init, {memo_encrypt, memo_decrypt} from "@wasm/organizator_wasm";
 
 // The editor's icons are inlined by fetching them, and the group list inside it fetches its
@@ -72,6 +77,10 @@ describe("The memo editor", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     vi.unstubAllGlobals();
+    // A theme is on <html>, so it would follow the next test into its stylesheet — and the
+    // textarea test below reads the size the default theme gives it.
+    delete document.documentElement.dataset.theme;
+    localStorage.clear();
   });
 
   it("should style its textarea rather than leave it to the browser defaults", () => {
@@ -398,6 +407,104 @@ describe("The memo editor", () => {
       editor.shadowRoot?.querySelector("#save_all_button") as HTMLElement | null
     )?.style.color;
     expect(colour).to.be.equal("orange");
+  });
+
+  it("should paint the memo in the colours of the theme the page is showing", () => {
+    stub_the_server();
+    const editor = make_editor();
+    const shown = editor.shadowRoot?.querySelector("#presentation") as HTMLElement;
+    // Written straight in rather than rendered: what is being checked is the stylesheet, and a
+    // memo rendered through wasm would only mean waiting on a promise that has nothing to do with
+    // the colours.
+    shown.innerHTML = "<h1>a heading</h1><p>and a paragraph</p>";
+    const heading = shown.querySelector("h1") as HTMLElement;
+
+    apply_theme("light");
+    // The container *and* what is inside it: the `*` rule puts a background on every element, so a
+    // theme applied to #presentation alone would leave the heading dark grey on white.
+    expect(getComputedStyle(shown).backgroundColor).to.be.equal("rgb(255, 255, 255)");
+    expect(getComputedStyle(heading).color).to.be.equal("rgb(26, 26, 26)");
+
+    apply_theme("paper");
+    expect(getComputedStyle(shown).backgroundColor).to.be.equal("rgb(244, 236, 216)");
+    expect(getComputedStyle(heading).fontFamily).to.contain("Georgia");
+    // No theme narrows the memo: whatever is on, it fills the width it is given. A reading
+    // column with margins around it was tried and is not wanted.
+    expect(getComputedStyle(shown).maxWidth).to.be.equal("none");
+    // The textarea takes the same colours and type, so writing on Paper is not writing on black.
+    const source = editor.shadowRoot?.querySelector("#source") as HTMLTextAreaElement;
+    expect(getComputedStyle(source).backgroundColor).to.be.equal("rgb(244, 236, 216)");
+    expect(getComputedStyle(source).fontSize).to.be.equal("17px");
+  });
+
+  it("should put link groups in boxes only under the Links theme", () => {
+    stub_the_server();
+    const editor = make_editor();
+    const shown = editor.shadowRoot?.querySelector("#presentation") as HTMLElement;
+    shown.innerHTML =
+      "<ul><li>Reading</li><li><a href='#'>one</a></li></ul><ul><li>only words</li></ul>";
+    const [with_links, words_only] = Array.from(shown.querySelectorAll("ul")) as HTMLElement[];
+
+    // Every other theme lays a list out exactly as the app always has: bullets, one item per line.
+    for (const theme of ["dark", "light", "paper"] as const) {
+      apply_theme(theme);
+      expect(getComputedStyle(with_links).display, theme).to.be.equal("block");
+      expect(getComputedStyle(with_links).listStyleType, theme).to.be.equal("disc");
+      expect(getComputedStyle(shown).maxWidth, theme).to.be.equal("none");
+      // No extra air either: the spacing between rows belongs to the Links theme like the rest.
+      expect(getComputedStyle(with_links.querySelector("li") as HTMLElement).paddingTop, theme)
+        .to.be.equal("0px");
+    }
+
+    apply_theme("links");
+    // The group of links becomes a box, and its first item the title bar over it...
+    expect(getComputedStyle(with_links).display).to.be.equal("inline-block");
+    expect(
+      getComputedStyle(with_links.querySelector("li") as HTMLElement).position
+    ).to.be.equal("absolute");
+    // ...with air between the links, which is read by scanning down them. (The band under the
+    // pointer is the theme's highlight colour; Firefox only applies :hover to a real pointer, so
+    // that half is checked in the browser pass rather than here.)
+    const a_link = with_links.querySelectorAll("li")[1] as HTMLElement;
+    expect(getComputedStyle(a_link).paddingTop).to.be.equal("2px");
+    // ...while a list of plain text is left alone even here.
+    expect(getComputedStyle(words_only).display).to.be.equal("block");
+
+    // And choosing another theme puts it back.
+    apply_theme("dark");
+    expect(getComputedStyle(with_links).display).to.be.equal("block");
+  });
+
+  it("should leave a barcode legible whatever theme is on", () => {
+    stub_the_server();
+    const editor = make_editor();
+    const shown = editor.shadowRoot?.querySelector("#presentation") as HTMLElement;
+    shown.innerHTML = '<div data-gen="barcode13"><span>1234567890123</span></div>';
+
+    apply_theme("light");
+
+    const plate = shown.querySelector("span") as HTMLElement;
+    // White behind black bars is what a scanner reads. `#presentation *` would repaint this if
+    // the barcode rules were not restated in front of it.
+    expect(getComputedStyle(plate).backgroundColor).to.be.equal("rgb(255, 255, 255)");
+    expect(getComputedStyle(plate).color).to.be.equal("rgb(0, 0, 0)");
+
+    // And the face that draws the bars, which is the other half of the same rule: a barcode set in
+    // a text face is a line of digits. Paper is the theme that changes the memo's font, so it is
+    // the one that would take it away.
+    apply_theme("paper");
+    expect(getComputedStyle(plate).fontFamily).to.contain("Libre Barcode EAN13 Text");
+  });
+
+  it("should offer the theme picker wherever the memo is", () => {
+    stub_the_server();
+    const editor = make_editor();
+    const picker = editor.shadowRoot?.querySelector("#edit_theme") as ThemeList | null;
+
+    expect(picker).not.to.be.null;
+    // In the metadata row, which is the one row that is on screen in both the reading view and
+    // the editor — it is moved between them, so one control serves both.
+    expect(picker?.parentElement?.id).to.be.equal("edit_meta");
   });
 
   it("should keep the memo it is holding when a status message arrives", () => {

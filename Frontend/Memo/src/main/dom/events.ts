@@ -41,6 +41,10 @@ export interface OrgEvents {
   /// A memo has been written to this device. The list of titles is drawn from what the database
   /// said when it was last drawn, so it has to hear about this rather than find out later.
   "memoSavedLocally": CustomEvent<number>;
+  /// The reader chose another display theme. The colours follow from an attribute on <html> by
+  /// themselves; this is for the parts of a theme a stylesheet cannot reach — the layout a
+  /// component applies inside its own shadow root (see memo-editor.ts and the Links theme).
+  "themeChanged": CustomEvent<string>;
 }
 // export const SAVE_ALL_STATUS = "saveAllStatus";
 // export const SAVING_EVENT = "savingEvent";
@@ -79,3 +83,6 @@ export const memo_deleted = (id: number) =>
 
 export const memo_saved_locally = (id: number) =>
   raspandac.emit("memoSavedLocally", id);
+
+export const theme_changed = (theme: string) =>
+  raspandac.emit("themeChanged", theme);

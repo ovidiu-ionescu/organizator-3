@@ -3,6 +3,20 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta charset="utf-8">
+    <meta name="theme-color" content="#000000">
+    <!-- The theme is applied here, before anything is drawn, so the app does not flash the
+         default and then change on every start. A module script would be too late: modules run
+         after the page has been parsed. The key is also in src/main/dom/theme.ts, which is what
+         writes it; the two have to agree. -->
+    <script>
+      try {
+        const theme = localStorage.getItem("memo_theme");
+        if (theme) document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        // A browser that will not give storage: the app opens on the default theme.
+      }
+    </script>
+    <link rel="stylesheet" href="./themes.css">
     <link rel="apple-touch-icon" sizes="152x152" href="/images/ios/tulip-blue-touch-icon-ipad.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/images/ios/tulip-blue-touch-icon-ipad-retina.png">
     <link rel="apple-touch-icon" sizes="167x167" href="/images/ios/tulip-blue-touch-icon-iphone-retina.png">

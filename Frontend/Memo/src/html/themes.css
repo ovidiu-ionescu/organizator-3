@@ -1,0 +1,84 @@
+/*
+ * The display themes: how a memo looks when it is read and when it is written.
+ *
+ * This file is the palettes. A theme's layout — the compact boxes the Links theme puts link
+ * groups in — lives in src/main/dom/memo-editor.ts, because it has to select the memo's own
+ * elements and a page stylesheet cannot see inside a shadow root. Custom properties, unlike
+ * selectors, do cross that boundary, which is why the colours can live here where they are easy
+ * to change: adding a colour theme is a block below and a line in src/main/dom/theme.ts.
+ *
+ * The defaults are the app's original colours, so with no theme chosen nothing changes. The
+ * attribute these are keyed off is set on <html> by src/main/dom/theme.ts (and, before the first
+ * paint, by the little script in memo.html).
+ */
+
+:root {
+  --memo-bg: #1F1F1F;
+  --memo-fg: white;
+  --memo-font: sans-serif;
+  --memo-font-size: 1rem;
+  --memo-line-height: normal;
+  --memo-link: steelblue;
+  /* The band behind a link while the pointer is over it. Only the Links theme puts one there —
+     a page of links is scanned by moving down it, and the band is what says which one is under
+     the finger. */
+  --memo-link-hover-bg: yellow;
+  --memo-link-hover-fg: black;
+  --memo-del: gray;
+  --memo-code: yellow;
+  --memo-pre-bg: #1F1F1F;
+  --memo-border: grey;
+  --memo-group-title-bg: #333333;
+  --memo-group-title-fg: white;
+}
+
+:root[data-theme="light"] {
+  --memo-bg: #ffffff;
+  --memo-fg: #1a1a1a;
+  --memo-link: #0b5fa5;
+  --memo-del: #888888;
+  --memo-code: #a31515;
+  --memo-pre-bg: #f2f2f2;
+  --memo-border: #bbbbbb;
+  --memo-group-title-bg: #e8e8e8;
+  --memo-group-title-fg: #1a1a1a;
+}
+
+/* For reading at length: a serif face and a wider line spacing. Full width like every other
+   theme — the memo fills what it is given. */
+:root[data-theme="paper"] {
+  --memo-bg: #f4ecd8;
+  --memo-fg: #3b3228;
+  --memo-font: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --memo-font-size: 1.0625rem;
+  --memo-line-height: 1.6;
+  --memo-link: #2a5c8a;
+  --memo-del: #9a8b74;
+  --memo-code: #8a3b2a;
+  --memo-pre-bg: #eae0c8;
+  --memo-border: #cbbf9f;
+  --memo-group-title-bg: #e3d7bb;
+  --memo-group-title-fg: #3b3228;
+}
+
+/* For memos that are really a set of link groups: smaller type, closer lines, and — in
+   memo-editor.ts — each group packed into a box of its own.
+
+   What a group is is decided by the markdown, not here: one list, one box, and markdown joins
+   consecutive lists into one. A group therefore ends where the list does — with a heading, a
+   ---- rule, or an invisible <!-- --> between them. Adjacent lists (a <!-- --> or a change of
+   bullet marker between) pack side by side; anything else starts a new line, and a heading keeps
+   its own box beneath it. */
+:root[data-theme="links"] {
+  --memo-bg: #1F1F1F;
+  --memo-fg: #d7d7d7;
+  --memo-font-size: 0.9375rem;
+  --memo-line-height: 1.25;
+  --memo-link: #7fb3e8;
+  --memo-del: #777777;
+  --memo-code: #e6c07b;
+  --memo-pre-bg: #262626;
+  --memo-border: #444444;
+  --memo-group-title-bg: #2c3e50;
+  --memo-group-title-fg: #ffffff;
+}
