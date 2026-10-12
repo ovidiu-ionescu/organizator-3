@@ -11,7 +11,7 @@ use axum::{
 };
 use tracing::error;
 
-use crate::security::check_security::{BEARER, create_security_cookie};
+use crate::security::check_security::{BEARER, create_security_cookie, is_mobile_app};
 use crate::security::jot::User;
 use crate::{
     security::check_security::{JwtStatus, check_jwt_header, check_ssl_header},
@@ -42,6 +42,7 @@ pub async fn authorization_middleware(
         }
     }
 
+    let is_mobile = is_mobile_app(&req.headers());
     let start = Instant::now();
     let mut response = next.run(req).await;
     let elapsed = start.elapsed();
@@ -55,7 +56,12 @@ pub async fn authorization_middleware(
     // if the token is in the grace period, we automatically refresh it and send it back to the
     // client in the response headers and cookies
     if let Some(token) = new_token {
-        let cookie = create_security_cookie(&token);
+        let max_age = if is_mobile {
+            Some(state.jot.session_expiry)
+        } else {
+            None
+        };
+        let cookie = create_security_cookie(&token, max_age);
 
         let header = String::from(BEARER) + &token;
         response

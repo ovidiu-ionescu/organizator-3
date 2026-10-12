@@ -1,3 +1,8 @@
+organizator (0.1.33) UNRELEASED; urgency=medium
+
+  * cookie on mobile will have the max-age of the token
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Sun, 11 Oct 2026 11:30:00 +0200
 organizator (0.1.32) UNRELEASED; urgency=medium
 
   * fox for barcode fonts

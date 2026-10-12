@@ -124,20 +124,6 @@ impl Jot {
         })
     }
 
-    pub fn from_ed_der(
-        public_key: &[u8],
-        security_config: &SecurityConfig,
-    ) -> Result<Jot, AppError> {
-        let decoding_key = DecodingKey::from_ed_der(public_key);
-        Ok(Jot {
-            encoding_key: EncodingKey::from_ed_der(public_key),
-            decoding_key,
-            session_expiry: security_config.session_expiry,
-            session_expiry_grace_period: security_config.session_expiry_grace_period,
-            public_key: BASE64.encode(public_key),
-        })
-    }
-
     pub fn check_expiration(&self, claims: &Claims) -> ExpiredToken {
         let now = get_current_timestamp();
         if claims.exp > now + self.session_expiry_grace_period {

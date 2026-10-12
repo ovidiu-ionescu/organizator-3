@@ -7,7 +7,7 @@ use axum::{
 ///  - check a header filled in by Nginx from a client certificate
 ///  - check the JWT token in the Authorization header
 ///
-use tracing::{info, trace, debug};
+use tracing::{debug, info, trace};
 
 pub const SSL_HEADER_VERIFY: &str = "X-SSL-Client-Verify";
 pub const SSL_HEADER_DN: &str = "X-SSL-Client-S-DN";
@@ -140,9 +140,22 @@ pub fn check_jwt_header(request: &mut Request, jot: &Jot) -> JwtStatus {
     }
 }
 
+// check if the request comes from a mobile app by checking the User-Agent header
+pub fn is_mobile_app(headers: &HeaderMap) -> bool {
+    if let Some(user_agent) = headers.get(header::USER_AGENT) {
+        if let Ok(user_agent_str) = user_agent.to_str() {
+            return user_agent_str.contains("OrganizatorMobileApp");
+        }
+    }
+    false
+}
+
 /// Create the cookie string from the jwt string
-pub fn create_security_cookie(jwt: &str) -> String {
-    format!("__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Strict; Path=/;")
+pub fn create_security_cookie(jwt: &str, max_age: Option<u64>) -> String {
+    format!(
+        "__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Strict; Path=/; {}",
+        max_age.map_or("".to_string(), |age| format!("Max-Age={age};"))
+    )
 }
 
 /// Go through the headers and find the cookie with the given prefix,

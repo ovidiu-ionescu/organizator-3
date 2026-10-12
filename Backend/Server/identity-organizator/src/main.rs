@@ -20,7 +20,7 @@ use lib_axum_organizator::postgres::{self, DbConn};
 use lib_axum_organizator::security::authorization_middleware::{
     RequireAdmin, authorization_middleware,
 };
-use lib_axum_organizator::security::check_security::{create_security_cookie, extract_jwt};
+use lib_axum_organizator::security::check_security::{create_security_cookie, extract_jwt, is_mobile_app};
 use lib_axum_organizator::security::jot::{Jot, PublicKey, User};
 use lib_axum_organizator::settings::Settings;
 use lib_axum_organizator::state::AppState;
@@ -276,7 +276,13 @@ async fn login_handler(
     let temp: Vec<&str> = roles.iter().map(|role| role.name.as_str()).collect();
     let new_token: String = state.jot.generate_token(&form.username, &temp)?;
     info!("User 「{}」 logged in", &form.username);
-    let cookie = create_security_cookie(&new_token);
+    let is_mobile = is_mobile_app(&headers);
+    let max_age = if is_mobile {
+        Some(state.jot.session_expiry)
+    } else {
+        None
+    };
+    let cookie = create_security_cookie(&new_token, max_age);
 
     // if it has the web client header, return just the cookie
     Ok(if headers.get("x-organizator-client-version").is_some() {
