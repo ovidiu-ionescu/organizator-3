@@ -42,7 +42,10 @@
     proxy_read_timeout 300s;
   }
 
-  location ~ ^/organizator/(?<ep>user-roles|roles|password|me)$ {
+  # The identity service owns the session cookie and is the only thing that can take it away, so
+  # logout has to come here. Left to the location below it went to the memo server, which has no
+  # such route: the answer was a 404 with no Set-Cookie, and the cookie stayed in the browser.
+  location ~ ^/organizator/(?<ep>user-roles|roles|password|me|logout)$ {
     client_max_body_size 30M;
 
     proxy_set_header Authorization $http_authorization;

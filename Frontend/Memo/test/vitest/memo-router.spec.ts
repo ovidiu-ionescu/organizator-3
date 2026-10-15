@@ -95,51 +95,32 @@ describe("The title list", () => {
     });
   });
 
-  // The status bar, with the offer to cache everything on its summary line.
-  const status_bar = (): { info: HTMLDetailsElement; cache: HTMLElement } => {
+  // The status bar: where the list says where it came from, and why when that needs explaining.
+  const status_bar = (): { info: HTMLDetailsElement } => {
     document.body.innerHTML = `
       <section id="memoTitles" page>
         <details id="titles_info">
-          <summary><span id="titles_info_summary">Memos from the server</span>
-            <a href="#" id="cache_all" hidden>Cache all</a></summary>
+          <summary><span id="titles_info_summary">Memos from the server</span></summary>
           <p id="titles_info_message"></p>
         </details>
         <ul id="memoTitlesList"></ul>
       </section>`;
     return {
       info: document.getElementById("titles_info") as HTMLDetailsElement,
-      cache: document.getElementById("cache_all") as HTMLElement,
     };
   };
 
-  it("should offer to cache everything only while the list comes from the server", async () => {
-    const { cache } = status_bar();
-
-    load_route();
-    await vi.waitFor(() => {
-      expect(cache.hidden).to.be.false;
-    });
-
-    // The server goes away. The list falls back to this device — which is what the empty list
-    // makes it fetch again for — and the offer goes with it: the server has just failed us, so
-    // there is nothing left to fetch from, and what it would fetch is already here.
+  it("should say when the list is the local fallback rather than the server's", async () => {
+    status_bar();
     vi.stubGlobal("fetch", async () => new Response("no", { status: 500 }));
-    (document.getElementById("memoTitlesList") as HTMLElement).innerHTML = "";
+
     load_route();
+
+    // The server failed us, so the list on screen is what this device holds — and the summary
+    // line says so rather than leaving the reader to wonder why memos are missing.
     await vi.waitFor(() => {
-      expect(cache.hidden).to.be.true;
+      expect(document.getElementById("titles_info_summary")?.innerText).to.be.equal("Local memos");
     });
-  });
-
-  it("should not fold the status open when the cache link is clicked", async () => {
-    const { info, cache } = status_bar();
-    // Never answered, so the run the click starts does not get anywhere; this is about the click
-    // itself, and the link sits on the summary line, where a click would otherwise fold it.
-    vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
-
-    cache.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-
-    expect(info.open).to.be.false;
   });
 
   // The page as the drop command needs it: the search box to give it the command, the status

@@ -7,6 +7,7 @@ use pulldown_cmark_escape::{escape_href, escape_html};
 #[derive(PartialEq)]
 enum CustomBlocks {
     Code128,
+    Code39,
     EAN13,
     None,
 }
@@ -34,6 +35,10 @@ pub fn process_markdown(markdown: &str) -> String {
                 in_custom_block = CustomBlocks::Code128;
                 Event::Text("".into())
             }
+            "barcode39" => {
+                in_custom_block = CustomBlocks::Code39;
+                Event::Text("".into())
+            }
             "barcode13" => {
                 in_custom_block = CustomBlocks::EAN13;
                 Event::Text("".into())
@@ -43,6 +48,9 @@ pub fn process_markdown(markdown: &str) -> String {
         Event::Text(text) if in_custom_block == CustomBlocks::Code128 => {
             //Event::Html(process_barcode128(text))
             Event::Html(process_barcode128_libre(text))
+        }
+        Event::Text(text) if in_custom_block == CustomBlocks::Code39 => {
+            Event::Html(process_barcode39_libre(text))
         }
         Event::Text(text) if in_custom_block == CustomBlocks::EAN13 => {
             //Event::Html(process_barcode13(text))
@@ -78,6 +86,10 @@ fn process_link<'a>(dest_url: CowStr, title: CowStr) -> CowStr<'a> {
 
 fn process_barcode13_libre(text: CowStr) -> CowStr {
     format!(r#"<div data-gen="barcode13"><span>{}</span></div>"#, text).into()
+}
+
+fn process_barcode39_libre(text: CowStr) -> CowStr {
+    format!(r#"<div data-gen="barcode39"><span>*{}*</span></div>"#, text).into()
 }
 
 fn process_barcode128_libre(text: CowStr) -> CowStr {

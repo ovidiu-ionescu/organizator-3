@@ -6,7 +6,7 @@
 const journal: string[] = [];
 
 const add = (...args: (string | number)[]) => {
-  if (journal.length > 100) {
+  if (journal.length > 1000) {
     journal.shift();
   }
   journal.push(args.join(" "));

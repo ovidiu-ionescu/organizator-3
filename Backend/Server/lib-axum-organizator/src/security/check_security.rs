@@ -153,7 +153,7 @@ pub fn is_mobile_app(headers: &HeaderMap) -> bool {
 /// Create the cookie string from the jwt string
 pub fn create_security_cookie(jwt: &str, max_age: Option<u64>) -> String {
     format!(
-        "__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Strict; Path=/; {}",
+        "__Host-jwt={jwt}; HttpOnly; Secure; SameSite=Lax; Path=/; {}",
         max_age.map_or("".to_string(), |age| format!("Max-Age={age};"))
     )
 }

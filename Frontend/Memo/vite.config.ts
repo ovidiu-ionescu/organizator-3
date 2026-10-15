@@ -66,6 +66,14 @@ export default defineConfig({
                 secure: false,
                 rewrite: (path) => path.replace(/^\/organizator/, '')
             },
+            // Signing out is the identity service's too, and for the same reason: it is the one
+            // that set the cookie. This mirrors the nginx rule the deployed site needs.
+            '/organizator/logout': {
+                target: 'http://localhost:8080',
+                changeOrigin: true,
+                secure: false,
+                rewrite: (path) => path.replace(/^\/organizator/, '')
+            },
             '/organizator/': {
                 target: 'http://localhost:8082',
                 changeOrigin: true,

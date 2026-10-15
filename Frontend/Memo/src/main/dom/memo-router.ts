@@ -299,23 +299,6 @@ const titles_of = (memos: CacheMemo[]): string[] => {
 };
 
 /**
- * Offer, or stop offering, to fetch the whole library into this device.
- *
- * The offer belongs to the server's list. It means "take everything the server has, so this
- * device still works without it", which is a sensible thing to ask for while the server is the
- * one answering and a pointless one when the list on screen is the local fallback: the server
- * has just failed us, so there is nothing to fetch from, and what it would fetch is already
- * here. It is also withdrawn once a run finishes, since the run either left the library here or
- * said why it could not.
- */
-const show_cache_all = (offer: boolean) => {
-  const button = document.getElementById("cache_all");
-  if (button) {
-    button.hidden = !offer;
-  }
-};
-
-/**
  * Full-text search over the memos cached on this device.
  *
  * With no server to ask, the cached copies are all there is. Their bodies are in the database,
@@ -405,7 +388,6 @@ async function loadMemoTitles(force_reload?: boolean) {
     // The whole list is what is about to be drawn, whatever was searched for before.
     search_hits = undefined;
     show_list_info("Memos from the server");
-    show_cache_all(true);
     // The server's answer says nothing about the memos edited here since they were fetched;
     // the cache does, and its markers win.
     displayMemoTitles(await with_local_statuses(titles_from_server), false, false);
@@ -433,7 +415,6 @@ async function loadMemoTitles(force_reload?: boolean) {
   }
   list_is_local = true;
   search_hits = undefined;
-  show_cache_all(false);
   konsole.log("Get all memos from indexedDB");
   displayMemoTitles(await db.get_all_memos(), false, false);
 }
@@ -494,62 +475,6 @@ const displayMemoTitles = async (
     );
   }
 };
-
-/**
- * Fetch every memo the server has into this device, so the app works with the server down.
- *
- * Meant for the titles page, which is where somebody stands before going somewhere without a
- * connection. Each memo is merged the way a save merges, so nothing edited here is lost to it,
- * and one that will not come is reported rather than abandoning the rest.
- */
-const cache_everything = async () => {
-  const button = document.getElementById("cache_all");
-  if (!button || button.getAttribute("aria-busy") === "true") {
-    return;
-  }
-  const label = button.innerText;
-  button.setAttribute("aria-busy", "true");
-
-  try {
-    const result = await server_comm.cache_all_memos((done, total) => {
-      button.innerText = `Caching ${done}/${total}`;
-    });
-    konsole.log(`Cached ${result.cached} of ${result.total} memos`);
-    if (result.failures.length) {
-      show_list_info(
-        "Cached what the server had",
-        `${result.cached} of ${result.total} memos are now on this device.\n` +
-          result.failures.slice(0, 5).join("\n")
-      );
-    } else {
-      show_list_info(
-        "Cached the memos from the server",
-        `All ${result.total} memos are now on this device.`
-      );
-    }
-    // The run is over and the status no longer says the list came from the server. What it left
-    // behind is here either way, so the offer goes with it — unless some of it did not come, when
-    // asking again is exactly what the reader wants to do. It comes back with the next list the
-    // server answers in any case.
-    show_cache_all(result.failures.length > 0);
-  } catch (e) {
-    if (e instanceof server_comm.UnauthenticatedError) {
-      window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
-      return;
-    }
-    konsole.error("Failed to cache the memos", e);
-    show_list_info("Could not cache the memos", `${e}`);
-    show_cache_all(false);
-  } finally {
-    button.removeAttribute("aria-busy");
-    button.innerText = label;
-  }
-};
-
-document.getElementById("cache_all")?.addEventListener("click", (event) => {
-  event.preventDefault();
-  cache_everything();
-});
 
 raspandac.on("memoSavedLocally", (event: CustomEvent<number>) => {
   // A memo written to this device is now dirty, and the markers in the list are drawn from the

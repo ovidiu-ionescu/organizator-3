@@ -193,7 +193,7 @@ const template = `
         text-align: center;
       }
       
-      div[data-gen="barcode128"], div[data-gen="barcode13"] {
+      div[data-gen="barcode128"], div[data-gen="barcode39"], div[data-gen="barcode13"] {
         text-align: center;
       }
       /* All four of these under #presentation, so that they stay in front of the theme rule that
@@ -203,7 +203,7 @@ const template = `
 
          A barcode is read by a scanner: white behind black bars, in the font that draws those bars,
          whatever the reader chose to read in. */
-      #presentation div[data-gen="barcode128"] span, #presentation div[data-gen="barcode13"] span  {
+      #presentation div[data-gen="barcode128"] span, #presentation div[data-gen="barcode39"] span, #presentation div[data-gen="barcode13"] span {
         border-width: 10px 40px 10px 40px;
         border-style: solid;
         border-color: white;
@@ -214,6 +214,10 @@ const template = `
       }
       #presentation div[data-gen="barcode128"] span {
         font-family: "Libre Barcode 128 Text", system-ui;
+        font-size: 65px;
+      }
+      #presentation div[data-gen="barcode39"] span {
+        font-family: "Libre Barcode 39 Text", system-ui;
         font-size: 65px;
       }
       #presentation div[data-gen="barcode13"] span {
@@ -295,7 +299,6 @@ const template = `
         <img-inline-svg id="encrypt_button" src="/images/ic_lock_48px.svg" title="encrypt"></img-inline-svg>
         <img-inline-svg id="edit_button" src="/images/ic_create_48px.svg" title="toggle edit/view"></img-inline-svg>
         <img-inline-svg id="share_button" src="/images/share-white-48dp.svg" title="show sharing status"></img-inline-svg>
-        <img-inline-svg id="journal_button" src="/images/menu_book-white-48dp.svg" title="event journal (for debugging)"></img-inline-svg>
       </nav>
       <!-- Above the memo rather than below it: what a save did is read before the text is, not
            after scrolling to the end of it. -->
@@ -657,10 +660,6 @@ export class MemoEditor extends HTMLElement {
     window.addEventListener("popstate", save);
     raspandac.on("navigate", save);
 
-    this.$.journal_button.addEventListener("click", (evt) => {
-      evt.stopPropagation();
-      events.navigate("/journal");
-    });
   } // end of initialize
 
   _show_presentation() {

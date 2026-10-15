@@ -64,4 +64,6 @@ export const PWA_EXTRA_PRECACHE: string[] = [
   // password.ts, the two buttons of the password dialog
   '/images/ic_clear_48px.svg',
   '/images/ic_done_48px.svg',
+  // memo.html, the menu button in the corner
+  '/images/more_vert.svg',
 ];

@@ -1,3 +1,14 @@
+organizator (0.1.35) UNRELEASED; urgency=medium
+
+  * changed cookie to SameSite lax
+  * removed the journal button from the memo editor, it's now in the menu
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 15 Oct 2026 11:02:00 +0200
+organizator (0.1.34) UNRELEASED; urgency=medium
+
+  * added a side menu and moved Cache all, Admin and Journal there
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 12 Oct 2026 17:56:00 +0200
 organizator (0.1.33) UNRELEASED; urgency=medium
 
   * cookie on mobile will have the max-age of the token
