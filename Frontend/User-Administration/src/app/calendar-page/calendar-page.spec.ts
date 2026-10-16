@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
@@ -68,9 +69,11 @@ describe('CalendarPage', () => {
 
     // The real renderer is a wasm file this environment cannot fetch, so it is stubbed with
     // something recognisable — what is under test is that its output reaches the page, not the
-    // markdown itself.
-    vi.spyOn(TestBed.inject(Markdown), 'render').mockImplementation(
-      (note: string) => `<p class="stub">${note}</p>`
+    // markdown itself. The stub marks its HTML trusted, which is what the real one does, so the
+    // note takes the same route into the page (see the note on trusting it in markdown.ts).
+    const sanitizer = TestBed.inject(DomSanitizer);
+    vi.spyOn(TestBed.inject(Markdown), 'render').mockImplementation((note: string) =>
+      sanitizer.bypassSecurityTrustHtml(`<p class="stub">${note}</p>`)
     );
   });
 

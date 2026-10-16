@@ -17,6 +17,7 @@ import { current_theme } from "./theme.js";
 import * as memo_processing from "./memo_processing.js";
 import {alignedText, digestMessage} from "./util.js";
 import { promptPassword} from "./password.js";
+import { current_position } from "./location.js";
 
 // @ts-ignore
 import {memo_decrypt, memo_encrypt, process_markdown,} from "../pkg/organizator_wasm.js";
@@ -117,8 +118,22 @@ const template = `
         right: 0;
         border-radius: 10px;
       }
+      /* A row of buttons, laid out as flex rather than as words in a sentence: inline flow puts a
+         space between each pair of them, off the whitespace between the tags in the template, and
+         that space is what pushed the last button onto a second row on a phone. Flex items have no
+         such gaps. */
+      nav#toolbar, nav#edit_toolbar {
+        display: flex;
+        align-items: center;
+      }
       nav img, img-inline-svg {
-        width: 48px;
+        /* 48px of button, or a little less when the screen is narrower than the row — eight of
+           them have to stay on one line on a phone, and the ones in the middle of the scale are
+           still a comfortable thing to tap. */
+        width: min(48px, 11.5vw);
+        /* And never squeezed: a button that is not square reads as a mistake. If a screen is so
+           narrow that they do not fit, they wrap as they always did rather than being flattened. */
+        flex: 0 0 auto;
       }
       #modal_password {
         position: fixed;
@@ -310,6 +325,7 @@ const template = `
           <img-inline-svg id="today_button" src="/images/ic_today_48px.svg" title="insert date"></img-inline-svg>
           <img-inline-svg id="checkbox_button" src="/images/check_box-white-48dp.svg" title="insert markdown checkbox"></img-inline-svg>
           <img-inline-svg id="link_button" src="/images/ic_link_48px.svg" title="insert markdown link"></img-inline-svg>
+          <img-inline-svg id="location_button" src="/images/ic_place_48px.svg" title="insert a link to where you are"></img-inline-svg>
           <img-inline-svg id="table_button" src="/images/border_all-white-48dp.svg" title="insert markdown table"></img-inline-svg>
           <img-inline-svg id="crypto_button" src="/images/enhanced_encryption-white-48dp.svg" title="insert secret info"></img-inline-svg>
           <img-inline-svg id="upload_button" src="/images/publish-white-48dp.svg" title="insert image (or any file)"></img-inline-svg>
@@ -520,6 +536,29 @@ export class MemoEditor extends HTMLElement {
         } catch (error) {}
         return `[${text}](${s})`;
       });
+    });
+
+    // A link that opens where the memo is being written. The browser has to be asked, which takes
+    // a moment — and may end in the reader being told why it will not say. The caret is noted
+    // before the asking and put back when the answer comes: meanwhile the reader may have clicked
+    // somewhere else in the memo, and the link belongs where they were when they asked for it.
+    this.$.location_button.addEventListener("click", async () => {
+      const editor = this.$.source;
+      const start_offset = editor.selectionStart;
+      const end_offset = editor.selectionEnd;
+      try {
+        const position = await current_position();
+        if (start_offset !== null && end_offset !== null) {
+          editor.selectionStart = start_offset;
+          editor.selectionEnd = end_offset;
+        }
+        insertText(`[${position.label}](${position.url})`);
+      } catch (e) {
+        konsole.error("Could not find out where this is", e);
+        // Whatever the browser said, in the browser's own terms: it is the reader who has to allow
+        // it, or go outside to get a fix.
+        this.$.status.innerText = e instanceof Error ? e.message : `${e}`;
+      }
     });
 
     this.$.table_button.addEventListener("click", async () => {

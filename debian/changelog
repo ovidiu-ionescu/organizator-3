@@ -1,3 +1,9 @@
+organizator (0.1.36) UNRELEASED; urgency=medium
+
+  * added barcoded for odate
+  * addded a button for inserting location in a memo
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 15 Oct 2026 22:24:00 +0200
 organizator (0.1.35) UNRELEASED; urgency=medium
 
   * changed cookie to SameSite lax

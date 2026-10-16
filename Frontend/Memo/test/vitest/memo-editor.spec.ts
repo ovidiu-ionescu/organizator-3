@@ -81,6 +81,8 @@ describe("The memo editor", () => {
     // textarea test below reads the size the default theme gives it.
     delete document.documentElement.dataset.theme;
     localStorage.clear();
+    // The geolocation spies: unstubAllGlobals does not put those back.
+    vi.restoreAllMocks();
   });
 
   it("should style its textarea rather than leave it to the browser defaults", () => {
@@ -494,6 +496,80 @@ describe("The memo editor", () => {
     // the one that would take it away.
     apply_theme("paper");
     expect(getComputedStyle(plate).fontFamily).to.contain("Libre Barcode EAN13 Text");
+  });
+
+  it("should insert a link that opens where the reader is", async () => {
+    stub_the_server();
+    const found = vi.spyOn(navigator.geolocation, "getCurrentPosition").mockImplementation((ok) => {
+      ok({
+        coords: { latitude: 51.507353, longitude: -0.127758 },
+      } as GeolocationPosition);
+    });
+
+    const editor = make_editor();
+    await editor.set_memo({ id: 40, text: "# a memo", timestamp: 100 }, true);
+    // The button lives in the editing toolbar, so this is where the reader is when they press it.
+    (editor.shadowRoot?.querySelector("#edit_button") as HTMLElement).click();
+    const source = editor.shadowRoot?.querySelector("#source") as HTMLTextAreaElement;
+    source.selectionStart = source.value.length;
+    source.selectionEnd = source.value.length;
+
+    (editor.shadowRoot?.querySelector("#location_button") as HTMLElement).click();
+    await vi.waitFor(() => {
+      expect(source.value).to.contain("google.com/maps");
+    });
+
+    found.mockRestore();
+    // The label is the coordinates, and the same ones the link opens: a memo with two of these
+    // says where each is rather than "location" twice.
+    expect(source.value).to.contain("[51.50735, -0.12776]");
+    expect(source.value).to.contain("query=51.50735,-0.12776");
+  });
+
+  it("should say why the browser will not say where the reader is", async () => {
+    stub_the_server();
+    const refused = vi
+      .spyOn(navigator.geolocation, "getCurrentPosition")
+      .mockImplementation((_ok, failed) => {
+        failed?.({
+          code: 1,
+          PERMISSION_DENIED: 1,
+          POSITION_UNAVAILABLE: 2,
+          TIMEOUT: 3,
+          message: "denied",
+        } as GeolocationPositionError);
+      });
+
+    const editor = make_editor();
+    await editor.set_memo({ id: 41, text: "# a memo", timestamp: 100 }, true);
+    (editor.shadowRoot?.querySelector("#edit_button") as HTMLElement).click();
+    const source = editor.shadowRoot?.querySelector("#source") as HTMLTextAreaElement;
+    const before = source.value;
+
+    (editor.shadowRoot?.querySelector("#location_button") as HTMLElement).click();
+
+    await vi.waitFor(() => {
+      expect(editor.shadowRoot?.querySelector("#status")?.textContent ?? "").to.contain(
+        "not allowed"
+      );
+    });
+    refused.mockRestore();
+    // Nothing goes into the memo: a link to nowhere is worse than no link.
+    expect(source.value).to.be.equal(before);
+  });
+
+  it("should lay its toolbars out as rows without gaps", () => {
+    stub_the_server();
+    const editor = make_editor();
+    const toolbar = editor.shadowRoot?.querySelector("#edit_toolbar") as HTMLElement;
+    const button = toolbar.querySelector("img-inline-svg") as HTMLElement;
+
+    // Flex, not inline flow: the whitespace between the tags in the template is a gap between
+    // buttons in a sentence, and on a phone that gap is what pushes the last button onto a row of
+    // its own. What the icons are worth on a narrow screen is the other half of the same fix; this
+    // checks the half a test can hold.
+    expect(getComputedStyle(toolbar).display).to.be.equal("flex");
+    expect(getComputedStyle(button).flexShrink).to.be.equal("0");
   });
 
   it("should offer the theme picker wherever the memo is", () => {

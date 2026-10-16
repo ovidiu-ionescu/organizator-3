@@ -1,4 +1,5 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 
 /** The shape of the wasm package's module, as much of it as this app uses. */
 interface OrganizatorWasm {
@@ -17,23 +18,32 @@ interface OrganizatorWasm {
  * startup: it is a sizeable wasm file, and nobody reading the calendar needs it until they are
  * looking at a note.
  *
- * **The output is safe to put in the DOM.** The package runs its HTML through `ammonia`, an
- * allow-list sanitiser, before returning it (`organizator-wasm/src/markdown.rs`). Angular's
- * `[innerHTML]` sanitises it a second time on the way in, which is belt and braces rather than
- * the only thing standing between a note and the page.
+ * **The output is the package's own, and it is taken as it stands.** The package runs its HTML
+ * through `ammonia`, an allow-list sanitiser, before returning it (see
+ * `organizator-wasm/src/markdown.rs`), and `render` hands the result over marked trusted, so
+ * `[innerHTML]` puts it in the page as written. That is the same list a note is held to in the
+ * memo app, which shows this same HTML with no second pass at all.
+ *
+ * Marking it trusted is what gives up Angular's own pass over `[innerHTML]`, and it has to be
+ * given up: that pass drops the `data-gen` attribute the barcode markup is styled by, so a note
+ * holding a barcode came out as a line of digits. Ammonia is then the only thing between a note and
+ * the page, which is why `render` marks trusted exactly what the package returned and nothing else.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class Markdown {
+  private sanitizer = inject(DomSanitizer);
   private renderer = signal<((markdown: string) => string) | null>(null);
   private loading?: Promise<void>;
 
   /**
    * Rendered results, kept because the caller renders in a template binding: the same note is
-   * asked for on every change detection, and a calendar can hold hundreds of them.
+   * asked for on every change detection, and a calendar can hold hundreds of them. The trusted
+   * value is kept along with its HTML, so a binding checked again is handed the same object rather
+   * than a fresh one it would take for a change and write the element out over.
    */
-  private cache = new Map<string, string>();
+  private cache = new Map<string, SafeHtml>();
 
   isReady = computed(() => this.renderer() !== null);
 
@@ -60,17 +70,17 @@ export class Markdown {
   }
 
   /**
-   * The HTML for a piece of markdown, or null while the renderer is not loaded — the caller shows
-   * the text as it stands until then, rather than nothing.
+   * The HTML for a piece of markdown, marked trusted, or null while the renderer is not loaded —
+   * the caller shows the text as it stands until then, rather than nothing.
    */
-  render(markdown: string): string | null {
+  render(markdown: string): SafeHtml | null {
     const render = this.renderer();
     if (render === null) return null;
 
     const already = this.cache.get(markdown);
     if (already !== undefined) return already;
 
-    const html = render(markdown);
+    const html = this.sanitizer.bypassSecurityTrustHtml(render(markdown));
     this.cache.set(markdown, html);
     return html;
   }

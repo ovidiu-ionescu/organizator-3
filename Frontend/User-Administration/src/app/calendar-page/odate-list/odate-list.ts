@@ -1,5 +1,6 @@
 import { Component, inject, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import type { SafeHtml } from '@angular/platform-browser';
 import { Markdown } from '../../markdown';
 import { Odate } from '../../odate-api';
 import { Coordinates, mapUrl } from '../coordinates';
@@ -53,11 +54,11 @@ export class OdateList {
   }
 
   /**
-   * A note as HTML, or null while the renderer is loading — the note is shown as it was written
-   * until then. The renderer keeps what it has already produced, so asking on every change
-   * detection costs nothing after the first time.
+   * A note as HTML — the renderer's own output, marked trusted — or null while the renderer is
+   * loading, in which case the note is shown as it was written. The renderer keeps what it has
+   * already produced, so asking on every change detection costs nothing after the first time.
    */
-  noteHtml(note: string): string | null {
+  noteHtml(note: string): SafeHtml | null {
     return this.markdown.render(note);
   }
 

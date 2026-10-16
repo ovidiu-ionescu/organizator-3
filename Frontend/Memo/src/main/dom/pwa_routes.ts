@@ -66,4 +66,6 @@ export const PWA_EXTRA_PRECACHE: string[] = [
   '/images/ic_done_48px.svg',
   // memo.html, the menu button in the corner
   '/images/more_vert.svg',
+  // memo-editor.ts, the button that inserts a link to where the reader is
+  '/images/ic_place_48px.svg',
 ];

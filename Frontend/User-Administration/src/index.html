@@ -8,6 +8,26 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- The faces that draw barcodes in a note. The renderer turns a ```barcode13, ```barcode39 or
+       ```barcode128 block into a span of the digits or of the encoded reference, and these are the
+       fonts that draw those characters as bars. Only the "Text" variants, which print the digits
+       underneath; the variants with the bars alone are not used by the styles, so they are not
+       asked for. Same three families as the memo app, so a note copied between the two looks the
+       same. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap"
+    rel="stylesheet"
+  >
+  <link
+    href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39+Text&display=swap"
+    rel="stylesheet"
+  >
+  <link
+    href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap"
+    rel="stylesheet"
+  >
   <script>
     // Applies the stored theme before the app boots, so a light theme does not flash dark first.
     // Must match the storage key and default in src/app/theme.ts.

@@ -283,3 +283,72 @@ body {
   border: none;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* Barcodes in a note: the renderer turns a ```barcode13, ```barcode39 or ```barcode128 block into
+   one of these, a span of digits or of an encoded reference, and the font named below draws those
+   characters as bars. The rules are global for the same reason the rest of this block is — the
+   markup arrives through [innerHTML] and carries no component's scoping attribute.
+
+   The plate is white behind black whatever the theme is, and it is a border rather than padding so
+   that a scanner reading the screen has the quiet zone it expects at each end. The colours are
+   spelled out rather than taken from the theme's variables on purpose: bars drawn in a dark
+   theme's colours are not a barcode any more. */
+div[data-gen='barcode13'],
+div[data-gen='barcode128'],
+div[data-gen='barcode39'] {
+  margin: 0.5rem 0;
+  /* Where the note's text starts, not in the middle of the line: a barcode reads as part of what is
+     written above and below it. On a phone it is centred instead — see the query at the end of this
+     block.
+
+     A barcode that wraps is not a barcode: the bars have to be one symbol for a scanner to read
+     them, so the plate never breaks inside itself and is scrolled to where it is wider than the
+     column, which a Code 39 at 65px is even on a desktop. */
+  overflow-x: auto;
+}
+
+div[data-gen='barcode13'] span,
+div[data-gen='barcode128'] span,
+div[data-gen='barcode39'] span {
+  display: inline-block;
+  white-space: nowrap;
+  border-width: 10px 40px;
+  border-style: solid;
+  border-color: white;
+  background-color: white;
+  color: black;
+  margin: 10px;
+}
+
+/* The sizes the memo app draws at, to the pixel: a note looks the same in both frontends, and the
+   fonts are cut for a size the bars read at. */
+div[data-gen='barcode13'] span {
+  font-family: 'Libre Barcode EAN13 Text', system-ui;
+  font-size: 200px;
+}
+
+div[data-gen='barcode39'] span {
+  font-family: 'Libre Barcode 39 Text', system-ui;
+  font-size: 65px;
+}
+
+div[data-gen='barcode128'] span {
+  font-family: 'Libre Barcode 128 Text', system-ui;
+  font-size: 65px;
+}
+
+/* On a phone a barcode of that size is wider than the column, and it is the one part of a note that
+   has to be looked at square on rather than read, so it is centred there and whatever does not fit
+   is clipped off both ends. Centred rather than scrolled is the point: what shows is the middle of
+   the symbol, and what the clipping eats first is the quiet zone, which is white space a scanner
+   needs only a little of. A 13-digit EAN-13 loses nothing but that at a phone's width; a Code 39 at
+   65px is wider than the phone and does lose bars, since it is drawn at the memo app's size. */
+@media (max-width: 600px) {
+  div[data-gen='barcode13'],
+  div[data-gen='barcode128'],
+  div[data-gen='barcode39'] {
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+  }
+}
