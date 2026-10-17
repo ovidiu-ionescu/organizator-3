@@ -1,14 +1,14 @@
 import { Routes } from '@angular/router';
 
 /**
- * The three screens behind the shell's menu. All of them are lazy: each is only useful to
- * someone who followed the menu there, so none of their code belongs in the initial bundle.
+ * The two screens behind the shell's menu. Both are lazy: each is only useful to someone who
+ * followed the menu there, so none of their code belongs in the initial bundle.
  *
- * The calendar is the one the app opens on, and the first entry in the menu so that the screen
- * you land on is the one at the front.
+ * The calendar used to be a third, and the screen the app opened on. It is now a page of the memo
+ * app, which is where odates are read, written and drawn — /calendar on the same host.
  */
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'calendar' },
+  { path: '', pathMatch: 'full', redirectTo: 'users' },
   {
     path: 'users',
     // The router's default title strategy puts these in document.title, so each screen says
@@ -21,12 +21,7 @@ export const routes: Routes = [
     title: 'Groups',
     loadComponent: () => import('./groups-page/groups-page').then(module => module.GroupsPage),
   },
-  {
-    path: 'calendar',
-    title: 'Calendar',
-    loadComponent: () =>
-      import('./calendar-page/calendar-page').then(module => module.CalendarPage),
-  },
-  // Anything else — a stale bookmark, a typo — lands on the screen the app opens with.
-  { path: '**', redirectTo: 'calendar' },
+  // Anything else — a stale bookmark, a typo, the /calendar this app used to serve — lands on the
+  // screen the app opens with.
+  { path: '**', redirectTo: 'users' },
 ];

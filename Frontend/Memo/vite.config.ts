@@ -1,15 +1,20 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
-import { PWA_EXTRA_PRECACHE, PWA_NAVIGATION_DENYLIST } from './src/main/dom/pwa_routes';
+import {
+    PWA_EXTRA_PRECACHE,
+    PWA_IGNORED_SEARCH_PARAMS,
+    PWA_NAVIGATION_DENYLIST,
+} from './src/main/dom/pwa_routes';
 
 /// The pages Vite emits. It writes them under build/main because that is where its inputs are,
 /// and the deployed site is flat (see deb-links/): modifyURLPrefix below is the mapping between
 /// the two, and this list is what has to have a deb-links entry for the mapping to mean anything.
 const html_pages = {
     memo: resolve(__dirname, 'build/main/memo.html'),
+    calendar: resolve(__dirname, 'build/main/calendar.html'),
     login: resolve(__dirname, 'build/main/login.html'),
     logout: resolve(__dirname, 'build/main/logout.html'),
     password: resolve(__dirname, 'build/main/password.html'),
@@ -42,13 +47,75 @@ const precache_entry = (url: string) => ({
     revision: createHash('md5').update(readFileSync(deployed_path(url))).digest('hex'),
 });
 
-/// The four pages are precached by the build that writes them, so they can only be checked once
-/// it has run: at config load there is nothing under dist/ on a clean tree.
+/// The pages are precached by the build that writes them, so they can only be checked once it has
+/// run: at config load there is nothing under dist/ on a clean tree.
 const assert_pages_are_deployable = {
     name: 'assert-precached-pages-are-deployable',
     apply: 'build' as const,
     closeBundle() {
         Object.keys(html_pages).forEach((page) => deployed_path(`/${page}.html`));
+    },
+};
+
+/// The two pages that are the app rather than a way into it, and so have to carry the whole shell:
+/// the pre-paint theme script, and the four elements the service worker's bar writes into. A page
+/// that loses one of them is a page that silently never says a new version is ready, which is the
+/// kind of thing only a build check catches.
+const APP_PAGES = ['memo', 'calendar'];
+const THEME_BOOTSTRAP = 'localStorage.getItem("memo_theme")';
+const PWA_BAR_IDS = ['pwa_bar', 'pwa_bar_message', 'pwa_bar_action', 'pwa_bar_dismiss'];
+
+const assert_pages_carry_the_app_shell = {
+    name: 'assert-pages-carry-the-app-shell',
+    apply: 'build' as const,
+    closeBundle() {
+        APP_PAGES.forEach((page) => {
+            const html = readFileSync(deployed_path(`/${page}.html`), 'utf8');
+            if (!html.includes(THEME_BOOTSTRAP)) {
+                throw new Error(`build/main/${page}.html has no pre-paint theme script.`);
+            }
+            PWA_BAR_IDS.forEach((id) => {
+                if (!html.includes(`id="${id}"`)) {
+                    throw new Error(
+                        `build/main/${page}.html has no #${id}: the service worker's bar lives in ` +
+                        `the page, so without it this page is never told a new version is ready.`
+                    );
+                }
+            });
+        });
+    },
+};
+
+/// What "the wasm is cached once" means, checked rather than hoped for.
+///
+/// It is checked at its source rather than in dist/sw.js, because the worker is generated after
+/// these hooks have run and a build that waited for it there would be waiting for itself. What the
+/// manifest holds is exactly what this checks: every page Vite emitted (globPatterns takes every
+/// html) and every wasm the bundle produced, so one asset is one entry — a second copy of the
+/// module is a megabyte fetched and stored twice, which is what the calendar had while it lived in
+/// the Angular app with a package of its own under /user-admin/pkg.
+const assert_the_wasm_is_emitted_once = {
+    name: 'assert-the-wasm-is-emitted-once',
+    apply: 'build' as const,
+    closeBundle() {
+        const emitted = readdirSync(resolve(__dirname, 'dist/assets')).filter((name) =>
+            name.endsWith('.wasm')
+        );
+        if (emitted.length !== 1) {
+            throw new Error(
+                `the build emitted ${emitted.length} wasm files (${emitted.join(', ')}), and the ` +
+                    `point of one module is that it is stored once.`
+            );
+        }
+        APP_PAGES.forEach((page) => {
+            deployed_path(`/${page}.html`);
+            if (!existsSync(resolve(__dirname, 'dist/build/main', `${page}.html`))) {
+                throw new Error(
+                    `dist/build/main/${page}.html was not emitted, so the worker would precache a ` +
+                        `site without it.`
+                );
+            }
+        });
     },
 };
 
@@ -112,6 +179,11 @@ export default defineConfig({
                     if(url === '/password.html') {
                         req.url = '/build/main/password.html';
                     }
+                    // The calendar's two URLs, exactly — not a prefix: /calendar/anything is not a
+                    // route, and the worker's denylist sends it to the server for the same reason.
+                    if(url === '/calendar' || url === '/calendar/' || url === '/calendar.html') {
+                        req.url = '/build/main/calendar.html';
+                    }
                     // No page links an icon, so the browser asks for /favicon.ico by default. In
                     // development that is the green tulip, so one glance at the tab says which
                     // site you are on; the deployed one stays blue. configureServer only runs for
@@ -125,6 +197,7 @@ export default defineConfig({
             }
         },
         assert_pages_are_deployable,
+        assert_pages_carry_the_app_shell,
         VitePWA({
             // A memo being edited is work that exists nowhere else, and only the reader knows
             // when it is safe to reload. The default, written out because the whole arrangement
@@ -152,6 +225,11 @@ export default defineConfig({
                 // not this app.
                 navigateFallback: '/memo.html',
                 navigateFallbackDenylist: PWA_NAVIGATION_DENYLIST,
+                // A precached page is matched by URL, and workbox strips only utm_/fbclid by
+                // default: /calendar?anything would then miss its own cache entry and be answered
+                // by the fallback above — the memo app. Nothing here is served by query string, so
+                // all of it is ignored. pwa_routes.ts says why.
+                ignoreURLParametersMatching: PWA_IGNORED_SEARCH_PARAMS,
                 // The worker waits for the reader, but once they accept, the worker that
                 // activates has to take the page over: the reload is driven by the controller
                 // changing. Without this the new worker activates and the page goes on being
@@ -194,5 +272,6 @@ export default defineConfig({
                 ],
             },
         }),
+        assert_the_wasm_is_emitted_once,
     ],
 });

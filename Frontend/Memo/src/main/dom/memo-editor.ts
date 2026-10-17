@@ -12,6 +12,7 @@ import {raspandac} from "./events.js";
 import * as events from "./events.js";
 import "./img-inline-svg.js";
 import "./group-list.js";
+import {markdown_notes_css, presentation_css} from "./presentation_css.js";
 import "./theme-list.js";
 import { current_theme } from "./theme.js";
 import * as memo_processing from "./memo_processing.js";
@@ -211,34 +212,13 @@ const template = `
       div[data-gen="barcode128"], div[data-gen="barcode39"], div[data-gen="barcode13"] {
         text-align: center;
       }
-      /* All four of these under #presentation, so that they stay in front of the theme rule that
-         colours and *sets the font of* everything in the memo. That rule would otherwise paint the
-         plate in the theme's colours and, worse, take the barcode face away from the digits, which
-         is what turns a barcode back into a line of numbers.
-
-         A barcode is read by a scanner: white behind black bars, in the font that draws those bars,
-         whatever the reader chose to read in. */
-      #presentation div[data-gen="barcode128"] span, #presentation div[data-gen="barcode39"] span, #presentation div[data-gen="barcode13"] span {
-        border-width: 10px 40px 10px 40px;
-        border-style: solid;
-        border-color: white;
-        color: black;
-        background-color: white;
-        margin: 10px;
-        display: inline-block;
-      }
-      #presentation div[data-gen="barcode128"] span {
-        font-family: "Libre Barcode 128 Text", system-ui;
-        font-size: 65px;
-      }
-      #presentation div[data-gen="barcode39"] span {
-        font-family: "Libre Barcode 39 Text", system-ui;
-        font-size: 65px;
-      }
-      #presentation div[data-gen="barcode13"] span {
-        font-family: "Libre Barcode EAN13 Text", system-ui;
-        font-size: 200px;
-      }
+      ${presentation_css("#presentation ")}
+      /* A quote is a bar down its side and a list is indented, the same as in the calendar's notes:
+         a memo and an odate note are markdown through the same renderer, and they should not read
+         as two dialects. The Links theme's own boxes are safe from this — its selectors carry a
+         class more than these do, so its padding and margins still have the last word on a list of
+         links. */
+      ${markdown_notes_css("#presentation ")}
       /* The compact link display, and it belongs to the Links theme alone: these are the only
          rules in this file that name a list, so every other theme lays lists out exactly as the
          app always has. Each top-level list that holds a link becomes a box, and the list's first

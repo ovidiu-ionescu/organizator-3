@@ -280,7 +280,7 @@ export const save_memo_after_fetching_from_server = async (
   if(!has_server_changes && !has_server_access_level_changed) {
     return with_dirty(cached_memo);
   }
-  debugger
+
   // server says memo turned readonly, drop changes
   // ATTENTION: we might be dropping data
   if(server_memo.readonly && has_server_access_level_changed) {
@@ -305,6 +305,7 @@ export const save_memo_after_fetching_from_server = async (
   debugger
 
   if(has_server_text_changed) {
+    konsole.log(`Merging memo ${cached_memo.id}, server text changed`)
     cached_memo.local.text = memo_processing.merge_memo_text(
         cached_memo!.server!.text,
         cached_memo.local.text,

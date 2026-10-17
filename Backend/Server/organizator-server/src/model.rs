@@ -147,6 +147,64 @@ impl DBPersistence for Memo {
     }
 }
 
+/// One archived version of a memo: the state it held *before* the change that followed it.
+///
+/// `memo_write` writes one of these per update, so a memo's history is all of its previous states
+/// and none of its current one — the current one is the memo itself.
+#[derive(Serialize, ToSchema)]
+pub struct MemoHistory {
+    pub id: i32,
+    pub memo_id: i32,
+    pub title: Option<String>,
+    pub memotext: Option<String>,
+    /// When this version was saved, in the same epoch milliseconds as the memo's own.
+    pub savetime: Option<i64>,
+    /// The memo's owner at that version.
+    pub user: MemoUser,
+    /// Who saved it. Nullable because the column is, and a row from before a saver was recorded
+    /// has none.
+    pub saveuser: Option<MemoUser>,
+}
+
+impl From<Row> for MemoHistory {
+    fn from(row: Row) -> Self {
+        let saver_id: Option<i32> = row.get("saveuser_id");
+        let saveuser = saver_id.map(|id| MemoUser {
+            id,
+            name: row.get("saveusername"),
+        });
+
+        Self {
+            id: row.get("id"),
+            memo_id: row.get("memo_id"),
+            title: row.get("title"),
+            memotext: row.get("memotext"),
+            savetime: row.get("savetime"),
+            user: MemoUser {
+                id: row.get("user_id"),
+                name: row.get("username"),
+            },
+            saveuser,
+        }
+    }
+}
+
+impl DBPersistence for MemoHistory {
+    fn query() -> &'static str {
+        include_str!("sql/memo_history.sql")
+    }
+}
+
+/// What `GET /memo/{id}/history` answers: the memo as `GET /memo/{id}` gives it, every version
+/// before it, and who asked. Named here for the OpenAPI schema; the handler builds the same shape
+/// with `json!`, the way `build_json_response` does.
+#[derive(Serialize, ToSchema)]
+pub struct MemoWithHistory<'a> {
+    pub memo: Memo,
+    pub history: Vec<MemoHistory>,
+    pub requester: Requester<'a>,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct GetWriteMemo {
     #[serde(flatten)]

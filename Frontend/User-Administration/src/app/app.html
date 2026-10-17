@@ -8,9 +8,8 @@
 <!-- ariaCurrentWhenActive is what marks the link the visitor is on for a screen reader; the
      `active` class only says the same thing to the eye. -->
 <nav class="app-nav" aria-label="Sections">
-  <!-- First because it is the screen the app opens on; see app.routes.ts. The rest follow it in
-       the order they are used less often. -->
-  <a routerLink="/calendar" routerLinkActive="active" ariaCurrentWhenActive="page">Calendar</a>
+  <!-- In the order they are used: users first, because it is the screen the app opens on; see
+       app.routes.ts. -->
   <a routerLink="/users" routerLinkActive="active" ariaCurrentWhenActive="page">Users &amp; roles</a>
   <a routerLink="/groups" routerLinkActive="active" ariaCurrentWhenActive="page">Groups</a>
 </nav>

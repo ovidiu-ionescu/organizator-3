@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PWA_NAVIGATION_DENYLIST } from "@dom/pwa_routes.js";
+import { PWA_IGNORED_SEARCH_PARAMS, PWA_NAVIGATION_DENYLIST } from "@dom/pwa_routes.js";
 
 // The worker is served from /sw.js, so its scope is the whole of organizator.ro — more than this
 // application. Every navigation inside that scope that is not one of the app's own pages has to
@@ -55,5 +55,32 @@ describe("The service worker's navigation denylist", () => {
     // Nothing to serve at the root: the sections are shown by the router, which has no route
     // for /.
     expect(denied("/")).to.be.true;
+  });
+
+  it("should answer for the calendar, at its own two addresses", () => {
+    // Both are the calendar: /calendar is the precached page through the worker's clean-URL
+    // handling, and /calendar/ is the same page through the bounce in memo-router — so neither may
+    // be denied, or the reader opening the app where they left it gets the memo list.
+    expect(denied("/calendar")).to.be.false;
+    expect(denied("/calendar/")).to.be.false;
+    expect(denied("/calendar.html")).to.be.false;
+  });
+
+  it("should keep out from under the calendar, which has no routes of its own", () => {
+    // One page and nothing below it: anything deeper is somebody else's URL, and the server is the
+    // one to answer it. The two slashes are what tells this apart from /calendar/ itself — a
+    // sloppier pattern would take the directory form with it and leave the calendar unanswered.
+    expect(denied("/calendar/whatever")).to.be.true;
+    expect(denied("/calendar/2026/10/16")).to.be.true;
+  });
+
+  it("should match a precached page whatever is on the query string", () => {
+    // Workbox strips only utm_/fbclid by default, and /calendar?anything would then miss its own
+    // cache entry and be answered by the navigation fallback — the memo app.
+    const ignored = PWA_IGNORED_SEARCH_PARAMS;
+    expect(ignored.length).to.be.greaterThan(0);
+    ["?x=1", "?from=1&until=2", "?utm_source=news", ""].forEach(query =>
+      expect(ignored.some(pattern => pattern.test(query)), query).to.be.true
+    );
   });
 });

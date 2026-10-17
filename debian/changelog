@@ -1,3 +1,13 @@
+organizator (0.1.38) UNRELEASED; urgency=medium
+
+  * fixed some issues with merging
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 18 Oct 2026 00:37:00 +0200
+organizator (0.1.37) UNRELEASED; urgency=medium
+
+  * calendar moved together with memos
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 17 Oct 2026 02:55:00 +0200
 organizator (0.1.36) UNRELEASED; urgency=medium
 
   * added barcoded for odate

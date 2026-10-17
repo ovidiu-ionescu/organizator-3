@@ -30,6 +30,29 @@
   --memo-border: grey;
   --memo-group-title-bg: #333333;
   --memo-group-title-fg: white;
+  /* How soon a calendar entry is, and nothing else uses these. A red, an orange and a green that
+     can be told apart by a reader who separates colours badly or not at all is not something
+     colour can do on its own — so the calendar pairs each of these with a word ("Happening now")
+     or a date, and the colour is the second thing said rather than the only one. */
+  --memo-happening: #ff6b6b;
+  --memo-today: #f0883e;
+  --memo-this-week: #4ac26b;
+  /* For a control that takes something away. A red of its own rather than the one above: on the
+     calendar both are on the same screen, and a Delete the colour of "happening now" is one colour
+     saying two things. */
+  --memo-danger: #ff8a80;
+  /* A surface that is not the page: what a field is filled with, so that a box you can type into
+     reads as a box before the cursor is in it, and the band an entry's place and type sit on.
+     Barely different from --memo-bg on purpose: it is there to be seen without being looked at. */
+  --memo-field-bg: #2b2b2b;
+  /* The line down the side of a quote. Its own colour rather than --memo-border, which is an edge
+     between two areas of a page and is happy to be quiet: this line *is* the quote, and in the Links
+     theme --memo-border is #444 on a #1F1F1F page, which is a quote with nothing to show for it. */
+  --memo-quote-line: #9a9a9a;
+  /* What the browser paints its own controls with — a date field's little calendar, a select's
+     dropdown, the scrollbars. It paints them for the colour scheme it thinks the page is in, and
+     without this it thinks light: black calendar buttons on a dark page, which are barely there. */
+  color-scheme: dark;
 }
 
 :root[data-theme="light"] {
@@ -42,6 +65,14 @@
   --memo-border: #bbbbbb;
   --memo-group-title-bg: #e8e8e8;
   --memo-group-title-fg: #1a1a1a;
+  /* The same three, dark enough to read on white: 7:1, 4.7:1 and 4.6:1. */
+  --memo-happening: #a4161a;
+  --memo-today: #c2410c;
+  --memo-this-week: #1a7f37;
+  --memo-danger: #b3261e;
+  --memo-field-bg: #f5f5f5;
+  --memo-quote-line: #909090;
+  color-scheme: light;
 }
 
 /* For reading at length: a serif face and a wider line spacing. Full width like every other
@@ -59,6 +90,14 @@
   --memo-border: #cbbf9f;
   --memo-group-title-bg: #e3d7bb;
   --memo-group-title-fg: #3b3228;
+  /* The light set again: cream is as light as white for these three, and for the red of Delete. */
+  --memo-happening: #a4161a;
+  --memo-today: #c2410c;
+  --memo-this-week: #1a7f37;
+  --memo-danger: #b3261e;
+  --memo-field-bg: #ece3cd;
+  --memo-quote-line: #8f8264;
+  color-scheme: light;
 }
 
 /* For memos that are really a set of link groups: smaller type, closer lines, and — in

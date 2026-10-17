@@ -29,10 +29,23 @@ export const PWA_NAVIGATION_DENYLIST: RegExp[] = [
   // Nothing here is the app either. Serving memo.html at / would leave every section on screen
   // and the router with no route to activate.
   /^\/$/,
+  // Under the calendar, but not the calendar itself: it has one page and no routes below it, so
+  // anything deeper is somebody else's URL and the server is the one to answer. The two slashes
+  // matter — /calendar and /calendar/ are the calendar, and they are answered from the precache
+  // (the file itself for the first, through workbox's clean-URL handling; the same file for the
+  // second, through memo-router's bounce, which is where a miss here has to end).
+  /^\/calendar\/.+/,
   // Bare /memo is not here on purpose: nginx redirects it to /memo/, which leaves this worker
   // nothing to fall back to, and its own clean-URL handling finds /memo.html for it anyway — so
   // the app answers there, and the router knows that path (see memo-router.ts).
 ];
+
+/// Which query strings a precached page is still matched under. Every one of them: workbox strips
+/// only utm_/fbclid by default, so a page reached as /calendar?anything would miss its own cache
+/// entry, fall through to the navigation fallback above, and be answered with the memo app. Nothing
+/// here is served by query string — the API is not precached at all — so there is nothing to keep
+/// apart.
+export const PWA_IGNORED_SEARCH_PARAMS: RegExp[] = [/.*/];
 
 /// Files the app fetches at runtime that Vite never sees: memo-editor.ts builds its toolbars from
 /// a template string, so those URLs are not in the bundle, and no build step copies them either —
@@ -55,6 +68,7 @@ export const PWA_EXTRA_PRECACHE: string[] = [
   '/images/share-white-48dp.svg',
   '/images/menu_book-white-48dp.svg',
   '/images/ic_today_48px.svg',
+  '/images/ic_insert_comment_48px.svg',
   '/images/check_box-white-48dp.svg',
   '/images/ic_link_48px.svg',
   '/images/border_all-white-48dp.svg',

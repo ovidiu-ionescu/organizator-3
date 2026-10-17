@@ -6,6 +6,20 @@
       try_files /memo.html =404;
   }
 
+  # The calendar, a page of the same app: the memo service worker precaches it, so a hard load with
+  # the server unreachable is answered from the worker. This is for the first visit, before a worker
+  # is installed, and for anyone whose browser has one from before the calendar existed.
+  #
+  # Both URL forms, exactly: the calendar has one page and no routes below it, so /calendar/anything
+  # is a 404 here and the worker's denylist leaves it to this server for the same reason.
+  location = /calendar {
+      try_files /calendar.html =404;
+  }
+
+  location = /calendar/ {
+      try_files /calendar.html =404;
+  }
+
   location /files/ {
       alias /var/www/organizator.ro/files/;
 	  #root /var/www/organizator.ro;

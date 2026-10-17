@@ -1,0 +1,285 @@
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import "@dom/calendar-page.js";
+import type { Odate, OdateLocation, OdateType } from "@dom/odate_api.js";
+
+// The calendar page: what it reads on arrival, what it does with the answers, and which read each
+// write is followed by. The server is a stub; the shape of its answers is what is under test.
+const requester = { id: 1, name: "alice" };
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+const at = (days_from_today: number, hour: number) => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days_from_today, hour, 0).getTime();
+};
+
+const entry = (over: Partial<Odate> = {}): Odate => ({
+  id: 1,
+  start_time: at(1, 10),
+  end_time: at(1, 11),
+  ongoing: false,
+  description: "Dentist",
+  memo_text: null,
+  location: null,
+  type: null,
+  ...over,
+});
+
+const office: OdateLocation = {
+  id: 3,
+  name: "Office",
+  latitude: null,
+  longitude: null,
+  timezone: null,
+  last_used: null,
+};
+
+interface Answer {
+  odates?: Odate[];
+  locations?: OdateLocation[];
+  types?: OdateType[];
+}
+
+/// Every call the page makes, in order, and the answers it is given.
+const server = (answers: Answer) => {
+  const seen: {method: string; url: string; body: string | undefined}[] = [];
+  vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    seen.push({method, url: String(url), body: (init?.body as string) ?? undefined});
+    const path = String(url).replace(/^.*\/organizator/, "").split("?")[0];
+
+    if (method === "GET" && path === "/odates") {
+      const from = new URL(String(url), "http://x").searchParams.get("from");
+      const rooms = answers.odates ?? [];
+      return json({odates: rooms.filter(o => o.end_time > (from === null ? Date.now() : Number(from))), requester});
+    }
+    if (method === "GET" && path === "/locations") return json({locations: answers.locations ?? [], requester});
+    if (method === "GET" && path === "/odate_types") return json({odate_types: answers.types ?? [], requester});
+    if (method === "POST" && path === "/odates") return json(entry({id: 99, description: "Dentist"}), 201);
+    if (method === "PUT" && path === "/locations/3") return json({...office, name: "Office (new)"});
+    return json({id: 1}, 200);
+  });
+  return seen;
+};
+
+describe("the calendar page", () => {
+  let page: HTMLElement;
+  let shadow: ShadowRoot;
+
+  const list = () => shadow.querySelector("calendar-list")!.shadowRoot!;
+  const rows = () => [...list().querySelectorAll("li")];
+  const status = () => shadow.querySelector("#status")!.textContent ?? "";
+  const panel = (id: string) => shadow.querySelector(id)!.shadowRoot!;
+
+  const loaded = async () => {
+    await vi.waitFor(() => expect(rows().length).to.be.greaterThan(0));
+  };
+
+  /// Built after the server is stubbed, never before: the page reads the three lists as it is
+  /// constructed, and a page built first would read them from the real network and spend the test
+  /// showing the failure line.
+  const mount = () => {
+    document.body.innerHTML = "<calendar-page></calendar-page>";
+    page = document.querySelector("calendar-page")!;
+    shadow = page.shadowRoot!;
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.unstubAllGlobals();
+  });
+
+  it("should read the entries, the locations and the date types on arrival", async () => {
+    const seen = server({odates: [entry()], locations: [office], types: [{id: 4, name: "Meeting"}]});
+    mount();
+
+    await loaded();
+    const paths = seen.map(call => `${call.method} ${call.url.replace(/^.*\/organizator/, "").split("?")[0]}`);
+    expect(paths).to.include.members(["GET /odates", "GET /locations", "GET /odate_types"]);
+  });
+
+  it("should colour an entry by how soon it is, and mark the one happening now", async () => {
+    server({
+      odates: [
+        entry({id: 1, ongoing: true, description: "Now"}),
+        entry({id: 2, start_time: at(0, 23), end_time: at(0, 23) + 3_600_000, description: "Today"}),
+        entry({id: 3, start_time: at(3, 9), end_time: at(3, 10), description: "This week"}),
+        entry({id: 4, start_time: at(30, 9), end_time: at(30, 10), description: "Later"}),
+      ],
+    });
+    mount();
+
+    await loaded();
+    const classes = rows().map(row => row.className);
+    expect(classes).to.deep.equal(["happening", "today", "week", ""]);
+    // The badge is a word as well as a colour: the red is the second thing said, not the only one.
+    expect(rows()[0].textContent).to.contain("Happening now");
+  });
+
+  it("should say nothing is coming up rather than nothing at all", async () => {
+    server({odates: []});
+    mount();
+    await vi.waitFor(() => expect(list().querySelector("#state")!.textContent).to.contain("Nothing coming up"));
+    expect(status()).to.equal("");
+  });
+
+  it("should not dress a failed read as an empty calendar", async () => {
+    vi.stubGlobal("fetch", async () => new Response("no", {status: 500}));
+    mount();
+
+    await vi.waitFor(() => expect(status()).to.contain("Could not read your calendar."));
+    // "Nothing coming up" under "could not read your calendar" would say the calendar is empty when
+    // the request merely failed.
+    expect(list().querySelector("#state")!.textContent).to.equal("");
+  });
+
+  it("should add an entry and say so", async () => {
+    const seen = server({odates: []});
+    mount();
+    await vi.waitFor(() => expect(seen.some(c => c.method === "GET")).to.equal(true));
+
+    const form = shadow.querySelector("odate-form")!.shadowRoot!;
+    form.querySelector<HTMLButtonElement>("#trigger")!.click();
+    form.querySelector<HTMLInputElement>("#start")!.value = "2026-03-05T09:30";
+    form.querySelector<HTMLInputElement>("#end")!.value = "2026-03-05T10:30";
+    form.querySelector<HTMLInputElement>("#what")!.value = "Dentist";
+    form
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+
+    await vi.waitFor(() => expect(status()).to.contain("Added “Dentist”."));
+    const posts = seen.filter(call => call.method === "POST");
+    expect(posts.length).to.equal(1);
+    expect(JSON.parse(posts[0].body!)).to.deep.equal({
+      start_time: new Date(2026, 2, 5, 9, 30).getTime(),
+      end_time: new Date(2026, 2, 5, 10, 30).getTime(),
+      description: "Dentist",
+    });
+    // The form stays open for the next one.
+    expect(shadow.querySelector("odate-form")!.shadowRoot!.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(false);
+  });
+
+  it("should ask for the range that was given, and call the list by it", async () => {
+    const seen = server({odates: []});
+    mount();
+    await vi.waitFor(() => expect(seen.length).to.be.greaterThan(0));
+    seen.length = 0;
+
+    shadow.querySelector<HTMLInputElement>("#search_from")!.value = "2026-03-05";
+    shadow.querySelector<HTMLInputElement>("#search_until")!.value = "2026-03-06";
+    shadow.querySelector<HTMLButtonElement>("#search_button")!.click();
+
+    await vi.waitFor(() => expect(list().querySelector("h2")!.textContent).to.equal("Between those dates"));
+    const asked = new URL(seen[0].url, "http://x").searchParams;
+    expect(asked.get("from")).to.equal(`${new Date(2026, 2, 5).getTime()}`);
+    // The end of the 6th, because the range the server takes is half open: a search that ends on
+    // the 6th has to include the 6th.
+    expect(asked.get("until")).to.equal(`${new Date(2026, 2, 7).getTime()}`);
+    // Clear is offered once the range is being shown rather than while it is still being read.
+    await vi.waitFor(() =>
+      expect(shadow.querySelector<HTMLButtonElement>("#clear_button")!.disabled).to.equal(false)
+    );
+  });
+
+  it("should read two empty fields as clearing rather than as a search for nothing", async () => {
+    const seen = server({odates: [entry()]});
+    mount();
+    await loaded();
+
+    shadow.querySelector<HTMLInputElement>("#search_from")!.value = "";
+    shadow.querySelector<HTMLInputElement>("#search_until")!.value = "";
+    shadow.querySelector<HTMLButtonElement>("#search_button")!.click();
+
+    await vi.waitFor(() => expect(list().querySelector("h2")!.textContent).to.equal("Coming up"));
+    const last = seen[seen.length - 1];
+    expect(last.url).to.not.contain("from=");
+    expect(last.url).to.not.contain("until=");
+  });
+
+  it("should open the form in the row being changed, not at the top of the page", async () => {
+    const seen = server({odates: [entry()], locations: [office], types: [{id: 4, name: "Meeting"}]});
+    mount();
+    await loaded();
+
+    // Edit on the row, which is how the page hears about it.
+    list().querySelector<HTMLButtonElement>("button.edit")!.click();
+    await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.exist);
+
+    const in_row = list().querySelector("li odate-form")!.shadowRoot!;
+    expect(in_row.querySelector<HTMLInputElement>("#what")!.value).to.equal("Dentist");
+    // ...and the form at the top is still the way to add one, closed and empty.
+    const top = shadow.querySelector("odate-form")!.shadowRoot!;
+    expect(top.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(true);
+    expect(top.querySelector<HTMLInputElement>("#what")!.value).to.equal("");
+
+    // Saving it puts the entry back where it was.
+    in_row.querySelector<HTMLInputElement>("#what")!.value = "Dentist (moved)";
+    in_row
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+
+    await vi.waitFor(() => expect(seen.filter(call => call.method === "PUT").length).to.equal(1));
+    await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.be.null);
+  });
+
+  it("should put the row back when a change is given up", async () => {
+    server({odates: [entry()], locations: [office], types: [{id: 4, name: "Meeting"}]});
+    mount();
+    await loaded();
+
+    list().querySelector<HTMLButtonElement>("button.edit")!.click();
+    await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.exist);
+
+    list().querySelector("li odate-form")!.shadowRoot!.querySelector<HTMLButtonElement>("#cancel")!.click();
+
+    // The entry is still in the list, as itself: not gone, and not a closed form in its place.
+    await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.be.null);
+    expect(list().querySelectorAll("li").length).to.equal(1);
+    expect(list().textContent).to.contain("Dentist");
+  });
+
+  it("should redraw the entries after a location is renamed, because they carry its name", async () => {
+    const seen = server({odates: [entry({location: {id: 3, name: "Office", latitude: null, longitude: null}})], locations: [office]});
+    mount();
+    await loaded();
+    seen.length = 0;
+
+    // Rename it the way the panel does, in the one place the page listens to.
+    panel("#locations").querySelector<HTMLButtonElement>("#new_name")!.value = "";
+    const rename = new CustomEvent("place-save", {detail: {id: 3, name: "Office (new)", coordinates: null}});
+    shadow.querySelector("#locations")!.dispatchEvent(rename);
+
+    await vi.waitFor(() => expect(seen.filter(call => call.method === "PUT").length).to.equal(1));
+    await vi.waitFor(() => expect(seen.filter(call => call.url.includes("/odates")).length).to.be.greaterThan(0));
+    // Both: the list of places, and the entries that name one.
+    expect(seen.some(call => call.url.includes("/locations"))).to.equal(true);
+  });
+
+  it("should keep a refused delete's words and leave the place alone", async () => {
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "DELETE") {
+        return json({error: "1 entry still uses this location"}, 409);
+      }
+      const path = String(url).replace(/^.*\/organizator/, "").split("?")[0];
+      if (path === "/locations") return json({locations: [office], requester});
+      if (path === "/odate_types") return json({odate_types: [], requester});
+      return json({odates: [], requester});
+    });
+    mount();
+
+    await vi.waitFor(() => expect(panel("#locations").textContent).to.contain("Office"));
+    shadow
+      .querySelector("#locations")!
+      .dispatchEvent(new CustomEvent("place-remove", {detail: {id: 3}}));
+
+    await vi.waitFor(() =>
+      expect(panel("#locations").textContent).to.contain("1 entry still uses this location")
+    );
+    expect(panel("#locations").textContent).to.contain("Office");
+  });
+});

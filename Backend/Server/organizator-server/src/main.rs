@@ -36,8 +36,8 @@ use crate::db::QueryType::{Search, Select};
 use crate::model::{
     ExplicitPermission, FilePermission, FilestoreFile, FilestoreFileDB, FilestoreResult,
     FilestoreResultWithRequester, GetWriteMemo, GetWriteMemoWithRequester, Memo,
-    MemoGroupsWithRequester, MemoTitle, MemoTitleListWithRequester, MemoWithRequester, Requester,
-    UploadResponse, UploadResponseWithRequester,
+    MemoGroupsWithRequester, MemoHistory, MemoTitle, MemoTitleListWithRequester,
+    MemoWithHistory, MemoWithRequester, Requester, UploadResponse, UploadResponseWithRequester,
 };
 use crate::response_utils::{
     build_json_response, build_simple_json_response, millis_since_epoch, split_and_trim,
@@ -93,6 +93,7 @@ async fn main() {
 
     let (protected_router, protected_api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(get_memo))
+        .routes(routes!(get_memo_history))
         .routes(routes!(write_memo))
         .routes(routes!(get_memogroups_for_user))
         .routes(routes!(get_memo_titles))
@@ -190,6 +191,61 @@ async fn get_memo(
         Some(memo) => build_json_response((memo, requester)),
         None => Err(AppError::not_found(format!("memo {memo_id} not found"))),
     }
+}
+
+/// A memo and every version of it, for the memo's owner.
+///
+/// The memo is the same object `GET /memo/{id}` answers with. The history is the versions
+/// `memo_write` archived before each change, oldest first; the current state is `memo`, not a row
+/// of the list.
+///
+/// Owner only: a memo shared with the caller through a group is theirs to read and not theirs to
+/// see the history of. A memo the caller does not own answers the same 404 as one that does not
+/// exist — the answer `get_memo` gives for a memo nobody may read, and for the same reason, that
+/// telling the two apart lets a caller probe which ids exist.
+#[utoipa::path(
+    get,
+    path = "/memo/{id}/history",
+    responses(
+        (status = 200, description = "The memo and every version of it before the current one", body = MemoWithHistory),
+        CommonError
+    ),
+    params(
+        ("id" = i32, Path, description = "ID of the memo whose history to read")
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn get_memo_history(
+    Path(memo_id): Path<i32>,
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+) -> HandlerResponse {
+    let (memo, requester): (Option<Memo>, Requester) =
+        db::get_single(&db_client, requester.id(), &[&memo_id]).await?;
+
+    let Some(memo) = memo else {
+        return Err(AppError::not_found(format!("memo {memo_id} not found")));
+    };
+
+    // The owner, not merely a reader. Checked here as well as in the query, and on purpose: this
+    // check does not depend on the SQL being read correctly, and the one in the query does not
+    // depend on this handler surviving an edit.
+    if memo.user.id != requester.id {
+        return Err(AppError::not_found(format!("memo {memo_id} not found")));
+    }
+
+    // `requester` is the `Requester` the read handed back by now, not the `User` the middleware
+    // put in the request: it carries the username the statement is scoped by.
+    let (history, _requester): (Vec<MemoHistory>, Requester) =
+        db::get_multiple(&db_client, requester.username, &[&memo_id], Select).await?;
+
+    Ok(Json(json!({
+        "memo": memo,
+        "history": history,
+        "requester": requester,
+    }))
+    .into_response())
 }
 
 #[derive(serde::Deserialize, Debug, Clone, ToSchema)]

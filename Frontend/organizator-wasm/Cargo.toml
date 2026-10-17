@@ -16,7 +16,6 @@ default = ["console_error_panic_hook"]
 wasm-bindgen = "0.2.100"
 pulldown-cmark = "0.13.3"
 pulldown-cmark-escape = "0.11.0"
-diffy-imara = "0.3.2"
 ammonia = "4.1"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
@@ -33,6 +32,7 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 indoc = "2.0.5"
 base64 = "0.22.1"
 wee_alloc = "0.4.5"
+reconcile-text = "0.13.2"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"

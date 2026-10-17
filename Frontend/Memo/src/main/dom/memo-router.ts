@@ -15,6 +15,7 @@ import {create_synthetic_memo} from "./synthetic.js";
 import {raspandac} from "./events.js";
 import {failure_message, fold} from "./util.js";
 import {ask_confirmation} from "./confirm.js";
+import {go_to_login} from "./http.js";
 
 const local_prefixes = ["/memo/", "/journal"];
 const routerInterceptor = (evt) => {
@@ -51,6 +52,20 @@ let AFTER_LOGIN = true;
 
 export const load_route = () => {
   konsole.log(`route loader`, `「${document.location.pathname}」`);
+
+  // A calendar URL reaching this document means the service worker's precache could not answer it
+  // and its fallback did, which answers every navigation with this page. Two ways in: /calendar/
+  // (workbox's clean-URL handling matches /calendar and /calendar.html, not the directory form),
+  // and /calendar under a worker from before the calendar was deployed. With no route to activate
+  // this document would draw every section at once, so the reader is sent to the calendar itself.
+  //
+  // To the .html and never to /calendar: the worker that got us here would answer /calendar with
+  // this same fallback, and the redirect would never end.
+  if (location.pathname === "/calendar" || location.pathname === "/calendar/") {
+    konsole.log("This is the memo page at a calendar URL; going to the calendar itself");
+    window.location.replace("/calendar.html");
+    return;
+  }
 
   // check if we got here from login
   if (document.referrer) {
@@ -179,8 +194,7 @@ async function loadMemo() {
     }
   } catch (e) {
     if (e instanceof server_comm.UnauthenticatedError) {
-      // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
-      window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+      go_to_login();
       return;
     }
     const message = e instanceof server_comm.HttpError
@@ -395,8 +409,7 @@ async function loadMemoTitles(force_reload?: boolean) {
     return;
   } catch (e) {
     if (e instanceof server_comm.UnauthenticatedError) {
-      // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
-      window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+      go_to_login();
       return;
     }
     if (e instanceof server_comm.HttpError) {
@@ -616,8 +629,7 @@ export async function searchMemos() {
     //console.log(responseJson);
   } catch (e) {
     if (e instanceof server_comm.UnauthenticatedError) {
-      // more info at https://www.w3schools.com/howto/howto_js_redirect_webpage.asp
-      window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+      go_to_login();
       return;
     }
     // The previous list is still on screen and the search did not touch it, so leaving this

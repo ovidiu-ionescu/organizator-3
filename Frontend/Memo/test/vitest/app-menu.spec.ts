@@ -1,11 +1,16 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { open_app_menu } from "@dom/app-menu.js";
+import { open_app_menu, set_app_entries } from "@dom/app-menu.js";
+import { memo_menu_entries } from "@dom/memo_menu.js";
 import { raspandac } from "@dom/events.js";
 import * as db from "@dom/memo_db.js";
 
 // The menu behind the three dots: taking every memo onto this device, and signing out. The dialog
 // is built in the page rather than in the browser's own box, so what it offers and what its entries
 // do are checked the same way as anything else.
+//
+// Which entries the menu holds is the page's to say, so the memo app's list is registered by
+// importing its own module — the same way memo.html gets it. The dialog itself knows only the two
+// screens beside the app and signing out, which is what a page that registers nothing gets.
 //
 // Signing out is not here: it ends by sending the page to the login screen, which would take the
 // test run with it. The stub server in this file answers the caching runs.
@@ -74,11 +79,39 @@ describe("The app menu", () => {
 
     expect(document.querySelector("dialog")?.open).to.be.true;
     expect(entries()).to.deep.equal([
+      "Calendar",
       "Cache all memos on this device",
       "Admin",
       "Journal",
       "Log out",
     ]);
+  });
+
+  it("should wear the calendar icon on the calendar entry, and nowhere else", () => {
+    open_app_menu();
+
+    const with_icon = Array.from(document.querySelectorAll(".menu-entry")).map(entry => ({
+      label: entry.textContent?.trim(),
+      icon: entry.querySelector("img-inline-svg")?.getAttribute("src") ?? null,
+    }));
+    expect(with_icon.filter(entry => entry.icon !== null)).to.deep.equal([
+      {label: "Calendar", icon: "/images/ic_today_48px.svg"},
+    ]);
+  });
+
+  it("should hold what the page registers, whatever that is", () => {
+    // The calendar is a page of its own and its menu links are ordinary links; what it must not do
+    // is inherit "Cache all memos", which is the memo app's business and not the dialog's.
+    set_app_entries(() => [
+      { label: "Memos", run: () => {} },
+      { label: "Log out", run: () => {} },
+    ]);
+
+    open_app_menu();
+    expect(entries()).to.deep.equal(["Memos", "Log out"]);
+
+    // Back to the memo app's list, so the tests after this one see the page they are testing.
+    set_app_entries(memo_menu_entries);
   });
 
   it("should go to the admin page and the journal from the menu", async () => {

@@ -294,17 +294,11 @@ export const canonical_memo_text = (text: string): string =>
 
 /**
  * Merge three versions of a memo: what both sides started from, what is here, what is there.
- *
- * The merge itself is wasm (see merge.rs), and it works in lines: it ends its answer with a
- * newline whether or not the memo it was given had one. A memo that did not end with a blank
- * line therefore came back from a merge with an extra character, differing from what the server
- * holds — and read as edited for ever, because every fetch of it merged again. The newline is
- * dropped when neither version had one; when either did, it is part of the memo and stays.
  */
 export const merge_memo_text = (base: string, ours: string, theirs: string): string => {
   const merged = merge(base, ours, theirs);
-  if (merged.endsWith("\n") && !ours.endsWith("\n") && !theirs.endsWith("\n")) {
-    return merged.slice(0, -1);
+  if(merged !== ours) {
+    konsole.log(`we got changes from the server in the merge`);
   }
   return merged;
 };

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="theme-color" content="#000000">
+    <!-- The theme is applied here, before anything is drawn, so the page does not flash the default
+         and then change on every start. A module script would be too late: modules run after the
+         page has been parsed. The key is also in src/main/dom/theme.ts, which is what writes it; the
+         two have to agree, and it is deliberately the memo app's key — the theme a reader chose
+         follows them between the two pages. -->
+    <script>
+      try {
+        const theme = localStorage.getItem("memo_theme");
+        if (theme) document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        // A browser that will not give storage: the page opens on the default theme.
+      }
+    </script>
+    <link rel="stylesheet" href="./themes.css">
+    <link rel="apple-touch-icon" sizes="152x152" href="/images/ios/tulip-blue-touch-icon-ipad.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/ios/tulip-blue-touch-icon-ipad-retina.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/images/ios/tulip-blue-touch-icon-iphone-retina.png">
+    <link rel="manifest" href="/org-manifest.json">
+    <!-- The barcode faces, for the barcodes a note can hold. The three "Text" variants only, which
+         print the digits under the bars: the others are not asked for by any stylesheet. Same three
+         families as the memo app, so a note reads the same on both pages. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+    <script type="module">
+      import "./dom/calendar-page.js";
+      import "./dom/pwa.js";
+      import "./dom/app-menu.js";
+      // What the menu button is made of: the three dots are an inline <svg> this element fetches,
+      // and without it the button is a 44px square of nothing — still clickable, and on a phone
+      // still sitting over the theme control in the corner.
+      import "./dom/img-inline-svg.js";
+    </script>
+    <style>
+      html {
+        height: 100%;
+        padding: 0;
+        margin: 0;
+        border: 0;
+      }
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 16px;
+        font-family: Roboto, sans-serif;
+        background-color: var(--memo-bg, black);
+        color: var(--memo-fg, white);
+      }
+      /* The service worker's line, at the top of the page: a new version is ready, or the app can
+         now be opened with the server unreachable. The four elements it writes into are the same
+         ones memo.html has, because src/main/dom/pwa.js is the same file on both pages. */
+      #pwa_bar {
+        padding: 6px 8px;
+        /* Room at the right for the menu button, which is fixed over this corner. */
+        padding-right: 48px;
+        background-color: #2c3e50;
+        font-size: 0.9rem;
+      }
+      #pwa_bar a {
+        margin-left: 10px;
+      }
+      /* The app's own menu. Fixed to the corner, above what it sits over. */
+      #app_menu {
+        position: fixed;
+        top: 0;
+        right: 0;
+        z-index: 10;
+        width: 44px;
+        height: 44px;
+        padding: 8px;
+        border: none;
+        background: none;
+        color: white;
+        cursor: pointer;
+      }
+      #app_menu img-inline-svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      a {
+        color: var(--memo-link, steelblue);
+      }
+    </style>
+    <title>Calendar</title>
+  </head>
+  <body>
+    <main>
+      <!-- The few things that are about the app rather than about the calendar. The menu button
+           hangs over the top-right corner, so the bar leaves room for it. -->
+      <button id="app_menu" title="more" aria-label="more" aria-haspopup="dialog">
+        <img-inline-svg src="/images/more_vert.svg"></img-inline-svg>
+      </button>
+      <div id="pwa_bar" hidden>
+        <span id="pwa_bar_message"></span>
+        <a href="#" id="pwa_bar_action" hidden></a>
+        <a href="#" id="pwa_bar_dismiss" hidden>dismiss</a>
+      </div>
+      <calendar-page></calendar-page>
+    </main>
+  </body>
+</html>

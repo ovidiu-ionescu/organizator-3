@@ -1,29 +1,41 @@
 /**
  * @prettier
  *
- * The menu behind the three dots: the few things that are about the app rather than about the memo
- * on screen — taking every memo onto this device, the two pages that are not memos, and signing
- * out.
+ * The menu behind the three dots: the few things that are about the app rather than about what is on
+ * screen — the pages beside this one, and signing out.
+ *
+ * Which entries it holds is the page's to say, because what is beside a page depends on the page:
+ * the memo app moves between its own screens without leaving the document, and the calendar is a
+ * document of its own. A page registers its list with set_app_entries; the default is the two
+ * screens besides it and signing out.
  *
  * A dialog rather than a drop-down, which is what the app already uses to ask something
- * (confirm.ts) and what a thumb can reach on a phone. It is also where the caching run can say how
- * far it has got: the list page's own "Cache all" link reports into the list, which is not on
- * screen when the menu is used from a memo.
+ * (confirm.ts) and what a thumb can reach on a phone.
  */
-
 import konsole from "./console_log.js";
-import * as events from "./events.js";
-import * as server_comm from "./server_comm.js";
+import {go_to_login} from "./http.js";
 
-/// The page the reader is sent to when the session is gone. Same shape as everywhere else: back
-/// here once they have signed in again.
-const go_to_login = () =>
-  window.location.replace(`/login.html?r=${encodeURIComponent(window.location.href)}`);
+export interface MenuEntry {
+  label: string;
+  /// An SVG to put before the label, inlined the way the rest of the app does it. Optional: an
+  /// entry is a word, and a list of words with one picture in it is a list where the picture means
+  /// something.
+  icon?: string;
+  /**
+   * What the entry does when it is chosen. `progress` is the dialog's own line, for anything that
+   * takes a while; `close` puts the dialog away first, for anything that leaves the page.
+   *
+   * An entry that answers with a promise is taken to be doing something, and the rest of the
+   * entries are taken away while it does: a second tap on "cache all memos" would set a second run
+   * going over the same library.
+   */
+  run: (progress: HTMLElement, close: () => void) => void | Promise<void>;
+}
 
 /// Sign out on the server, then out of the app. Everything on this device stays on it — the memos
 /// cached here are still here, and anything waiting to be saved goes to the server when the reader
 /// signs back in.
-const log_out = async () => {
+export const log_out = async (): Promise<void> => {
   try {
     const response = await fetch("/organizator/logout", { credentials: "include", method: "GET" });
     if (!response.ok) {
@@ -39,14 +51,51 @@ const log_out = async () => {
   go_to_login();
 };
 
-const entry_button = (label: string, run: () => void): HTMLButtonElement => {
+const go_to = (where: string) => {
+  window.location.assign(where);
+};
+
+/// What the menu holds when the page has not said. Enough to be useful on any page, and nothing
+/// that belongs to one of them.
+const default_entries = (): MenuEntry[] => [
+  {label: "Memos", run: (_progress, close) => (close(), go_to("/memo/"))},
+  {label: "Calendar", run: (_progress, close) => (close(), go_to("/calendar"))},
+  {label: "Admin", run: (_progress, close) => (close(), go_to("/memo/$$$admin"))},
+  {label: "Journal", run: (_progress, close) => (close(), go_to("/journal"))},
+  {label: "Log out", run: (_progress, close) => (close(), void log_out())},
+];
+
+let entries_for_page: () => MenuEntry[] = default_entries;
+
+/// The entries this page's menu holds. Registered once by the page, before the menu is opened.
+export const set_app_entries = (entries: () => MenuEntry[]): void => {
+  entries_for_page = entries;
+};
+
+const entry_button = (
+  entry: MenuEntry,
+  progress: HTMLElement,
+  close: () => void,
+  entries: HTMLElement
+): HTMLButtonElement => {
   const button = document.createElement("button");
   // Not a submit: the buttons that close the dialog are the ones in .btn-group, and an entry that
   // closed it would take the run with it.
   button.type = "button";
   button.className = "menu-entry";
-  button.textContent = label;
-  button.addEventListener("click", run);
+  if (entry.icon !== undefined) {
+    // Built from markup rather than createElement plus setAttribute: this element reads its src in
+    // its own constructor, which has already run by the time an attribute is set afterwards — it
+    // would find no src, log, and leave the button without its picture.
+    const holder = document.createElement("span");
+    holder.innerHTML = `<img-inline-svg src="${entry.icon}"></img-inline-svg>`;
+    // No title: the button says the word, and a title here would be the same word a second time.
+    button.append(holder.firstElementChild!);
+  }
+  button.append(entry.label);
+  button.addEventListener("click", () => {
+    if (entry.run(progress, close) instanceof Promise) entries.remove();
+  });
   return button;
 };
 
@@ -65,7 +114,8 @@ export const open_app_menu = () => {
     #menu_entries { display: flex; flex-direction: column; gap: 10px; min-width: 240px; }
     .menu-entry { background: none; border: 1px solid #888; border-radius: 6px; padding: 12px;
                   color: white; font-family: inherit; font-size: 1rem; text-align: left;
-                  cursor: pointer; }
+                  cursor: pointer; display: flex; align-items: center; gap: 10px; }
+    .menu-entry img-inline-svg { width: 22px; height: 22px; flex: 0 0 auto; display: block; }
     .menu-entry:hover { border-color: white; }
     #menu_progress { margin-top: 4px; min-height: 1.2rem; color: #f1c40f; white-space: pre-line; }
     .btn-group { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
@@ -94,51 +144,9 @@ export const open_app_menu = () => {
   close_button.textContent = "Close";
   buttons.appendChild(close_button);
 
-  /// Take every memo the server has onto this device, saying how far it has got — a run over a
-  /// few hundred memos is not instant, and silence would look like a tap that did nothing.
-  const cache_everything = async () => {
-    entries.remove();
-    try {
-      const result = await server_comm.cache_all_memos((done, total) => {
-        progress.textContent = `Caching ${done} of ${total}…`;
-      });
-      progress.textContent = result.failures.length
-        ? `${result.cached} of ${result.total} memos are now on this device.\n` +
-          result.failures.slice(0, 5).join("\n")
-        : `All ${result.total} memos are now on this device.`;
-    } catch (e) {
-      if (e instanceof server_comm.UnauthenticatedError) {
-        go_to_login();
-        return;
-      }
-      konsole.error("Failed to cache the memos", e);
-      // The error's own sentence rather than the whole object: "HTTP Error 404: Failed to list the
-      // memos" says what happened, "HttpError: …" only says which class it is.
-      progress.textContent = `Could not cache the memos: ${e instanceof Error ? e.message : e}`;
-    }
-  };
+  const close = () => dialog.close();
 
-  /// Go somewhere else in the app, with the dialog out of the way first. `events.navigate` is how
-  /// the journal button in the editor moves too: it saves what is open, tells the router, and the
-  /// router draws the page.
-  const go_to = (where: string) => {
-    dialog.close();
-    events.navigate(where);
-  };
-
-  entries.append(
-    entry_button("Cache all memos on this device", () => {
-      cache_everything();
-    }),
-    // What used to be the two links in the corner of the list, which were hard to reach on a phone
-    // and made the list page carry chrome the other pages did not have.
-    entry_button("Admin", () => go_to("/memo/$$$admin")),
-    entry_button("Journal", () => go_to("/journal")),
-    entry_button("Log out", () => {
-      dialog.close();
-      log_out();
-    })
-  );
+  entries.append(...entries_for_page().map(entry => entry_button(entry, progress, close, entries)));
 
   form.append(entries, progress, buttons);
   dialog.appendChild(form);

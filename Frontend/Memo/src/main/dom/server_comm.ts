@@ -23,19 +23,13 @@ import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
 import {MemoEditor} from "./memo-editor.js";
 import {wasm_ready} from "./wasm.js";
+import {HttpError, UnauthenticatedError, describe_failure} from "./http.js";
 
-export class HttpError extends Error {
-  constructor(public status: number, message: string) {
-    super(`HTTP Error ${status}: ${message}`);
-    this.name = 'HttpError';
-  }
-}
-export class UnauthenticatedError extends HttpError {
-  constructor(message: string = `No session, need to log in`) {
-    super(401, message);
-    this.name = 'UnauthenticatedError';
-  }
-}
+/// Re-exported, never declared here: the classes live in http.ts so that the calendar can use the
+/// same ones, and callers that reach for `server_comm.HttpError` keep getting that same class —
+/// `instanceof` answers true only for one and the same object.
+export { HttpError, UnauthenticatedError };
+
 /**
  * The code communicating with the server
  */
@@ -86,18 +80,6 @@ export const save_to_server = async (memo: Memo): Promise<ServerMemoReply> => {
       konsole.log(`Save to server failed for memo ${memoId} with status ${response.status}`);
       throw new HttpError(response.status, `Save to server failed for memo ${memoId}`);
   }
-};
-
-/// What went wrong, for a reader rather than a log. Not everything thrown here is an Error:
-/// read_memo throws a plain object with a message on it.
-const describe_failure = (e: unknown): string => {
-  if (e instanceof Error) {
-    return e.message;
-  }
-  if (typeof e === "object" && e !== null && "message" in e) {
-    return String((e as { message: unknown }).message);
-  }
-  return String(e);
 };
 
 /// How many failures the report spells out before it stops listing them.

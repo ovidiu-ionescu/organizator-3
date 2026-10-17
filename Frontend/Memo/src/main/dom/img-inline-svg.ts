@@ -8,7 +8,9 @@ import konsole from "./console_log.js";
 export class ImgInlineSvg extends HTMLElement {
   _color() {
     const fillColor = getComputedStyle(this).color || "white";
-    const svg = this.shadowRoot!.querySelector("svg");
+    // No shadow root yet means no svg to colour — which is the case for an element whose src was
+    // set after it was built, and is not worth throwing over.
+    const svg = this.shadowRoot?.querySelector("svg");
     if (svg) {
       svg.style.fill = fillColor;
     }
