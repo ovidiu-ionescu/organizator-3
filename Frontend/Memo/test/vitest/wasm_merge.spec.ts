@@ -20,31 +20,27 @@ describe("Testing text merging", () => {
 
         const merged = merge(base, local, remote);
 
+        // The merge no longer ends its answer with a newline of its own; the old one did, and
+        // the app stripped it again. Neither version here ended with one, so neither does this.
         expect(merged).to.be.equal(
-            "added first line\ninitial line\nadded last line\n"
+            "added first line\ninitial line\nadded last line"
         );
     });
 
-    it("should fail to merge unrelated stuff", () => {
+    it("should merge unrelated edits instead of failing", () => {
+        // The merge this replaced answered a conflict with a `# Merge failed:` block and diff3
+        // markers. This one always merges: "abcd" is one word, both sides replace it with a word
+        // of their own, and the two replacements are kept one after the other. What matters here
+        // is that no failure block comes back.
         const base = "abcd";
         const local = "ebgd";
         const remote = "ibkd";
 
         const merged = merge(base, local, remote);
 
-        const expected = alignedText`
-          # Merge failed: 
-
-          <<<<<<< ours
-          ebgd
-          ||||||| original
-          abcd
-          =======
-          ibkd
-          >>>>>>> theirs
-        `
-        //console.log(merged);
-        expect(merged).toEqual(expected);
+        expect(merged).not.toContain("# Merge failed:");
+        expect(merged).not.toContain("<<<<<<<");
+        expect(merged).toBe("ebgdibkd");
     });
 
 

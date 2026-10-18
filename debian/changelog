@@ -1,3 +1,8 @@
+organizator (0.1.39) UNRELEASED; urgency=medium
+
+  * journal should load faster
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 18 Oct 2026 01:23:00 +0200
 organizator (0.1.38) UNRELEASED; urgency=medium
 
   * fixed some issues with merging

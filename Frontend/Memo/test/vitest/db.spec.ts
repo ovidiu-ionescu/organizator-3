@@ -234,41 +234,12 @@ describe("Testing the database functions", () => {
     expect(queued).to.have.lengthOf(0);
   });
 
-  it('should record a memo it has never fetched as one the server has not seen', async () => {
-    // No cache entry means no server half, and a record with no server half has to be saved.
-    // Recording the memo as its own server copy — which is what this used to do — asserts the
-    // server already holds exactly this text, and the memo is never queued.
-    await db.save_local_only({ id: 5, text: 'Never fetched\nBody' });
-
-    const unsaved = await db.unsaved_memos();
-    expect(unsaved.map((m) => m.id)).to.include(5);
-    expect((await db.read_memo(5))?.dirty).to.be.true;
-  });
-
-  it('should keep the text written here when there is no ancestor to merge it with', async () => {
-    // A memo written here that was never sent, whose cached ancestor is gone — the cache was
-    // dropped while the editor held the text, say. Merging against nothing turns any two texts
-    // into a conflict block, and that block is what would be written back and then saved over the
-    // server's copy. What is here exists nowhere else, so it is kept.
-    await db.save_local_only({ id: 62, text: 'Written here\nAnd never sent' });
-
-    const memo = await db.save_memo_after_fetching_from_server({
-      memo: {
-        id: 62,
-        title: 'On the server',
-        memotext: '\nA different text',
-        savetime: 900,
-        user: { id: 1, name: 'root' },
-        access_level: 3,
-      },
-      requester: { id: 1, name: 'root' },
-    });
-
-    expect(memo.text).to.contain('Written here');
-    expect(memo.text).to.contain('And never sent');
-    expect(memo.text).not.to.contain('<<<<<<<');
-    // And it is still to be sent: nothing about it has reached the server.
-    expect(memo.dirty).to.be.true;
+  it('should refuse to save a positive id it has nothing cached for', async () => {
+    // A positive id comes from the server, and the reply that assigns it records both halves at
+    // once. With nothing cached the record was lost; recreating it from a guess would either
+    // claim the server holds this text or claim there is no ancestor to compare against.
+    await expect(db.save_local_only({ id: 5, text: 'Never fetched\nBody' })).rejects.toThrow();
+    expect(await db.read_memo(5)).to.be.null;
   });
 
   it('should take the group the server put a memo in while merging the text', async () => {
@@ -295,9 +266,9 @@ describe("Testing the database functions", () => {
       requester: { id: 1, name: 'root' },
     });
 
-    // Both texts survive the merge, and the memo is in the group the server says it is in.
-    expect(memo.text).to.contain('written here');
-    expect(memo.text).to.contain('written there');
+    // Both edits survive the merge — the crate keeps both replacements of the last line's text
+    // one after the other — and the memo is in the group the server says it is in.
+    expect(memo.text).to.be.equal('Shared line\nwritten here there');
     expect(memo.memogroup?.id).to.be.equal(2);
   });
 
@@ -393,30 +364,6 @@ describe("Testing the database functions", () => {
     }
   });
 
-  it('should take the group from the server when the copy here never had one', async () => {
-    // A record the cache lost while the editor held the memo: a positive id with only a local
-    // half, and no group in it. Saving it as it stands sends no group_id, which memo_write reads
-    // as "put it in no group" — so the memo leaves the group it is really in. The group is the
-    // one thing the reply can settle without guessing at the text.
-    await db.save_local_only({ id: 91, text: 'Written here\nbody' });
-    expect((await db.read_memo(91))?.memogroup).to.be.undefined;
-
-    await db.save_memo_after_fetching_from_server({
-      memo: {
-        id: 91,
-        title: 'On the server',
-        memotext: '\nbody',
-        savetime: 900,
-        user: { id: 1, name: 'root' },
-        memogroup: { id: 7, name: 'Work' },
-        access_level: 3,
-      },
-      requester: { id: 1, name: 'root' },
-    });
-
-    expect((await db.read_memo(91))?.memogroup?.id).to.be.equal(7);
-  });
-
   it('should settle a memo whose local copy differs only in line endings', async () => {
     // The shape of a memo that reads as dirty however often it is fetched: the local copy has a
     // carriage return the server's does not, it has lost the group the memo is really in, and the
@@ -444,46 +391,6 @@ describe("Testing the database functions", () => {
     expect(memo.text).to.contain('body');
     expect(memo.text).not.to.contain('<<<<<<<');
     //expect(memo.dirty).to.be.false;
-  });
-
-  it('should record what the server holds for a memo it had no server copy of', async () => {
-    // An old record this device made for itself — the editor saved a memo nothing was cached for
-    // — which every fetch since left as it was. Comparing its copy against no ancestor at all, it
-    // read as unsent for ever, and a fetch of the whole library never changed that.
-    await db.save_local_only({ id: 94, text: 'An old memo\nbody' });
-
-    const memo = await db.save_memo_after_fetching_from_server({
-      memo: {
-        id: 94,
-        title: 'An old memo',
-        memotext: '\nbody',
-        savetime: 1700000000000,
-        user: { id: 1, name: 'root' },
-        access_level: 3,
-      },
-      requester: { id: 1, name: 'root' },
-    });
-
-    const cached = (await db.cached_memos()).find((c) => c.id === 94);
-    expect(cached?.server).not.to.be.undefined;
-    // The server holds exactly this text, so there is nothing left to send.
-    expect(memo.dirty).to.be.false;
-
-    // A copy that really does differ is still kept, and still waiting to be sent.
-    await db.save_local_only({ id: 95, text: 'Written here\nand never sent' });
-    const other = await db.save_memo_after_fetching_from_server({
-      memo: {
-        id: 95,
-        title: 'On the server',
-        memotext: '\nsomething else',
-        savetime: 1700000000000,
-        user: { id: 1, name: 'root' },
-        access_level: 3,
-      },
-      requester: { id: 1, name: 'root' },
-    });
-    expect(other.text).to.contain('never sent');
-    expect(other.dirty).to.be.true;
   });
 
   it('should leave the database usable after dropping it', async () => {

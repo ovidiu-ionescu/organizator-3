@@ -130,13 +130,13 @@ describe("Testing memo processing", () => {
       expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.true;
   });
 
-  it('should not invent a server copy for a memo it has never fetched', () => {
-    const cache_memo = memo_processing.make_cache_memo({ id: 9, text: 'a memo' });
-
-    // Nothing has looked at the server for this memo, so the record says nothing about it — and
-    // a record with no server half counts as needing to be saved, which it does.
-    expect(cache_memo.server).to.be.undefined;
-    expect(memo_processing.should_save_memo_to_server(cache_memo)).to.be.true;
+  it('should refuse a positive id it has no cached server copy for', () => {
+    // A negative id is a memo the server has not seen yet. A positive one comes from the server,
+    // and the reply that assigns it records both halves at once — so a positive id with nothing
+    // cached is a lost record, not a memo that was never fetched, and there is no server half to
+    // build for it.
+    expect(() => memo_processing.make_cache_memo({ id: 9, text: 'a memo' }))
+      .toThrow('has a server id but the cache holds no server copy');
   });
 
   it('should keep the two halves of a synced record equal but separate', () => {

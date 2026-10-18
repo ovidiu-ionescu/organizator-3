@@ -70,6 +70,22 @@ const make_editor = (): MemoEditor => {
   return editor;
 };
 
+/// The cache record a memo has once the server has answered for it. A positive id without one is
+/// a lost record, not a memo that was never fetched, so a test that saves such a memo has to
+/// start from the state the app is in.
+const cache_a_memo = (id: number) =>
+  db.save_memo_after_fetching_from_server({
+    memo: {
+      id,
+      title: "# a memo",
+      memotext: "",
+      savetime: 100,
+      user: { id: 1, name: "ovidiu" },
+      access_level: 3,
+    },
+    requester: { id: 1, name: "ovidiu" },
+  });
+
 const get_source = (editor: MemoEditor): HTMLTextAreaElement | null =>
   editor.shadowRoot?.querySelector("#source") ?? null;
 
@@ -105,6 +121,7 @@ describe("The memo editor", () => {
 
   it("should open a memo neutral, and turn orange once an edit is written", async () => {
     stub_the_server();
+    await cache_a_memo(4);
 
     const editor = make_editor();
     const colour = () =>
@@ -203,6 +220,7 @@ describe("The memo editor", () => {
 
   it("should say so when it has written a memo to this device", async () => {
     stub_the_server();
+    await cache_a_memo(6);
     const written: number[] = [];
     const listener = (event: Event) => written.push((event as CustomEvent<number>).detail);
     raspandac.on("memoSavedLocally", listener as (event: CustomEvent<number>) => void);
@@ -329,6 +347,7 @@ describe("The memo editor", () => {
 
   it("should not go on calling an encrypted memo edited when nothing has changed", async () => {
     stub_the_server();
+    await cache_a_memo(22);
     const editor = make_editor();
     await editor.set_memo({ id: 22, text: "# a memo", timestamp: 100 }, true);
     const colour = () =>
@@ -366,6 +385,7 @@ describe("The memo editor", () => {
 
   it("should react to an edit as it is made, not when the memo is next saved", async () => {
     stub_the_server();
+    await cache_a_memo(3);
     const editor = make_editor();
     const colour = () =>
       (editor.shadowRoot?.querySelector("#save_all_button") as HTMLElement | null)?.style.color;

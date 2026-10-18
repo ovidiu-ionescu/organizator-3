@@ -169,6 +169,16 @@ export const first_more_recent = (first: Memo, second: Undef<Memo>): boolean => 
   return first.timestamp > second.timestamp;
 };
 
+/**
+ * A cache record for a memo that is being written here.
+ *
+ * A memo's positive id comes from the server: it is assigned when the memo is first saved, and
+ * that reply is recorded as both halves at once (save_memo_after_saving_to_server). A positive
+ * id with no cached server copy is therefore not a memo that has never been fetched — it is a
+ * cache that has lost the record. There is no honest server half to build for it: claiming the
+ * server holds this text can skip a save, and claiming there is no ancestor leaves the memo
+ * looking unsent for ever. It is refused rather than guessed at.
+ */
 export const make_cache_memo = (
   memo: Memo,
   cache_memo?: CacheMemo
@@ -181,27 +191,18 @@ export const make_cache_memo = (
     };
   }
 
-  if (!cache_memo) {
-    // Nothing cached says what the server holds, so nothing here claims to know. A record with no
-    // server half counts as needing to be saved, which is the safe answer for a memo that has
-    // never been fetched — and the truthful one, since nobody has looked. It used to put the memo
-    // itself in both halves, which asserts the server already has exactly this text: a memo whose
-    // first write was local then read as in step with a server that had never seen it.
-    //
-    // A memo that really has just come from the server is recorded by make_synced_cache_memo,
-    // which is the one place both halves are known.
-    return {
-      id: memo.id,
-      local: memo,
-    };
-  } else {
-    // we update the local part in the cache
-    return {
-      id: memo.id,
-      local: memo,
-      server: cache_memo.server,
-    };
+  if (!cache_memo?.server) {
+    const msg = `memo ${memo.id} has a server id but the cache holds no server copy of it`;
+    konsole.error(msg);
+    throw new Error(msg);
   }
+
+  // we update the local part in the cache
+  return {
+    id: memo.id,
+    local: memo,
+    server: cache_memo.server,
+  };
 };
 
 /**
