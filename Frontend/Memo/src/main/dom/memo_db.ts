@@ -20,6 +20,7 @@ import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
 import {wasm_ready} from "./wasm.js";
 import konsole from "./console_log.js";
+import {diff} from "./memo_processing.js";
 
 export const DBName = "MemoDatabase";
 
@@ -296,6 +297,8 @@ export const save_memo_after_fetching_from_server = async (
     return with_dirty(cached_memo);
   }
   // from now on, server says writable
+  cached_memo.local.readonly = false;
+  cached_memo.server.readonly = false;
   // we don't have local changes but server has changed
   if(!has_local_changes && has_server_changes) {
     const cache_memo = memo_processing.make_synced_cache_memo(server_memo);
@@ -305,6 +308,15 @@ export const save_memo_after_fetching_from_server = async (
   debugger
 
   if(has_server_text_changed) {
+    if(!cached_memo?.server?.text) {
+      konsole.log(`no cached memo server text`);
+    }
+    if(!server_memo.text) {
+      konsole.log(`no server memo text`);
+    }
+    if(cached_memo?.server?.text && server_memo.text) {
+      konsole.log(diff(cached_memo?.server?.text, server_memo.text))
+    }
     konsole.log(`Merging memo ${cached_memo.id}, server text changed`)
     cached_memo.local.text = memo_processing.merge_memo_text(
         cached_memo!.server!.text,
@@ -312,8 +324,7 @@ export const save_memo_after_fetching_from_server = async (
         server_memo.text
     );
   }
-  cached_memo.local.readonly = false
-  cached_memo.server.readonly = false
+  cached_memo.server.text = server_memo.text;
 
   if (has_server_memogroup_changed  && !has_local_memogroup_changed) {
     cached_memo.local.memogroup = server_memo.memogroup;

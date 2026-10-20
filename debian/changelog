@@ -1,3 +1,13 @@
+organizator (0.1.41) UNRELEASED; urgency=medium
+
+  * added word search for calendar
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Tue, 20 Oct 2026 15:56:00 +0200
+organizator (0.1.40) UNRELEASED; urgency=medium
+
+  * another bug in merge, forgot to update the ancestor
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Mon, 19 Oct 2026 18:42:00 +0200
 organizator (0.1.39) UNRELEASED; urgency=medium
 
   * journal should load faster

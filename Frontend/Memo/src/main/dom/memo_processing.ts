@@ -1,5 +1,5 @@
 // @ts-ignore
-import {merge} from "../pkg/organizator_wasm.js";
+import {merge, diff as diff_wasm} from "../pkg/organizator_wasm.js";
 /**
  * @prettier
  *
@@ -102,7 +102,7 @@ export const server2local = (server_memo_reply: ServerMemoReply): Memo => {
   // it to another group. The reply answers it by naming both sides.
   memo.owned = server_memo_reply.requester?.id === server_memo.user?.id;
 
-  konsole.log(`OI: ${memo}`);
+  konsole.log(`Converted server result to local Memo: ${memo}`);
   return memo;
 };
 
@@ -303,6 +303,10 @@ export const merge_memo_text = (base: string, ours: string, theirs: string): str
   }
   return merged;
 };
+
+export const diff = (old: string, nou: string): string => {
+  return diff_wasm(old, nou);
+}
 
 export const should_save_memo_to_server = (cache_memo: CacheMemo): boolean => {
   // no server correspondent, must be a new memo, save it

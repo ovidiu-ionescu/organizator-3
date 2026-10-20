@@ -81,6 +81,15 @@ describe("the calendar's calls", () => {
     expect(calls[2].url).to.not.contain("until=");
   });
 
+  it("should send a text search with the range it was given", async () => {
+    stub(() => answer({ odates: [], requester }));
+
+    await api.read_odates({ q: "dentist bill" });
+
+    const asked = new URL(calls[0].url, "http://x").searchParams;
+    expect(asked.get("q")).to.equal("dentist bill");
+  });
+
   it("should send an entry with only the fields that were given", async () => {
     stub(() => answer({ id: 7 }, 201));
 
@@ -97,6 +106,15 @@ describe("the calendar's calls", () => {
     await api.update_odate(7, { start_time: 1, end_time: 2 });
     expect(calls[0].url).to.contain("/organizator/odates/7");
     expect(calls[0].method).to.equal("PUT");
+  });
+
+  it("should delete an entry at its own address", async () => {
+    stub(() => answer(null, 204));
+
+    await api.delete_odate(7);
+
+    expect(calls[0].url).to.contain("/organizator/odates/7");
+    expect(calls[0].method).to.equal("DELETE");
   });
 
   it("should keep the server's own words when it explains itself", async () => {

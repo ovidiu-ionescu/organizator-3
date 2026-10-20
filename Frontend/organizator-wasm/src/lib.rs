@@ -74,8 +74,14 @@ pub fn transform_markdown(markdown_input: &str) -> String {
 
 #[wasm_bindgen]
 pub fn merge(original: &str, ours: &str, theirs: &str) -> String {
-  merge::merge_with_options(original, ours, theirs)
+  merge::merge(original, ours, theirs)
 }
+
+#[wasm_bindgen]
+pub fn diff(old: &str, new: &str) -> String {
+  merge::diff(old, new)
+}
+
 
 #[cfg(test)]
 mod tests {

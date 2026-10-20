@@ -117,6 +117,7 @@ async fn main() {
         .routes(routes!(list_odates))
         .routes(routes!(create_odate))
         .routes(routes!(update_odate))
+        .routes(routes!(delete_odate))
         .routes(routes!(list_locations))
         .routes(routes!(create_location))
         .routes(routes!(update_location))
@@ -657,15 +658,21 @@ struct PlaceOutcome {
     used_by: Option<i64>,
 }
 
-/// The stretch of time `GET /odates` was asked to look at, as the screen's two date fields send
-/// it. Both are epoch milliseconds, and both are optional: no `from` means from now, and no
+/// What `GET /odates` was asked to look at: the screen's two date fields and its text box.
+///
+/// The dates are epoch milliseconds, and both are optional: no `from` means from now, and no
 /// `until` means no end, which together are the list the screen shows before anyone searches.
+/// A text search changes the first of those: with no `from`, it covers the whole calendar rather
+/// than what is coming up, because the entry the reader is looking for is usually one that has
+/// already happened.
 #[derive(serde::Deserialize, Debug)]
 struct OdateRange {
     #[serde(default)]
     from: Option<i64>,
     #[serde(default)]
     until: Option<i64>,
+    #[serde(default)]
+    q: Option<String>,
 }
 
 /// What `create_odate.sql` reports about the entry it tried to make.
@@ -1671,6 +1678,47 @@ async fn update_odate(
     Ok(build_json_body(entry_json)?.into_response())
 }
 
+/// Delete one of the caller's own calendar entries.
+///
+/// An entry that is not the caller's answers the same 404 as one that does not exist, so ids
+/// cannot be probed by trying to delete them. Nothing else refers to an entry, so unlike a
+/// location or a date type there is no in-use case to refuse.
+#[utoipa::path(
+    delete,
+    path = "/odates/{id}",
+    params(("id" = i32, Path, description = "odate.id")),
+    responses(
+        (status = 204, description = "The entry was deleted"),
+        (status = 404, description = "No such entry, or not the caller's", body = Object),
+        CommonError
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn delete_odate(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(entry_id): Path<i32>,
+) -> HandlerResponse {
+    debug!("Deleting odate {entry_id}");
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/delete_odate.sql")),
+        &[&entry_id],
+    )
+    .await?;
+
+    let outcome: OdateOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "removed" => Ok(StatusCode::NO_CONTENT.into_response()),
+        "no_owner" => Ok(no_owner("calendar entry")),
+        _ => Ok(refused(StatusCode::NOT_FOUND, "No such entry".to_string())),
+    }
+}
+
 /// The caller's calendar entries, soonest first — everything that has not finished, unless a
 /// range is asked for.
 ///
@@ -1682,8 +1730,9 @@ async fn update_odate(
     get,
     path = "/odates",
     params(
-        ("from" = Option<i64>, Query, description = "Epoch milliseconds to look from, inclusive. Absent means now."),
-        ("until" = Option<i64>, Query, description = "Epoch milliseconds to look up to, exclusive. Absent means no end.")
+        ("from" = Option<i64>, Query, description = "Epoch milliseconds to look from, inclusive. Absent means now, or the beginning of time when q is given."),
+        ("until" = Option<i64>, Query, description = "Epoch milliseconds to look up to, exclusive. Absent means no end."),
+        ("q" = Option<String>, Query, description = "Full-text search in the entry's description and notes. Absent or empty means no search.")
     ),
     responses(
         (status = 200, description = "The caller's entries in that range, soonest first", body = Object),
@@ -1699,9 +1748,16 @@ async fn list_odates(
 ) -> HandlerResponse {
     let now = millis_since_epoch();
     let username = requester.id();
+    // An empty text box is no search, not a search for nothing.
+    let search = range.q.as_deref().map(str::trim).filter(|q| !q.is_empty());
     // No range given is the reading the screen wants by default: everything not yet finished.
-    let from = range.from.unwrap_or(now);
-    debug!("Listing odates for {username} from {from} until {:?}", range.until);
+    // A search with no range is the exception — it covers the whole calendar, because what the
+    // reader is looking for with a word is usually something that has already happened.
+    let from = range.from.unwrap_or(if search.is_some() { 0 } else { now });
+    debug!(
+        "Listing odates for {username} from {from} until {:?}, search {search:?}",
+        range.until
+    );
 
     // A range the caller got backwards is an empty one and answers an empty list, which is what
     // asking for nothing should say. Refusing it would only be a second way to say the same.
@@ -1709,7 +1765,7 @@ async fn list_odates(
         &db_client,
         &requester,
         SQLstr(include_str!("sql/list_odates.sql")),
-        &[&now, &from, &range.until],
+        &[&now, &from, &range.until, &search],
     )
     .await?;
 

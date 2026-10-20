@@ -50,9 +50,23 @@ const server = (answers: Answer) => {
     const path = String(url).replace(/^.*\/organizator/, "").split("?")[0];
 
     if (method === "GET" && path === "/odates") {
-      const from = new URL(String(url), "http://x").searchParams.get("from");
+      const params = new URL(String(url), "http://x").searchParams;
+      const from = params.get("from");
+      const q = params.get("q");
+      // The server's rule: with no from, a text search covers the whole calendar and the plain
+      // list covers what is coming up.
+      const start = from === null ? (q === null ? Date.now() : 0) : Number(from);
       const rooms = answers.odates ?? [];
-      return json({odates: rooms.filter(o => o.end_time > (from === null ? Date.now() : Number(from))), requester});
+      const in_range = rooms.filter(o => o.end_time > start);
+      // The real one is full-text; matching whole words is enough for the shape of the answer.
+      const matched = q === null
+        ? in_range
+        : in_range.filter(o =>
+            `${o.description ?? ""} ${o.memo_text ?? ""}`.toLowerCase()
+              .split(/\s+/)
+              .includes(q.toLowerCase())
+          );
+      return json({odates: matched, requester});
     }
     if (method === "GET" && path === "/locations") return json({locations: answers.locations ?? [], requester});
     if (method === "GET" && path === "/odate_types") return json({odate_types: answers.types ?? [], requester});
@@ -186,6 +200,42 @@ describe("the calendar page", () => {
     );
   });
 
+  it("should search the text across the whole calendar", async () => {
+    const past = entry({
+      id: 2,
+      start_time: at(-30, 9),
+      end_time: at(-30, 10),
+      description: "Dentist visit",
+      memo_text: "Bring the card",
+    });
+    const soon = entry({id: 3, description: "Lunch"});
+    const seen = server({odates: [past, soon]});
+    mount();
+    await loaded();
+    // The plain list is what is coming up: only the lunch.
+    expect(list().textContent).to.contain("Lunch");
+    expect(list().textContent).not.to.contain("Dentist visit");
+    seen.length = 0;
+
+    shadow.querySelector<HTMLInputElement>("#search_text")!.value = "dentist";
+    shadow.querySelector<HTMLButtonElement>("#search_button")!.click();
+
+    await vi.waitFor(() => expect(list().querySelector("h2")!.textContent).to.equal("Matching “dentist”"));
+    // The old list already had a row, so the wait is on what the row says rather than on how
+    // many there are.
+    await vi.waitFor(() => expect(rows()[0]?.textContent ?? "").to.contain("Dentist visit"));
+    expect(rows().length).to.equal(1);
+    // A text search on its own covers the whole calendar, so no from is asked for.
+    const asked = new URL(seen[0].url, "http://x").searchParams;
+    expect(asked.get("q")).to.equal("dentist");
+    expect(asked.get("from")).to.be.null;
+
+    // Clearing puts the screen back to what is coming up, text box included.
+    shadow.querySelector<HTMLButtonElement>("#clear_button")!.click();
+    await vi.waitFor(() => expect(list().querySelector("h2")!.textContent).to.equal("Coming up"));
+    expect(shadow.querySelector<HTMLInputElement>("#search_text")!.value).to.equal("");
+  });
+
   it("should read two empty fields as clearing rather than as a search for nothing", async () => {
     const seen = server({odates: [entry()]});
     mount();
@@ -241,6 +291,45 @@ describe("the calendar page", () => {
     await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.be.null);
     expect(list().querySelectorAll("li").length).to.equal(1);
     expect(list().textContent).to.contain("Dentist");
+  });
+
+  it("should ask before deleting an entry, and delete only when told yes", async () => {
+    let odates = [entry()];
+    const seen: { method: string; url: string }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      seen.push({method, url: String(url)});
+      const path = String(url).replace(/^.*\/organizator/, "").split("?")[0];
+      if (method === "DELETE" && path === "/odates/1") {
+        odates = odates.filter(one => one.id !== 1);
+        return new Response(null, {status: 204});
+      }
+      if (path === "/odates") return json({odates, requester});
+      if (path === "/locations") return json({locations: [], requester});
+      if (path === "/odate_types") return json({odate_types: [], requester});
+      return json({}, 200);
+    });
+    mount();
+    await loaded();
+
+    // Delete asks; it does not delete.
+    list().querySelector<HTMLButtonElement>("button.delete")!.click();
+    expect(list().textContent).to.contain("Delete “Dentist”?");
+    expect(rows().length).to.equal(1);
+    expect(seen.some(call => call.method === "DELETE")).to.equal(false);
+
+    // Given up: the row is itself again, still without a request.
+    list().querySelector<HTMLButtonElement>("button.cancel")!.click();
+    expect(list().textContent).not.to.contain("Delete “Dentist”?");
+    expect(seen.some(call => call.method === "DELETE")).to.equal(false);
+
+    // Asked again and confirmed: now it goes, and the list is read again without it.
+    list().querySelector<HTMLButtonElement>("button.delete")!.click();
+    list().querySelector<HTMLButtonElement>("button.confirm")!.click();
+
+    await vi.waitFor(() => expect(seen.filter(call => call.method === "DELETE").length).to.equal(1));
+    await vi.waitFor(() => expect(rows().length).to.equal(0));
+    expect(status()).to.contain("Deleted “Dentist”.");
   });
 
   it("should redraw the entries after a location is renamed, because they carry its name", async () => {

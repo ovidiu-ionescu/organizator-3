@@ -7,6 +7,12 @@
 -- $2 "from", in epoch milliseconds. The handler passes the server's now when the caller asked
 --    for no particular range, which is what makes the default reading "everything coming up".
 -- $3 "until", in epoch milliseconds, or NULL for no end.
+-- $4 a text search, or NULL for none. It is matched against the entry's description and notes
+--    with the same expression the memo search uses (search_memo.sql): the text is unaccented and
+--    indexed with the database's default full-text configuration, and what the reader typed is
+--    read as words by websearch_to_tsquery rather than as query syntax, so a stray quote or a
+--    leading minus cannot make the request fail. The handler sends NULL for an empty search, so
+--    an empty box is no filter rather than a query that matches nothing.
 --
 -- An entry is in the list when its own interval overlaps [$2, $3): one is included while
 -- `end_time > from` rather than `start_time >= from`, so one happening at this moment is on the
@@ -44,7 +50,8 @@ WITH requested AS (
   SELECT
     $1::BIGINT AS now_ms,
     $2::BIGINT AS from_time,
-    $3::BIGINT AS until_time
+    $3::BIGINT AS until_time,
+    $4::TEXT AS query_text
 ),
 current_user_row AS (
   SELECT (current_setting('organizator.current_user'))::INTEGER AS user_id
@@ -100,6 +107,15 @@ SELECT
           -- after the range begins, and begins before the range ends.
           AND odate.end_time > requested.from_time
           AND (requested.until_time IS NULL OR odate.start_time < requested.until_time)
+          -- The text search, when there is one. COALESCE because either column may be null,
+          -- and one null operand would make the whole concatenation null and drop the entry
+          -- from every search.
+          AND (
+            requested.query_text IS NULL
+            OR to_tsvector(unaccent(
+                 COALESCE(odate.description, '') || ' ' || COALESCE(odate.memo_text, '')
+               )) @@ websearch_to_tsquery(unaccent(requested.query_text))
+          )
       ),
       '[]'::JSON
     ),

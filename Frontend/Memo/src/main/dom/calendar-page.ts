@@ -75,6 +75,12 @@ const template = `
       font-size: 0.9rem;
       opacity: 0.85;
     }
+    /* Wide enough that a two-word search stays visible while it is typed, and narrow enough
+       that the row's buttons stay on the same line at a laptop width. */
+    #search_text {
+      width: 10rem;
+      box-sizing: border-box;
+    }
     /* The same field fill as the form and the panels use, so that every box you can type into on
        this page looks like one. A button is not a field and keeps the page behind it. */
     input,
@@ -128,6 +134,10 @@ const template = `
            "To" left at the end of one line with its date at the start of the next reads as a label
            for whatever happens to follow it. -->
       <span class="pair">
+        <label for="search_text">Text</label>
+        <input type="search" id="search_text" placeholder="words in the entry">
+      </span>
+      <span class="pair">
         <label for="search_from">From</label>
         <input type="date" id="search_from">
       </span>
@@ -167,6 +177,9 @@ export class CalendarPage extends HTMLElement {
   private types: OdateType[] = [];
   private editing: Odate | null = null;
   private searched: DayRange | null = null;
+  /// What the text box is looking for, kept with the range so that a reload after a write looks
+  /// at the same thing the reader was looking at.
+  private search_text = "";
   private saving = false;
   private loading_odates = false;
   private loading_locations = false;
@@ -209,6 +222,11 @@ export class CalendarPage extends HTMLElement {
       this.editing = (event as CustomEvent<Odate>).detail;
       this.draw();
       this.list.focus_editing_form();
+    });
+    // Sent only after the row has asked a second time: the list owns the question and the page
+    // owns the request.
+    this.list.addEventListener("delete-entry", event => {
+      void this.delete_entry((event as CustomEvent<Odate>).detail);
     });
     // On the page rather than on either form: there are two of them now — the one at the top and
     // the one that takes a row's place while it is being changed, which is inside the list's own
@@ -266,7 +284,10 @@ export class CalendarPage extends HTMLElement {
     this.draw();
 
     try {
-      this.odates = await api.read_odates(this.searched ?? undefined);
+      this.odates = await api.read_odates({
+        ...(this.searched ?? {}),
+        ...(this.search_text === "" ? {} : {q: this.search_text}),
+      });
       this.list_failed = false;
       // Said once the list is back, not before: the reload clears the status on its way out, and a
       // message set first would be wiped by the reload it caused.
@@ -331,10 +352,11 @@ export class CalendarPage extends HTMLElement {
    * pressing Search on two empty fields reads as clearing rather than as a search for nothing.
    */
   private search(): void {
+    const text = (this.$["search_text"] as HTMLInputElement).value.trim();
     const start = day_start((this.$["search_from"] as HTMLInputElement).value);
     const end = day_end((this.$["search_until"] as HTMLInputElement).value);
 
-    if (start === null && end === null) {
+    if (start === null && end === null && text === "") {
       this.clear_search();
       return;
     }
@@ -343,15 +365,20 @@ export class CalendarPage extends HTMLElement {
     if (start !== null) range.from = start;
     if (end !== null) range.until = end;
 
-    this.searched = range;
+    // No dates is no range, not an empty one: a text search on its own must not read as
+    // "between those dates", and the server takes it over the whole calendar.
+    this.searched = start === null && end === null ? null : range;
+    this.search_text = text;
     void this.load_odates();
   }
 
   /** Back to the list the screen opens with, and the fields emptied with it. */
   private clear_search(): void {
+    (this.$["search_text"] as HTMLInputElement).value = "";
     (this.$["search_from"] as HTMLInputElement).value = "";
     (this.$["search_until"] as HTMLInputElement).value = "";
     this.searched = null;
+    this.search_text = "";
     void this.load_odates();
   }
 
@@ -371,6 +398,35 @@ export class CalendarPage extends HTMLElement {
       this.editing = null;
       void this.load_odates(`Saved “${updated.description ?? "entry"}”.`);
     }, "save");
+  }
+
+  /**
+   * Remove an entry, once its row has asked a second time.
+   *
+   * The reload is the range being looked at, like every other change: an entry removed from a
+   * search result must not widen the screen back to the plain list.
+   */
+  private async delete_entry(entry: Odate): Promise<void> {
+    this.saving = true;
+    this.set_status("");
+    this.draw();
+
+    try {
+      await api.delete_odate(entry.id);
+      // A form open on the entry that has just gone has nothing left to save.
+      if (this.editing?.id === entry.id) this.editing = null;
+      await this.load_odates(`Deleted “${entry.description ?? "entry"}”.`);
+    } catch (e) {
+      if (e instanceof UnauthenticatedError) return go_to_login();
+      konsole.error("Failed to delete the entry", e);
+      this.set_status(
+        e instanceof ServerRefusal ? api.entry_change_failed(e, "delete") : "Could not delete the entry.",
+        true
+      );
+    } finally {
+      this.saving = false;
+      this.draw();
+    }
   }
 
   /** One write, and what follows it. Only the "what follows" differs between the two. */
@@ -534,16 +590,28 @@ export class CalendarPage extends HTMLElement {
     status.textContent = this.status_text;
     status.classList.toggle("error", this.status_is_error);
 
-    const searching = this.searched !== null;
+    const searching = this.searched !== null || this.search_text !== "";
+    const dates = this.searched !== null;
     (this.$["clear_button"] as HTMLButtonElement).disabled = !searching || this.loading_odates;
+    (this.$["search_text"] as HTMLInputElement).disabled = this.loading_odates;
     (this.$["search_from"] as HTMLInputElement).disabled = this.loading_odates;
     (this.$["search_until"] as HTMLInputElement).disabled = this.loading_odates;
 
     this.list.entries_to_show = this.odates;
-    this.list.title = searching ? "Between those dates" : "Coming up";
-    this.list.empty_message = searching
-      ? "Nothing between those dates."
-      : "Nothing coming up. Add an entry above.";
+    this.list.title = this.search_text !== ""
+      ? dates
+        ? `Matching “${this.search_text}” between those dates`
+        : `Matching “${this.search_text}”`
+      : dates
+        ? "Between those dates"
+        : "Coming up";
+    this.list.empty_message = this.search_text !== ""
+      ? dates
+        ? `Nothing matches “${this.search_text}” between those dates.`
+        : `Nothing matches “${this.search_text}”.`
+      : dates
+        ? "Nothing between those dates."
+        : "Nothing coming up. Add an entry above.";
     this.list.show_loading = this.loading_odates;
     this.list.show_failed = this.list_failed;
 

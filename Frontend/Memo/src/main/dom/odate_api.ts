@@ -51,6 +51,14 @@ export interface NewOdate {
   type?: number;
 }
 
+/// What the search fields send: a stretch of time, a text search, or both.
+export interface OdateSearch {
+  from?: number;
+  until?: number;
+  /// Full-text search in the entry's description and notes. Absent or empty means no search.
+  q?: string;
+}
+
 export interface NewLocation {
   name: string;
   latitude?: number;
@@ -145,10 +153,11 @@ const call = async <T>(method: string, url: string, body?: unknown): Promise<T> 
  * whatever overlaps that stretch of time, **entries that have already happened included**, which is
  * the whole point of asking for a range: the plain list stops at now.
  */
-export const read_odates = async (range?: {from?: number; until?: number}): Promise<Odate[]> => {
+export const read_odates = async (range?: OdateSearch): Promise<Odate[]> => {
   const asked = new URLSearchParams();
   if (range?.from !== undefined) asked.set("from", `${range.from}`);
   if (range?.until !== undefined) asked.set("until", `${range.until}`);
+  if (range?.q) asked.set("q", range.q);
   asked.set("request.preventCache", `${+new Date()}`);
 
   const wire = await call<OdateListWire>("GET", `/organizator/odates?${asked}`);
@@ -172,6 +181,10 @@ export const create_odate = (entry: NewOdate): Promise<Odate> =>
 /** Replaces an entry wholesale: the body is the whole of it, the same shape create takes. */
 export const update_odate = (id: number, entry: NewOdate): Promise<Odate> =>
   call<Odate>("PUT", `/organizator/odates/${id}`, entry);
+
+/** Deletes an entry. The server answers with no body, so there is nothing to hand back. */
+export const delete_odate = (id: number): Promise<void> =>
+  call<void>("DELETE", `/organizator/odates/${id}`);
 
 /** The same pair for the places: a write replaces the row, so the body carries every field. */
 export const create_location = (place: NewLocation): Promise<OdateLocation> =>

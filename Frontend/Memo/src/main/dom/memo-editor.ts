@@ -698,7 +698,7 @@ export class MemoEditor extends HTMLElement {
   _move_header_in_presentation() {
     const header = this.$.edit_meta;
     header.parentElement?.removeChild(header);
-    konsole.log(`insert memo header before presentation`);
+    //konsole.log(`insert memo header before presentation`);
     const target = this.$.presentation;
     target?.parentNode?.insertBefore(header, target);
 
@@ -707,7 +707,7 @@ export class MemoEditor extends HTMLElement {
   _move_header_in_editor() {
     const header = this.$.edit_meta;
     header.parentElement?.removeChild(header);
-    konsole.log(`insert memo header before source`);
+    //konsole.log(`insert memo header before source`);
     const target = this.$.source;
     target?.parentNode?.insertBefore(header, target);
   }

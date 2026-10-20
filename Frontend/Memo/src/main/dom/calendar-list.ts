@@ -120,6 +120,22 @@ const template = `
       cursor: pointer;
       text-decoration: none;
     }
+    .edit.danger {
+      color: var(--memo-danger, red);
+    }
+    /* The row's two actions stay together, after what the entry says. The question takes the
+       place of the actions while a deletion is being confirmed: the entry itself stays in the
+       row, so the reader is looking at what they are about to remove. */
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: baseline;
+      margin-top: 0.2rem;
+    }
+    .confirm-question {
+      font-weight: bold;
+    }
     @media (hover: hover) {
       a:hover,
       .edit:hover {
@@ -155,6 +171,9 @@ export class CalendarList extends HTMLElement {
   /// hands of somebody typing in it would be a form that loses what they typed.
   private editing: Odate | null = null;
   private editing_form: OdateForm | null = null;
+  /// The entry whose Delete has been pressed and which is waiting for a second press. Held here,
+  /// like `editing`, because it is a row that changes shape.
+  private confirming: Odate | null = null;
   private saving = false;
   private places: OdateLocation[] = [];
   private types: OdateType[] = [];
@@ -174,7 +193,12 @@ export class CalendarList extends HTMLElement {
   }
 
   set entries_to_show(entries: Odate[]) {
+    // An entry that is gone cannot still be the one waiting to be deleted.
+    const confirming_id = this.confirming?.id;
     this.entries = entries;
+    if (confirming_id !== undefined && !entries.some(entry => entry.id === confirming_id)) {
+      this.confirming = null;
+    }
     this.draw();
   }
 
@@ -207,6 +231,9 @@ export class CalendarList extends HTMLElement {
       this.editing_form = null;
     }
     this.editing = entry;
+    // Changing an entry and deleting it are two different intentions; the second press on Delete
+    // is not also a confirmation of a form that was left open on another row.
+    if (entry !== null) this.confirming = null;
     this.draw();
   }
 
@@ -323,20 +350,75 @@ export class CalendarList extends HTMLElement {
       row.append(about);
     }
 
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "edit";
-    edit.textContent = "Edit";
-    const for_whom = document.createElement("span");
-    for_whom.className = "visually-hidden";
-    for_whom.textContent = ` ${entry.description || "this entry"}`;
-    edit.append(for_whom);
-    edit.addEventListener("click", () =>
-      this.dispatchEvent(new CustomEvent("edit-entry", {detail: entry, bubbles: true, composed: true}))
-    );
-    row.append(edit);
+    row.append(this.draw_actions(entry));
 
     return row;
+  }
+
+  /// Edit and Delete, or the question that stands in for them while a deletion is being
+  /// confirmed. The entry itself stays above, so the question is asked about something in view.
+  private draw_actions(entry: Odate): HTMLElement {
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    if (this.confirming !== null && this.confirming.id === entry.id) {
+      const question = document.createElement("span");
+      question.className = "confirm-question";
+      question.textContent = entry.description
+        ? `Delete “${entry.description}”?`
+        : "Delete this entry?";
+      actions.append(question);
+
+      actions.append(
+        this.button("Yes, delete", "danger confirm", () => {
+          this.confirming = null;
+          this.draw();
+          this.dispatchEvent(
+            new CustomEvent("delete-entry", {detail: entry, bubbles: true, composed: true})
+          );
+        }),
+        this.button("Cancel", "cancel", () => {
+          this.confirming = null;
+          this.draw();
+        })
+      );
+      return actions;
+    }
+
+    const edit = this.button("Edit", "", () =>
+      this.dispatchEvent(new CustomEvent("edit-entry", {detail: entry, bubbles: true, composed: true}))
+    );
+    edit.append(this.visually_hidden(` ${entry.description || "this entry"}`));
+
+    const remove = this.button("Delete", "danger delete", () => {
+      this.confirming = entry;
+      this.draw();
+    });
+    remove.append(this.visually_hidden(` ${entry.description || "this entry"}`));
+
+    actions.append(edit, remove);
+    return actions;
+  }
+
+  private button(label: string, extra: string, run: () => void): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.classList.add("edit");
+    // One token at a time: classList.add takes a single name per call and throws on a space.
+    extra
+      .split(" ")
+      .filter(name => name !== "")
+      .forEach(name => button.classList.add(name));
+    button.addEventListener("click", run);
+    return button;
+  }
+
+  private visually_hidden(text: string): HTMLSpanElement {
+    const span = document.createElement("span");
+    span.className = "visually-hidden";
+    span.textContent = text;
+    return span;
   }
 
   /// The form for the row being changed, built once and then handed back on every redraw: the same
