@@ -10,8 +10,18 @@
  */
 import konsole from "./console_log.js";
 import type {Named, Odate, OdateLocation, NewOdate, OdateType} from "./odate_api.js";
+import type {RepeatUnit} from "./recurrence.js";
 import {load_markdown, render_markdown} from "./markdown.js";
 import {barcode_layout_css, markdown_notes_css, presentation_css} from "./presentation_css.js";
+
+/// What the form asks the page to make when Duplicate is confirmed.
+export interface DuplicateRequest {
+  id: number;
+  /// The fields as they stand, so that a time or a note changed in the form is the one copied.
+  entry: NewOdate;
+  count: number;
+  unit: RepeatUnit;
+}
 
 /// A time as the `datetime-local` field writes it: built from the local getters, never from
 /// `toISOString`, which answers in UTC and would move the value by the zone offset.
@@ -161,8 +171,45 @@ const template = `
     }
     .buttons {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.5rem;
       margin-top: 0.6rem;
+    }
+    /* How many copies, and how far apart. A row of its own under the entry, so the two choices
+       read as one question rather than as more fields of the entry. */
+    .duplicate {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: baseline;
+      margin-top: 0.6rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--memo-border, grey);
+    }
+    /* The generic field rule stretches these; here they are only as wide as what they hold. */
+    .duplicate label {
+      flex: 0 0 auto;
+      padding-top: 0;
+    }
+    .duplicate input {
+      flex: 0 0 4rem;
+    }
+    .duplicate select {
+      flex: 0 0 auto;
+    }
+    .duplicate.hidden {
+      display: none;
+    }
+    /* The answer to the last thing asked from this form, under its buttons — where the reader
+       is when they asked it, rather than at the top of the page. Always in the page and always
+       a line tall, so the form does not grow when a message arrives. */
+    .status {
+      min-height: 1.1rem;
+      margin: 0.5rem 0 0 0;
+      font-size: 0.9rem;
+    }
+    .status.error {
+      color: var(--memo-happening, red);
     }
     .primary {
       border-color: var(--memo-link, steelblue);
@@ -222,10 +269,25 @@ const template = `
       <label for="type">Type</label>
       <select id="type"></select>
     </div>
+    <div id="duplicate_panel" class="duplicate hidden">
+      <label for="duplicate_count">Copies</label>
+      <input type="number" id="duplicate_count" min="1" max="366" step="1" value="2">
+      <label for="duplicate_unit">every</label>
+      <select id="duplicate_unit">
+        <option value="day">day</option>
+        <option value="week" selected>week</option>
+        <option value="biweekly">2 weeks</option>
+        <option value="month">month</option>
+      </select>
+      <button id="duplicate_confirm" type="button" class="primary">Duplicate</button>
+      <button id="duplicate_cancel" type="button">Close</button>
+    </div>
     <div class="buttons">
       <button id="save" class="primary" type="submit">Add entry</button>
       <button id="cancel" type="button">Cancel</button>
+      <button id="duplicate" type="button">Duplicate…</button>
     </div>
+    <p id="form_status" class="status" role="status" aria-live="polite"></p>
   </form>
 `;
 
@@ -235,6 +297,8 @@ export class OdateForm extends HTMLElement {
   private open_for_new = false;
   private previewing = false;
   private saving = false;
+  /// Whether the copies row is showing under the entry being changed.
+  private duplicating = false;
   private places: OdateLocation[] = [];
   private types: OdateType[] = [];
   /// True while closing, so that the focus going back to the trigger is not read as the reader
@@ -256,6 +320,15 @@ export class OdateForm extends HTMLElement {
     this.$["trigger"].addEventListener("click", () => this.open());
     this.$["cancel"].addEventListener("click", () => this.close());
     this.$["preview_toggle"].addEventListener("click", () => this.toggle_preview());
+    this.$["duplicate"].addEventListener("click", () => {
+      this.duplicating = !this.duplicating;
+      this.draw();
+    });
+    this.$["duplicate_cancel"].addEventListener("click", () => {
+      this.duplicating = false;
+      this.draw();
+    });
+    this.$["duplicate_confirm"].addEventListener("click", () => this.duplicate());
     this.$["end"].addEventListener("focus", () => this.fill_end_from_start());
     this.$["entry_form"].addEventListener("submit", event => {
       event.preventDefault(); // a submit event does not stop the native GET by itself
@@ -276,6 +349,8 @@ export class OdateForm extends HTMLElement {
 
   /** The entry being changed, or null for a new one — which is also how the form is closed. */
   set editing(entry: Odate | null) {
+    this.duplicating = false;
+    this.show_status("");
     if (entry === null) {
       this.entry = null;
       this.open_for_new = false;
@@ -300,6 +375,8 @@ export class OdateForm extends HTMLElement {
     this.open_for_new = true;
     this.entry = null;
     this.previewing = false;
+    this.duplicating = false;
+    this.show_status("");
     this.draw_selects();
     this.draw();
 
@@ -320,6 +397,8 @@ export class OdateForm extends HTMLElement {
     this.open_for_new = false;
     this.entry = null;
     this.previewing = false;
+    this.duplicating = false;
+    this.show_status("");
     this.draw();
 
     // Whoever put this form where it is has to hear that it is done with: the form that takes a
@@ -387,13 +466,13 @@ export class OdateForm extends HTMLElement {
     this.draw();
   }
 
-  /** Everything the server is told, when the reader asks for it to be written. */
-  private submit(): void {
+  /// What the fields hold, or null when the times cannot be read.
+  private read_entry(): NewOdate | null {
     const start = new Date((this.$["start"] as HTMLInputElement).value).getTime();
     const end = new Date((this.$["end"] as HTMLInputElement).value).getTime();
     // Half-filled times are not a request to make: the browser's own `required` covers the empty
     // field, and this covers the value it cannot read as a time.
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
 
     const what = (this.$["what"] as HTMLInputElement).value.trim();
     const notes = (this.$["notes"] as HTMLTextAreaElement).value.trim();
@@ -407,10 +486,56 @@ export class OdateForm extends HTMLElement {
     if (notes !== "") entry.memo_text = notes;
     if (where) entry.location_id = where;
     if (type) entry.type = type;
+    return entry;
+  }
+
+  /**
+   * What the last change asked from this form did, under its buttons. `error` says it in the
+   * colour the page uses for a refusal.
+   */
+  show_status(text: string, error: boolean = false): void {
+    const status = this.$["form_status"];
+    status.textContent = text;
+    status.classList.toggle("error", error);
+    // `nearest` leaves a line that is already on screen where it is.
+    if (text !== "") status.scrollIntoView({block: "nearest"});
+  }
+
+  /** Everything the server is told, when the reader asks for it to be written. */
+  private submit(): void {
+    const entry = this.read_entry();
+    if (entry === null) return;
+    this.show_status("");
 
     this.dispatchEvent(
       new CustomEvent("entry-submit", {
         detail: {id: this.entry === null ? null : this.entry.id, entry},
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  /// The entry as the fields hold it, and how many copies of it to make and how far apart. The
+  /// page decides which of those already exist; this only says what was asked for.
+  private duplicate(): void {
+    if (this.entry === null) return;
+    const entry = this.read_entry();
+    if (entry === null) return;
+
+    const typed = Number((this.$["duplicate_count"] as HTMLInputElement).value);
+    if (!Number.isFinite(typed) || typed < 1) return;
+    const count = Math.min(366, Math.floor(typed));
+
+    const unit = (this.$["duplicate_unit"] as HTMLSelectElement).value as RepeatUnit;
+    if (unit !== "day" && unit !== "week" && unit !== "biweekly" && unit !== "month") return;
+
+    this.duplicating = false;
+    this.show_status("");
+    this.draw();
+    this.dispatchEvent(
+      new CustomEvent<DuplicateRequest>("entry-duplicate", {
+        detail: {id: this.entry.id, entry, count, unit},
         bubbles: true,
         composed: true,
       })
@@ -466,6 +591,17 @@ export class OdateForm extends HTMLElement {
     save.disabled = this.saving;
     (this.$["cancel"] as HTMLButtonElement).disabled = this.saving;
     for (const id of ["start", "end", "what", "notes", "where", "type"]) {
+      (this.$[id] as HTMLInputElement).disabled = this.saving;
+    }
+
+    // Duplicating is about an entry that exists; there is nothing to copy while adding one.
+    const duplicate = this.$["duplicate"] as HTMLButtonElement;
+    duplicate.classList.toggle("hidden", this.entry === null);
+    duplicate.disabled = this.saving;
+
+    const duplicate_panel = this.$["duplicate_panel"];
+    duplicate_panel.classList.toggle("hidden", !this.duplicating || this.entry === null);
+    for (const id of ["duplicate_count", "duplicate_unit", "duplicate_confirm", "duplicate_cancel"]) {
       (this.$[id] as HTMLInputElement).disabled = this.saving;
     }
 

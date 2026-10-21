@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import "@dom/odate-form.js";
-import type { OdateForm } from "@dom/odate-form.js";
+import type { DuplicateRequest, OdateForm } from "@dom/odate-form.js";
 import type { NewOdate, Odate } from "@dom/odate_api.js";
 
 // The entry form: one new entry, or the one being changed. What it owns is the writing of it — an
@@ -143,6 +143,70 @@ describe("the entry form", () => {
     // handler, and an event that cannot be cancelled would navigate the test away instead.
     shadow.querySelector("form")!.dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
     expect(seen[0].id).to.equal(12);
+  });
+
+  it("should offer Duplicate only while changing an entry", () => {
+    // Adding one has no id yet, so there is nothing on the server to copy.
+    open();
+    expect(shadow.querySelector<HTMLButtonElement>("#duplicate")!.classList.contains("hidden")).to.equal(true);
+
+    form.editing = ENTRY;
+    const duplicate = shadow.querySelector<HTMLButtonElement>("#duplicate")!;
+    expect(duplicate.classList.contains("hidden")).to.equal(false);
+
+    duplicate.click();
+    expect(shadow.querySelector("#duplicate_panel")!.classList.contains("hidden")).to.equal(false);
+    // Two copies is what "duplicate" usually means: this one and the next.
+    expect(shadow.querySelector<HTMLInputElement>("#duplicate_count")!.value).to.equal("2");
+    expect(shadow.querySelector<HTMLSelectElement>("#duplicate_unit")!.value).to.equal("week");
+  });
+
+  it("should hand the fields, the count and the interval of a duplication to the page", () => {
+    const seen: DuplicateRequest[] = [];
+    form.addEventListener("entry-duplicate", event =>
+      seen.push((event as CustomEvent<DuplicateRequest>).detail)
+    );
+
+    form.editing = ENTRY;
+    shadow.querySelector<HTMLButtonElement>("#duplicate")!.click();
+    shadow.querySelector<HTMLInputElement>("#duplicate_count")!.value = "3";
+    shadow.querySelector<HTMLSelectElement>("#duplicate_unit")!.value = "biweekly";
+    shadow.querySelector<HTMLButtonElement>("#duplicate_confirm")!.click();
+
+    expect(seen.length).to.equal(1);
+    expect(seen[0].id).to.equal(12);
+    expect(seen[0].count).to.equal(3);
+    expect(seen[0].unit).to.equal("biweekly");
+    // The fields as they stand, including the entry's place and type.
+    expect(seen[0].entry).to.deep.equal({
+      start_time: new Date(2026, 2, 5, 9, 30).getTime(),
+      end_time: new Date(2026, 2, 5, 10, 30).getTime(),
+      description: "Dentist",
+      memo_text: "Bring the **card**",
+      location_id: 3,
+      type: 4,
+    });
+    // The row of choices closes once it has handed the request over.
+    expect(shadow.querySelector("#duplicate_panel")!.classList.contains("hidden")).to.equal(true);
+  });
+
+  it("should put what happened under its buttons, where the reader asked for it", () => {
+    form.editing = ENTRY;
+    form.show_status("The event already existed on Wed 28 Oct, 10:00.");
+
+    const line = shadow.querySelector<HTMLElement>("#form_status")!;
+    expect(line.textContent).to.contain("already existed");
+    expect(line.classList.contains("error")).to.equal(false);
+    // The bottom of the form: after the row of buttons.
+    expect(shadow.querySelector("#entry_form")!.lastElementChild).to.equal(line);
+
+    form.show_status("Could not duplicate the entry.", true);
+    expect(line.textContent).to.equal("Could not duplicate the entry.");
+    expect(line.classList.contains("error")).to.equal(true);
+
+    // Closing the form takes the message with it.
+    button("cancel").click();
+    expect(line.textContent).to.equal("");
   });
 
   it("should keep a place the loaded list has not got, rather than taking the field away", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import "@dom/calendar-page.js";
-import type { Odate, OdateLocation, OdateType } from "@dom/odate_api.js";
+import type { NewOdate, Odate, OdateLocation, OdateType } from "@dom/odate_api.js";
 
 // The calendar page: what it reads on arrival, what it does with the answers, and which read each
 // write is followed by. The server is a stub; the shape of its answers is what is under test.
@@ -118,21 +118,57 @@ describe("the calendar page", () => {
   });
 
   it("should colour an entry by how soon it is, and mark the one happening now", async () => {
-    server({
-      odates: [
-        entry({id: 1, ongoing: true, description: "Now"}),
-        entry({id: 2, start_time: at(0, 23), end_time: at(0, 23) + 3_600_000, description: "Today"}),
-        entry({id: 3, start_time: at(3, 9), end_time: at(3, 10), description: "This week"}),
-        entry({id: 4, start_time: at(30, 9), end_time: at(30, 10), description: "Later"}),
-      ],
-    });
-    mount();
+    // A fixed clock: whether 23:00 is still ahead depends on when the suite runs, and so does the
+    // colour of the day's last entry.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(2026, 2, 5, 12, 0));
+      server({
+        odates: [
+          entry({id: 1, ongoing: true, description: "Now"}),
+          entry({id: 2, start_time: at(0, 23), end_time: at(0, 23) + 3_600_000, description: "Today"}),
+          entry({id: 3, start_time: at(3, 9), end_time: at(3, 10), description: "This week"}),
+          entry({id: 4, start_time: at(30, 9), end_time: at(30, 10), description: "Later"}),
+        ],
+      });
+      mount();
 
-    await loaded();
-    const classes = rows().map(row => row.className);
-    expect(classes).to.deep.equal(["happening", "today", "week", ""]);
-    // The badge is a word as well as a colour: the red is the second thing said, not the only one.
-    expect(rows()[0].textContent).to.contain("Happening now");
+      await loaded();
+      const classes = rows().map(row => row.className);
+      expect(classes).to.deep.equal(["happening", "today", "week", ""]);
+      // The badge is a word as well as a colour: the red is the second thing said, not the only one.
+      expect(rows()[0].textContent).to.contain("Happening now");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("should show an entry that was earlier today as today, fading into the past", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(2026, 2, 5, 12, 0));
+      server({
+        odates: [
+          entry({id: 1, start_time: at(0, 9), end_time: at(0, 10), description: "This morning"}),
+          entry({id: 2, start_time: at(0, 15), end_time: at(0, 16), description: "This afternoon"}),
+        ],
+      });
+      mount();
+      // The plain list is what is coming up; the morning is over, so it is found by searching
+      // today — which is also where an expired entry from today is shown at all.
+      await vi.waitFor(() => expect(rows().length).to.equal(1));
+      shadow.querySelector<HTMLInputElement>("#search_from")!.value = "2026-03-05";
+      shadow.querySelector<HTMLInputElement>("#search_until")!.value = "2026-03-05";
+      shadow.querySelector<HTMLButtonElement>("#search_button")!.click();
+
+      await vi.waitFor(() => expect(rows().length).to.equal(2));
+      expect(rows()[0].className).to.equal("was_today");
+      expect(rows()[1].className).to.equal("today");
+      // A gradient on the line, not the flat today colour.
+      expect(getComputedStyle(rows()[0], "::before").backgroundImage).to.contain("linear-gradient");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("should say nothing is coming up rather than nothing at all", async () => {
@@ -330,6 +366,76 @@ describe("the calendar page", () => {
     await vi.waitFor(() => expect(seen.filter(call => call.method === "DELETE").length).to.equal(1));
     await vi.waitFor(() => expect(rows().length).to.equal(0));
     expect(status()).to.contain("Deleted “Dentist”.");
+  });
+
+  it("should duplicate an entry by the chosen interval, skipping only copies of it that are there", async () => {
+    const base = entry({id: 1, start_time: at(1, 10), end_time: at(1, 11), description: "Dentist"});
+    // A copy from an earlier duplication: one week after the base.
+    const already = entry({id: 2, start_time: at(8, 10), end_time: at(8, 11), description: "Dentist"});
+    // Something else at the second week's slot: same time, a different description. It is not a
+    // copy of this entry, so it must not take the slot.
+    const other = entry({id: 3, start_time: at(15, 10), end_time: at(15, 11), description: "Lunch"});
+    const odates = [base, already, other];
+    const posted: NewOdate[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      const path = String(url).replace(/^.*\/organizator/, "").split("?")[0];
+      const params = new URL(String(url), "http://x").searchParams;
+      if (method === "GET" && path === "/odates") {
+        const from = params.get("from");
+        const until = params.get("until");
+        const start = from === null ? Date.now() : Number(from);
+        const end = until === null ? Infinity : Number(until);
+        return json({odates: odates.filter(o => o.end_time > start && o.start_time < end), requester});
+      }
+      if (method === "POST" && path === "/odates") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as NewOdate;
+        posted.push(body);
+        const made = entry({
+          id: 100 + posted.length,
+          start_time: body.start_time,
+          end_time: body.end_time,
+          description: body.description ?? null,
+        });
+        odates.push(made);
+        return json(made, 201);
+      }
+      if (path === "/locations") return json({locations: [], requester});
+      if (path === "/odate_types") return json({odate_types: [], requester});
+      return json({}, 200);
+    });
+    mount();
+    await loaded();
+    expect(rows().length).to.equal(3);
+
+    // Edit the base, which is the earliest of the rows.
+    rows()[0].querySelector<HTMLButtonElement>("button.edit:not(.delete)")!.click();
+    await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.exist);
+    const in_row = list().querySelector("li odate-form")!.shadowRoot!;
+
+    in_row.querySelector<HTMLButtonElement>("#duplicate")!.click();
+    in_row.querySelector<HTMLInputElement>("#duplicate_count")!.value = "3";
+    in_row.querySelector<HTMLSelectElement>("#duplicate_unit")!.value = "week";
+    in_row.querySelector<HTMLButtonElement>("#duplicate_confirm")!.click();
+
+    // Three weeks asked for: the first is already a copy, the second is somebody else's entry
+    // about lunch, so the second and third are made.
+    await vi.waitFor(() => expect(posted.length).to.equal(2));
+    expect(posted.map(one => one.start_time)).to.deep.equal([at(15, 10), at(22, 10)]);
+    expect(posted.every(one => one.description === "Dentist")).to.equal(true);
+
+    // The message names the date that was passed over, not just how many there were, and it is
+    // under the buttons of the form that asked — not in the page's line at the top.
+    const skipped_when = new Intl.DateTimeFormat(undefined, {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    }).format(at(8, 10));
+    const form_status = in_row.querySelector<HTMLElement>("#form_status")!;
+    await vi.waitFor(() =>
+      expect(form_status.textContent).to.contain(
+        `Added 2 copies of “Dentist”; 1 already existed. The event already existed on ${skipped_when}.`
+      )
+    );
+    expect(status()).to.equal("");
   });
 
   it("should redraw the entries after a location is renamed, because they carry its name", async () => {

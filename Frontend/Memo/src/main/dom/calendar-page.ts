@@ -16,15 +16,16 @@ import {ServerRefusal} from "./odate_api.js";
 import {day_end, day_start} from "./day_range.js";
 import type {DayRange} from "./day_range.js";
 import {log_out, set_app_entries} from "./app-menu.js";
-import "./calendar-list.js";
+import {format_when} from "./calendar-list.js";
 import "./odate-form.js";
 import "./place-list.js";
 // The theme control, the same element the editor carries: one choice, remembered under the one key,
 // so the theme a reader picks on this page is the one they get on the memo page too.
 import "./theme-list.js";
 import type {CalendarList} from "./calendar-list.js";
-import type {OdateForm} from "./odate-form.js";
+import type {DuplicateRequest, OdateForm} from "./odate-form.js";
 import type {PlaceListPanel} from "./place-list.js";
+import {repeated_times} from "./recurrence.js";
 
 const template = `
   <style>
@@ -236,6 +237,9 @@ export class CalendarPage extends HTMLElement {
       if (detail.id === null) void this.create_entry(detail.entry);
       else void this.update_entry(detail.id, detail.entry);
     });
+    this.addEventListener("entry-duplicate", event => {
+      void this.duplicate_entry((event as CustomEvent<DuplicateRequest>).detail);
+    });
 
     this.wire_panel("locations", "location");
     this.wire_panel("types", "type");
@@ -398,6 +402,83 @@ export class CalendarPage extends HTMLElement {
       this.editing = null;
       void this.load_odates(`Saved “${updated.description ?? "entry"}”.`);
     }, "save");
+  }
+
+  /**
+   * Copy an entry at a regular interval, adding only the copies that are not there yet.
+   *
+   * A copy already there is one starting at the same instant and carrying the same description.
+   * That is what makes a second run over a longer stretch safe — the copies the first run made
+   * hold both — while an entry somebody else put at that time, which is about something else, is
+   * not mistaken for one of these copies. The check is a read of the whole stretch being filled
+   * rather than of the list on screen, which may be narrowed by a search or a date range.
+   */
+  private async duplicate_entry(request: DuplicateRequest): Promise<void> {
+    this.saving = true;
+    this.set_status("");
+    this.draw();
+
+    const {entry, count, unit} = request;
+    const times = repeated_times(entry.start_time, entry.end_time, count, unit);
+    const what = entry.description ?? "entry";
+    let created = 0;
+
+    try {
+      // Nothing to ask for, and no stretch to read.
+      if (times.length === 0) return;
+
+      const from = Math.min(...times.map(at => at.start_time));
+      const until = Math.max(...times.map(at => at.end_time));
+      const existing = await api.read_odates({from, until});
+      // The server answers with null for an entry that has no description, while the form leaves
+      // it out — the two are the same answer, so both are written the same way in the key.
+      const copy_key = (start: number, description: string | null | undefined) =>
+        `${start}\u0000${description ?? ""}`;
+      const occupied = new Set(existing.map(known => copy_key(known.start_time, known.description)));
+      const skipped_at: number[] = [];
+
+      for (const at of times) {
+        if (occupied.has(copy_key(at.start_time, entry.description))) {
+          skipped_at.push(at.start_time);
+          continue;
+        }
+        await api.create_odate({...entry, start_time: at.start_time, end_time: at.end_time});
+        created++;
+      }
+
+      // The dates that were passed over, in the list's own words: a count says something was
+      // skipped, the dates say which.
+      const dates = skipped_at.map(format_when);
+      const when = dates.length <= 1
+        ? dates[0] ?? ""
+        : `${dates.slice(0, -1).join(", ")} and ${dates[dates.length - 1]}`;
+
+      const message = created === 0
+        ? `Nothing was added. The event already existed on ${when}.`
+        : skipped_at.length === 0
+          ? `Added ${created} ${created === 1 ? "copy" : "copies"} of “${what}”.`
+          : `Added ${created} ${created === 1 ? "copy" : "copies"} of “${what}”; ${skipped_at.length} already existed. The event already existed on ${when}.`;
+
+      await this.load_odates();
+      // Under the buttons of the form that asked for it, where the reader is looking; the page's
+      // own line is the fallback for a form that was closed while the request was in flight.
+      if (!this.list.show_editing_status(message)) this.set_status(message);
+    } catch (e) {
+      if (e instanceof UnauthenticatedError) return go_to_login();
+      konsole.error("Failed to duplicate the entry", e);
+      const reason = e instanceof ServerRefusal
+        ? api.entry_change_failed(e, "duplicate")
+        : "Could not duplicate the entry.";
+      // Some copies may already have been made. They are not lost: the next run skips them.
+      const so_far = created === 0
+        ? ""
+        : ` ${created} ${created === 1 ? "copy was" : "copies were"} added before the failure.`;
+      const message = `${reason}${so_far}`;
+      if (!this.list.show_editing_status(message, true)) this.set_status(message, true);
+    } finally {
+      this.saving = false;
+      this.draw();
+    }
   }
 
   /**

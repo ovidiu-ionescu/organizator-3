@@ -27,6 +27,9 @@ const when_format = new Intl.DateTimeFormat(undefined, {
 });
 const end_format = new Intl.DateTimeFormat(undefined, {hour: "2-digit", minute: "2-digit"});
 
+/// When an entry starts, in the words the list uses, for messages about copies of one.
+export const format_when = (ms: number): string => when_format.format(ms);
+
 const template = `
   <style>
     :host {
@@ -59,6 +62,23 @@ const template = `
     #entries > li.happening { border-left-color: var(--memo-happening, red); }
     #entries > li.today { border-left-color: var(--memo-today, orange); }
     #entries > li.week { border-left-color: var(--memo-this-week, green); }
+    /* An entry that began today and is over: still today's, but no longer in front of the
+       reader. The line fades from the today colour to the ordinary one instead of staying as
+       bright as an entry still to come. Drawn over the border, which keeps its room, because a
+       border can only be one colour. */
+    #entries > li.was_today {
+      position: relative;
+      border-left-color: transparent;
+    }
+    #entries > li.was_today::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -3px;
+      width: 3px;
+      background: linear-gradient(to bottom, var(--memo-today, orange), var(--memo-border, grey));
+    }
     .when {
       display: flex;
       flex-wrap: wrap;
@@ -241,6 +261,14 @@ export class CalendarList extends HTMLElement {
   /// field that is not in the page cannot take the focus.
   focus_editing_form(): void {
     this.editing_form?.focus_first_field();
+  }
+
+  /// A message under the buttons of the row's form, when one is open. Answers whether there was
+  /// one to put it in — the page falls back to its own line when the reader has closed it.
+  show_editing_status(text: string, error: boolean = false): boolean {
+    if (this.editing_form === null) return false;
+    this.editing_form.show_status(text, error);
+    return true;
   }
 
   set is_saving(saving: boolean) {
@@ -474,13 +502,15 @@ export class CalendarList extends HTMLElement {
    * another timezone would otherwise colour a line orange beside a date reading tomorrow, for the
    * hours around midnight.
    */
-  private how_soon(entry: Odate): "happening" | "today" | "week" | null {
+  private how_soon(entry: Odate): "happening" | "was_today" | "today" | "week" | null {
     if (entry.ongoing) return "happening";
 
     const days = whole_days_between(start_of_day(new Date()), start_of_day(new Date(entry.start_time)));
     // Behind us and not running: it is over, and it is nothing of today's or this week's business.
     if (days < 0) return null;
-    if (days === 0) return "today";
+    // Today, but already over — still today's, and no longer in front of the reader. It gets its
+    // own colour: the today colour fading into the ordinary one.
+    if (days === 0) return entry.end_time <= Date.now() ? "was_today" : "today";
     if (days <= 7) return "week";
     return null;
   }
