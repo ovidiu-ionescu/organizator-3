@@ -35,6 +35,10 @@ pub struct Claims {
     pub sub: String,
     pub exp: u64,
     pub roles: Vec<String>,
+    /// Set by the login page's long-term checkbox. Read back on every refresh, so a remembered
+    /// login stays remembered instead of turning into a session on the next hour.
+    #[serde(default)]
+    pub long_term: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -42,6 +46,7 @@ pub struct ClaimsView<'a> {
     pub sub: &'a str,
     pub exp: u64,
     pub roles: &'a [&'a str],
+    pub long_term: bool,
 }
 
 impl User {
@@ -79,6 +84,8 @@ pub struct Jot {
     decoding_key: DecodingKey,
     pub session_expiry: u64,
     pub session_expiry_grace_period: u64,
+    pub long_session_expiry: u64,
+    pub long_session_expiry_grace_period: u64,
     public_key: String,
 }
 
@@ -112,6 +119,8 @@ impl Jot {
 
         let session_expiry = security_config.session_expiry;
         let session_expiry_grace_period = security_config.session_expiry_grace_period;
+        let long_session_expiry = security_config.long_session_expiry;
+        let long_session_expiry_grace_period = security_config.long_session_expiry_grace_period;
 
         let public_key = BASE64.encode(pair.public_key().as_ref());
 
@@ -120,6 +129,8 @@ impl Jot {
             decoding_key,
             session_expiry,
             session_expiry_grace_period,
+            long_session_expiry,
+            long_session_expiry_grace_period,
             public_key,
         })
     }
@@ -136,12 +147,25 @@ impl Jot {
         }
     }
 
+    /// The ordinary session token, good for the configured hour and its grace period.
     pub fn generate_token(&self, user_id: &str, roles: &[&str]) -> Result<String, AppError> {
-        let exp = get_current_timestamp() + self.session_expiry + self.session_expiry_grace_period;
+        self.generate_token_for(user_id, roles, false)
+    }
+
+    /// A token of one of the two lifetimes: the session's, or the long one the login page's
+    /// checkbox asks for. The choice goes into the claims, so a refresh can keep it.
+    pub fn generate_token_for(
+        &self,
+        user_id: &str,
+        roles: &[&str],
+        long_term: bool,
+    ) -> Result<String, AppError> {
+        let exp = get_current_timestamp() + self.lifetime(long_term);
         let claims = ClaimsView {
             sub: user_id,
             exp,
             roles,
+            long_term,
         };
         Ok(encode(
             &Header::new(Algorithm::EdDSA),
@@ -150,13 +174,32 @@ impl Jot {
         )?)
     }
 
+    fn lifetime(&self, long_term: bool) -> u64 {
+        if long_term {
+            self.long_session_expiry + self.long_session_expiry_grace_period
+        } else {
+            self.session_expiry + self.session_expiry_grace_period
+        }
+    }
+
+    /// The cookie's `Max-Age`, or none at all: a long-term login keeps its cookie for as long as
+    /// its token lives, while an ordinary login leaves the cookie to the browser session.
+    pub fn cookie_age(&self, long_term: bool) -> Option<u64> {
+        if long_term {
+            Some(self.lifetime(true))
+        } else {
+            None
+        }
+    }
+
     pub fn refresh_token(&self, token: &str) -> Result<String, AppError> {
         let claims = self.validate_token(token)?;
-        let exp = get_current_timestamp() + self.session_expiry + self.session_expiry_grace_period;
+        let exp = get_current_timestamp() + self.lifetime(claims.long_term);
         let claims = Claims {
             sub: claims.sub,
             exp,
             roles: claims.roles,
+            long_term: claims.long_term,
         };
         Ok(encode(
             &Header::new(Algorithm::EdDSA),
@@ -203,8 +246,12 @@ impl Jot {
         Ok(Jot {
             encoding_key,
             decoding_key: DecodingKey::from_ed_der(&public_key_bytes),
-            session_expiry: 0,
-            session_expiry_grace_period: 0,
+            // The API server refreshes tokens too, so it has to know both lifetimes; taking
+            // them from its own settings is what keeps a refreshed login from changing length.
+            session_expiry: security_config.session_expiry,
+            session_expiry_grace_period: security_config.session_expiry_grace_period,
+            long_session_expiry: security_config.long_session_expiry,
+            long_session_expiry_grace_period: security_config.long_session_expiry_grace_period,
             public_key: "fake_public_key".to_string(),
         })
     }
@@ -223,5 +270,38 @@ mod tests {
 
         let user_id = jot.validate_token(&token).unwrap().sub;
         assert_eq!(user_id, "admin");
+    }
+
+    #[test]
+    fn a_long_term_login_survives_its_refresh() {
+        // Short numbers on purpose: what is being checked is which configured lifetime is used,
+        // not a particular duration.
+        let config = SecurityConfig {
+            session_expiry: 10,
+            session_expiry_grace_period: 2,
+            long_session_expiry: 100,
+            long_session_expiry_grace_period: 20,
+            public_key_url: None,
+        };
+        let jot = Jot::autogenerate(&config).unwrap();
+        let now = get_current_timestamp();
+        let long_lifetime = config.long_session_expiry + config.long_session_expiry_grace_period;
+
+        let token = jot.generate_token_for("admin", &[], true).unwrap();
+        let claims = jot.validate_token(&token).unwrap();
+        assert!(claims.long_term);
+        assert!(claims.exp >= now + long_lifetime - 2);
+
+        let refreshed = jot.validate_token(&jot.refresh_token(&token).unwrap()).unwrap();
+        assert!(refreshed.long_term);
+        assert!(refreshed.exp >= now + long_lifetime - 2);
+
+        // A session token stays a session token, and a token minted before this claim existed
+        // reads as one too. Only the long one carries a cookie age.
+        let session = jot.validate_token(&jot.generate_token("admin", &[]).unwrap()).unwrap();
+        assert!(!session.long_term);
+        assert!(session.exp < now + long_lifetime);
+        assert_eq!(jot.cookie_age(true), Some(long_lifetime));
+        assert_eq!(jot.cookie_age(false), None);
     }
 }

@@ -11,7 +11,9 @@ dbname = "organizator_prod"
 # password comes from the environment variable POSTGRES_PASSWORD
 
 [security]
-# one week session expiry, 4 days grace period
-session_expiry = 604800
-session_expiry_grace_period = 345600
-
+# The long-term choice on the login page: one week, with four days in which a refresh is allowed.
+long_session_expiry = 604800
+long_session_expiry_grace_period = 345600
+# The ordinary session: one hour, with twenty minutes in which a refresh is allowed.
+session_expiry = 3600
+session_expiry_grace_period = 1200

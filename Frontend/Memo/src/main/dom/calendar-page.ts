@@ -26,6 +26,7 @@ import type {CalendarList} from "./calendar-list.js";
 import type {DuplicateRequest, OdateForm} from "./odate-form.js";
 import type {PlaceListPanel} from "./place-list.js";
 import {repeated_times} from "./recurrence.js";
+import {parse_shared_event, read_shared_inbox} from "./shared_event.js";
 
 const template = `
   <style>
@@ -259,6 +260,58 @@ export class CalendarPage extends HTMLElement {
     ]);
 
     await Promise.all([this.load_odates(), this.load_locations(), this.load_odate_types()]);
+    // After the lists: a shared event may name a place, and matching it is what chooses one.
+    await this.take_share();
+  }
+
+  /**
+   * An event shared into the app, from the Android share sheet — the one door a web app has into
+   * another app's "add to calendar". The share's own words open the add form, the way a native
+   * calendar opens its insert screen; the reader checks and saves, and nothing is made up when
+   * the share did not say when the event is.
+   */
+  private async take_share(): Promise<void> {
+    const params = new URLSearchParams(window.location.search);
+    // A POST share — the only kind that can carry an .ics file — is handed over through the
+    // worker's cache. The query parameters are the same fields for a GET share or a direct link.
+    const inbox = await read_shared_inbox();
+    const shared = parse_shared_event(
+      inbox ?? {
+        title: params.get("title"),
+        text: params.get("text"),
+        url: params.get("url"),
+      }
+    );
+    if (
+      shared.description === undefined &&
+      shared.memo_text === undefined &&
+      shared.start_time === undefined &&
+      shared.end_time === undefined
+    ) {
+      return;
+    }
+
+    const wanted = shared.location?.trim().toLowerCase();
+    const place =
+      wanted === undefined
+        ? undefined
+        : this.locations.find(known => known.name.trim().toLowerCase() === wanted);
+
+    let notes = shared.memo_text;
+    if (shared.location !== undefined && place === undefined) {
+      // A place that is not one of the reader's own becomes a line of the note rather than a new
+      // location: the share is not a reason to add rows to the lists on this page.
+      notes = `Location: ${shared.location}` + (notes === undefined ? "" : `\n\n${notes}`);
+    }
+
+    this.form.fill_for_new({
+      start_time: shared.start_time,
+      end_time: shared.end_time,
+      description: shared.description,
+      memo_text: notes,
+      location_id: place?.id,
+    });
+    this.set_status("From the shared event. Check the details and press Add entry.");
   }
 
   private get list(): CalendarList {

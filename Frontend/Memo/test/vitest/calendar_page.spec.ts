@@ -14,6 +14,13 @@ const at = (days_from_today: number, hour: number) => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days_from_today, hour, 0).getTime();
 };
 
+/// What a datetime-local field holds for a moment, built the way the form builds it.
+const local_input = (ms: number) => {
+  const when = new Date(ms);
+  const two = (value: number) => `${value}`.padStart(2, "0");
+  return `${when.getFullYear()}-${two(when.getMonth() + 1)}-${two(when.getDate())}T${two(when.getHours())}:${two(when.getMinutes())}`;
+};
+
 const entry = (over: Partial<Odate> = {}): Odate => ({
   id: 1,
   start_time: at(1, 10),
@@ -99,13 +106,18 @@ describe("the calendar page", () => {
     shadow = page.shadowRoot!;
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     document.body.innerHTML = "";
+    // A test that shares an event into the page writes the URL; the next one starts without it.
+    history.replaceState(null, "", "/");
+    if (typeof caches !== "undefined") await caches.delete("organizator-share");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     document.body.innerHTML = "";
+    history.replaceState(null, "", "/");
     vi.unstubAllGlobals();
+    if (typeof caches !== "undefined") await caches.delete("organizator-share");
   });
 
   it("should read the entries, the locations and the date types on arrival", async () => {
@@ -115,6 +127,76 @@ describe("the calendar page", () => {
     await loaded();
     const paths = seen.map(call => `${call.method} ${call.url.replace(/^.*\/organizator/, "").split("?")[0]}`);
     expect(paths).to.include.members(["GET /odates", "GET /locations", "GET /odate_types"]);
+  });
+
+  it("should start an entry from an event shared to the app", async () => {
+    // What the Android share sheet puts in the URL: the sharing app's title and text, and the
+    // calendar link it shared, which is the part that knows when the event is.
+    const shared = new URLSearchParams({
+      title: "Dentist",
+      text: "Bring the card",
+      url:
+        "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+        "&text=Dentist&dates=20261028T080000Z/20261028T090000Z&location=Office",
+    });
+    history.replaceState(null, "", `/calendar?${shared}`);
+    server({ odates: [], locations: [office], types: [] });
+    mount();
+
+    const form = shadow.querySelector("odate-form")!.shadowRoot!;
+    await vi.waitFor(() =>
+      expect(form.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(false)
+    );
+    expect(form.querySelector<HTMLInputElement>("#what")!.value).to.equal("Dentist");
+    expect(form.querySelector<HTMLTextAreaElement>("#notes")!.value).to.equal("Bring the card");
+    // The share's place is one of the reader's own, so the control is set to it.
+    expect(form.querySelector<HTMLSelectElement>("#where")!.value).to.equal("3");
+    expect(form.querySelector<HTMLInputElement>("#start")!.value).to.equal(
+      local_input(Date.UTC(2026, 9, 28, 8, 0))
+    );
+    expect(form.querySelector<HTMLInputElement>("#end")!.value).to.equal(
+      local_input(Date.UTC(2026, 9, 28, 9, 0))
+    );
+    expect(status()).to.contain("From the shared event");
+  });
+
+  it("should start an entry from an .ics file shared to the app", async () => {
+    const file = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "SUMMARY:Dentist",
+      "DTSTART:20261028T080000Z",
+      "DTEND:20261028T090000Z",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    // What share-target.js leaves behind before redirecting to the calendar: the POST body
+    // itself never reaches the page.
+    const cache = await caches.open("organizator-share");
+    await cache.put(
+      "/share-target/inbox",
+      new Response(JSON.stringify({title: null, text: null, url: null, ics: file}), {
+        headers: {"Content-Type": "application/json"},
+      })
+    );
+    history.replaceState(null, "", "/calendar?share-target=1");
+    server({ odates: [], locations: [office], types: [] });
+    mount();
+
+    const form = shadow.querySelector("odate-form")!.shadowRoot!;
+    await vi.waitFor(() =>
+      expect(form.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(false)
+    );
+    expect(form.querySelector<HTMLInputElement>("#what")!.value).to.equal("Dentist");
+    expect(form.querySelector<HTMLInputElement>("#start")!.value).to.equal(
+      local_input(Date.UTC(2026, 9, 28, 8, 0))
+    );
+    expect(form.querySelector<HTMLInputElement>("#end")!.value).to.equal(
+      local_input(Date.UTC(2026, 9, 28, 9, 0))
+    );
+    // Read once: a reload cannot make the same event a second time.
+    expect(await (await caches.open("organizator-share")).match("/share-target/inbox")).to.not.exist;
   });
 
   it("should colour an entry by how soon it is, and mark the one happening now", async () => {

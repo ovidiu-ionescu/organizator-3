@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import memo_html from "../../src/html/memo.html?raw";
 import calendar_html from "../../src/html/calendar.html?raw";
+import login_html from "../../src/html/login.html?raw";
+import manifest_json from "../../src/html/org-manifest.json?raw";
 
 /// The two pages that are the app rather than a way into it. Both have to carry the same shell: the
 /// theme applied before the first paint, and the four elements the service worker's bar writes into.
@@ -50,5 +52,32 @@ describe("the pages that are the app", () => {
 
   it("both should be installable as the same app", () => {
     PAGES.forEach(([, html]) => expect(html).to.contain('rel="manifest" href="/org-manifest.json"'));
+  });
+
+  it("should let the reader ask for a long-term login instead of guessing from the device", () => {
+    expect(login_html).to.contain('id="long_term"');
+    expect(login_html).to.contain('type="checkbox"');
+    // Only a checked box changes the request; an ordinary login sends the fields it always did.
+    expect(login_html).to.contain("&long_term=on");
+  });
+
+  it("should offer the calendar as a destination for a shared event", () => {
+    // The share sheet is the one door a web app has into another app's "add to calendar": the
+    // system's calendar-insert intent belongs to native calendar apps. The action is the page
+    // that already exists, so the query parameters land in the calendar itself.
+    // A file can only be shared with a multipart POST; the service worker (share-target.js)
+    // is what reads the body and hands it to the calendar.
+    const manifest = JSON.parse(manifest_json) as {share_target?: unknown};
+    expect(manifest.share_target).to.deep.equal({
+      action: "/calendar",
+      method: "POST",
+      enctype: "multipart/form-data",
+      params: {
+        title: "title",
+        text: "text",
+        url: "url",
+        files: [{name: "ics", accept: ["text/calendar", ".ics", "application/ics"]}],
+      },
+    });
   });
 });

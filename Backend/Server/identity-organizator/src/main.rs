@@ -20,7 +20,7 @@ use lib_axum_organizator::postgres::{self, DbConn};
 use lib_axum_organizator::security::authorization_middleware::{
     RequireAdmin, authorization_middleware,
 };
-use lib_axum_organizator::security::check_security::{create_security_cookie, extract_jwt, is_mobile_app};
+use lib_axum_organizator::security::check_security::{create_security_cookie, extract_jwt};
 use lib_axum_organizator::security::jot::{Jot, PublicKey, User};
 use lib_axum_organizator::settings::Settings;
 use lib_axum_organizator::state::AppState;
@@ -36,7 +36,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use utoipa_swagger_ui::SwaggerUi;
 
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::db::{Login, Role, fetch_login};
 use crate::login_throttle::LoginThrottle;
@@ -198,6 +198,11 @@ struct LoginForm {
     /// Enter your password. It will be hashed and compared to the stored hash in the database.
     #[schema(format = "password", example = "")]
     password: String,
+    /// The login page's long-term checkbox: keep this browser signed in for 30 days instead of
+    /// for the browser session. Submitted as the checkbox's own value, "on".
+    #[serde(default)]
+    #[schema(example = "on")]
+    long_term: Option<String>,
 }
 
 /// Wrong passwords are counted for this process, which is the scope that matters while a single
@@ -274,15 +279,20 @@ async fn login_handler(
     let roles = db::get_roles_for_user(&client, &form.username).await?;
     // the token carries the names only; the descriptions are for the API to hand out, not the JWT
     let temp: Vec<&str> = roles.iter().map(|role| role.name.as_str()).collect();
-    let new_token: String = state.jot.generate_token(&form.username, &temp)?;
-    info!("User 「{}」 logged in", &form.username);
-    let is_mobile = is_mobile_app(&headers);
-    let max_age = if is_mobile {
-        Some(state.jot.session_expiry)
-    } else {
-        None
-    };
-    let cookie = create_security_cookie(&new_token, max_age);
+    // The checkbox is the only thing that decides the lifetime: no user agent gets a longer
+    // session on its own say-so.
+    let long_term = form
+        .long_term
+        .as_deref()
+        .is_some_and(|value| matches!(value, "on" | "true" | "1"));
+    let new_token: String = state.jot.generate_token_for(&form.username, &temp, long_term)?;
+    info!(
+        "User 「{}」 logged in{}",
+        &form.username,
+        if long_term { " for the long term" } else { "" }
+    );
+    let cookie = create_security_cookie(&new_token, state.jot.cookie_age(long_term));
+    debug!("cookie: 「{cookie}」");
 
     // if it has the web client header, return just the cookie
     Ok(if headers.get("x-organizator-client-version").is_some() {

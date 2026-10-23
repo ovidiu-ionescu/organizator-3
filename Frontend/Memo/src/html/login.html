@@ -143,6 +143,30 @@
             font-weight: bold;
             margin-top: 2em;
         }
+
+        /* The one field that is a choice rather than a value: its label sits beside it instead
+           of floating over it, and the box is as wide as a checkbox, not as the form. */
+        .checkboxRow {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin-top: 1.2em;
+        }
+
+        .checkboxRow input {
+            width: auto;
+            margin: 0;
+        }
+
+        .checkboxRow label {
+            position: static;
+            width: auto;
+            transform: none;
+            color: #445878;
+            font-size: 16px;
+            line-height: 24px;
+            cursor: pointer;
+        }
     </style><style class="darkreader darkreader--sync" media="screen"></style>
     <script type="text/javascript">
         function getTimeZoneOffsets() {
@@ -204,6 +228,9 @@
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            // The one thing that decides whether this browser is signed in for a session or for
+            // the long term. Nothing about the device decides it.
+            const longTerm = document.getElementById('long_term').checked;
             const d = new Date();
             d.setMonth(0);
             const offsetJanuary = d.getTimezoneOffset();
@@ -222,7 +249,7 @@
                     "x-organizator-client-version": "3"
                 },
                 "referrer": "https://organizator.ro/login.html",
-                "body": `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&offsetJanuary=${encodeURIComponent(offsetJanuary)}&offsetJuly=${encodeURIComponent(offsetJuly)}`,
+                "body": `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&offsetJanuary=${encodeURIComponent(offsetJanuary)}&offsetJuly=${encodeURIComponent(offsetJuly)}${longTerm ? "&long_term=on" : ""}`,
                 "method": "POST",
                 "mode": "cors"
             });
@@ -289,8 +316,12 @@
             <div class="focusedLine focusedLineBlur"></div>
         </div>
     </div>
+    <div class="checkboxRow">
+        <input id="long_term" name="long_term" type="checkbox">
+        <label for="long_term" data-i18n="Termen lung|Lange termijn">Long term</label>
+    </div>
     <button id="submit" onclick="login()">Login</button>
-    
+
   </div>
 
 

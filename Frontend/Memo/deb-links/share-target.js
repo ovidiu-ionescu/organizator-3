@@ -1,0 +1,1 @@
+../src/html/share-target.js

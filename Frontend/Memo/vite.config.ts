@@ -20,6 +20,15 @@ const html_pages = {
     password: resolve(__dirname, 'build/main/password.html'),
 };
 
+/// The manifest's address carries its contents. A build whose manifest changed asks for a
+/// different URL, so neither the browser's HTTP cache nor an installed WebAPK can go on using
+/// the previous icons — which is exactly what an Android reinstall kept doing after the local
+/// deployment turned the tulip green.
+const manifest_version = createHash('md5')
+    .update(readFileSync(resolve(__dirname, 'src/html/org-manifest.json')))
+    .digest('hex')
+    .slice(0, 8);
+
 /// A URL the worker precaches but the deploy does not have is a worker that never installs: it
 /// fetches its whole precache manifest at install and rejects the install if any of it 404s. A
 /// worker that never installs is no offline support at all, announced by nothing but a line in
@@ -163,6 +172,17 @@ export default defineConfig({
     },
     plugins: [
         {
+            // The manifest is fetched by the browser when the app is installed or updated; a new
+            // URL for new contents is what makes Android look at the icons again.
+            name: 'version-the-manifest',
+            transformIndexHtml(html) {
+                return html.replace(
+                    'href="/org-manifest.json"',
+                    `href="/org-manifest.json?v=${manifest_version}"`
+                );
+            },
+        },
+        {
             name: 'dev-clean-urls',
             configureServer(server) {
                 server.middlewares.use((req, res, next) => {
@@ -242,6 +262,9 @@ export default defineConfig({
                 inlineWorkboxRuntime: true,
                 // The files that are not Vite's output, each dated by its own bytes.
                 additionalManifestEntries: PWA_EXTRA_PRECACHE.map(precache_entry),
+                // The handler for a share target POST. A page cannot read a POST body, so the
+                // worker takes it — and for an .ics file this is the only way it arrives at all.
+                importScripts: ["share-target.js"],
                 runtimeCaching: [
                     {
                         // Attachments, and nothing else. /organizator/* is the API: the app's own

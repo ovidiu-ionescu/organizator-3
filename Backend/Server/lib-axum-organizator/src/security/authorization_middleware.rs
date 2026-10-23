@@ -11,7 +11,7 @@ use axum::{
 };
 use tracing::error;
 
-use crate::security::check_security::{BEARER, create_security_cookie, is_mobile_app};
+use crate::security::check_security::{BEARER, create_security_cookie};
 use crate::security::jot::User;
 use crate::{
     security::check_security::{JwtStatus, check_jwt_header, check_ssl_header},
@@ -29,8 +29,8 @@ pub async fn authorization_middleware(
         let jot = &state.jot;
         match check_jwt_header(&mut req, jot) {
             JwtStatus::Ok => {}
-            JwtStatus::Grace(token) => {
-                new_token = Some(token);
+            JwtStatus::Grace { token, long_term } => {
+                new_token = Some((token, long_term));
             }
             JwtStatus::Expired => return Err(StatusCode::UNAUTHORIZED),
             JwtStatus::Invalid => return Err(StatusCode::UNAUTHORIZED),
@@ -42,7 +42,6 @@ pub async fn authorization_middleware(
         }
     }
 
-    let is_mobile = is_mobile_app(&req.headers());
     let start = Instant::now();
     let mut response = next.run(req).await;
     let elapsed = start.elapsed();
@@ -55,13 +54,10 @@ pub async fn authorization_middleware(
     }
     // if the token is in the grace period, we automatically refresh it and send it back to the
     // client in the response headers and cookies
-    if let Some(token) = new_token {
-        let max_age = if is_mobile {
-            Some(state.jot.session_expiry)
-        } else {
-            None
-        };
-        let cookie = create_security_cookie(&token, max_age);
+    if let Some((token, long_term)) = new_token {
+        // A remembered login keeps its cookie for as long as its token; a session login keeps
+        // none (the cookie goes when the browser session does).
+        let cookie = create_security_cookie(&token, state.jot.cookie_age(long_term));
 
         let header = String::from(BEARER) + &token;
         response
@@ -186,11 +182,15 @@ mod tests {
             let security_config = SecurityConfig {
                 session_expiry: $expiry,
                 session_expiry_grace_period: $grace,
+                long_session_expiry: $expiry,
+                long_session_expiry_grace_period: $grace,
                 public_key_url: None,
             };
             let mut jot = Jot::autogenerate(&security_config).unwrap();
             jot.session_expiry = $expiry;
             jot.session_expiry_grace_period = $grace;
+            jot.long_session_expiry = $expiry;
+            jot.long_session_expiry_grace_period = $grace;
             let token = jot.generate_token("admin", &[]).unwrap();
 
             let state = Arc::new(AppState {

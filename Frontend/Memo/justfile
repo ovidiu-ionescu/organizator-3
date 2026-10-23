@@ -36,3 +36,17 @@ deploy-deb: deb
   cp -r deb/. {{www}}
   cp favicon.ico {{www}}/favicon.ico
 
+# The same deployment for the local instance on pillow, wearing the green tulip: the installed
+# app and the share-sheet entry then look different from the production one on the phone. The
+# manifest is the one file that changes — icons only — so everything else stays identical.
+deploy-local: deb
+  cp -r deb/. {{www}}
+  cp favicon-green.ico {{www}}/favicon.ico
+  sed -e 's|/images/tulip-blue.svg|/images/tulip-green.svg|' \
+      -e 's|/images/pwa-icon-192.png|/images/pwa-icon-green-192.png|' \
+      -e 's|/images/pwa-icon-512.png|/images/pwa-icon-green-512.png|' \
+      -e 's|"short_name": "Organizator"|"short_name": "Dev Organizator"|' \
+      -e 's|"name": "Organizator Memos"|"name": "Dev Organizator"|' \
+      src/html/org-manifest.json > {{www}}/org-manifest.json
+  v=$(md5sum {{www}}/org-manifest.json | cut -c1-8); sed -i "s|org-manifest.json?v=[0-9a-f]*|org-manifest.json?v=local-$v|" {{www}}/memo.html {{www}}/calendar.html
+

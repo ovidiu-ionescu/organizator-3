@@ -11,6 +11,12 @@ dbname = "organizator_prod"
 
 [security]
 public_key_url = "http://localhost:8080/public"
+# The lifetimes the identity service issues tokens with. This server refreshes them too — a
+# refresh that used different numbers would change a login's length — so the two files agree.
+long_session_expiry = 604800
+long_session_expiry_grace_period = 345600
+session_expiry = 3600
+session_expiry_grace_period = 1200
 
 [file_storage]
 # file storage directory

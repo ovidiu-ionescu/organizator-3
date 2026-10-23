@@ -81,7 +81,9 @@ pub fn from_dn_header(dn_str: &str) -> Option<User> {
 #[derive(Debug, PartialEq)]
 pub enum JwtStatus {
     Ok,
-    Grace(String),
+    /// The token was refreshed: the new one, and whether the login asked to be remembered. The
+    /// cookie the middleware sets has to keep that distinction alive.
+    Grace { token: String, long_term: bool },
     Expired,
     Invalid,
     NotFound,
@@ -120,11 +122,12 @@ pub fn check_jwt_header(request: &mut Request, jot: &Jot) -> JwtStatus {
                 JwtStatus::Ok
             }
             ExpiredToken::GracePeriod => {
-                // refresh the token
+                // refresh the token, keeping the lifetime the login asked for
                 let temp: Vec<&str> = claims.roles.iter().map(|s| s.as_str()).collect();
-                if let Ok(new_token) = jot.generate_token(&claims.sub, &temp) {
+                let long_term = claims.long_term;
+                if let Ok(new_token) = jot.generate_token_for(&claims.sub, &temp, long_term) {
                     request.extensions_mut().insert(User::from(claims));
-                    JwtStatus::Grace(new_token)
+                    JwtStatus::Grace { token: new_token, long_term }
                 } else {
                     JwtStatus::Error("Failed to refresh token".to_string())
                 }
@@ -138,16 +141,6 @@ pub fn check_jwt_header(request: &mut Request, jot: &Jot) -> JwtStatus {
         trace!("Invalid token");
         JwtStatus::Invalid
     }
-}
-
-// check if the request comes from a mobile app by checking the User-Agent header
-pub fn is_mobile_app(headers: &HeaderMap) -> bool {
-    if let Some(user_agent) = headers.get(header::USER_AGENT) {
-        if let Ok(user_agent_str) = user_agent.to_str() {
-            return user_agent_str.contains("OrganizatorMobileApp");
-        }
-    }
-    false
 }
 
 /// Create the cookie string from the jwt string
@@ -228,6 +221,17 @@ mod tests {
         let user = request.extensions().get::<User>().unwrap();
         assert_eq!("admin", user.id());
         assert!(user.is_admin());
+    }
+
+    #[test]
+    fn a_session_cookie_carries_no_age_and_a_long_term_one_does() {
+        // No Max-Age at all is what makes it a session cookie: the browser drops it when the
+        // session ends. Only the long-term choice gets one.
+        let session = create_security_cookie("token", None);
+        assert!(!session.contains("Max-Age"));
+
+        let long = create_security_cookie("token", Some(123));
+        assert!(long.contains("Max-Age=123;"));
     }
 
     #[tokio::test]

@@ -145,6 +145,40 @@ describe("the entry form", () => {
     expect(seen[0].id).to.equal(12);
   });
 
+  it("should open a new entry from the fields of a shared event", () => {
+    form.known_places = [
+      { id: 3, name: "Office", latitude: null, longitude: null, timezone: null, last_used: null },
+    ];
+    form.known_types = [{ id: 4, name: "Meeting" }];
+    // The type was chosen for the last entry; a shared event says nothing about it.
+    shadow.querySelector<HTMLSelectElement>("#type")!.value = "4";
+
+    form.fill_for_new({
+      start_time: new Date(2026, 2, 5, 9, 30).getTime(),
+      end_time: new Date(2026, 2, 5, 10, 30).getTime(),
+      description: "Dentist",
+      memo_text: "Bring the card",
+      location_id: 3,
+    });
+
+    expect(shadow.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(false);
+    expect(field("start").value).to.equal("2026-03-05T09:30");
+    expect(field("end").value).to.equal("2026-03-05T10:30");
+    expect(field("what").value).to.equal("Dentist");
+    expect(shadow.querySelector<HTMLTextAreaElement>("#notes")!.value).to.equal("Bring the card");
+    expect(shadow.querySelector<HTMLSelectElement>("#where")!.value).to.equal("3");
+    expect(shadow.querySelector<HTMLSelectElement>("#type")!.value).to.equal("");
+  });
+
+  it("should leave the times empty when a shared event did not carry them", () => {
+    form.fill_for_new({ description: "Dentist", memo_text: "Bring the card" });
+
+    expect(shadow.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(false);
+    expect(field("start").value).to.equal("");
+    expect(field("end").value).to.equal("");
+    expect(field("what").value).to.equal("Dentist");
+  });
+
   it("should offer Duplicate only while changing an entry", () => {
     // Adding one has no id yet, so there is nothing on the server to copy.
     open();

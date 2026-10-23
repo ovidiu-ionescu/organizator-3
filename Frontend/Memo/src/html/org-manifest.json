@@ -25,5 +25,21 @@
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "scope": "/"
+  "scope": "/",
+  "share_target": {
+    "action": "/calendar",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "ics",
+          "accept": ["text/calendar", ".ics", "application/ics"]
+        }
+      ]
+    }
+  }
 }

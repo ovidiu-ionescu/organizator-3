@@ -55,11 +55,17 @@ export const PWA_IGNORED_SEARCH_PARAMS: RegExp[] = [/.*/];
 /// The icons the pages link to are not here: Vite sees those, inlines the small ones and hashes
 /// the rest into /assets, where the ordinary glob picks them up.
 export const PWA_EXTRA_PRECACHE: string[] = [
-  '/org-manifest.json',
-  // The manifest's own icons, so an install offered while the server is unreachable has them.
+  // The manifest itself is not here: the pages ask for it under a URL carrying its contents, so
+  // it is fetched from the network at install time and never served from an old precache.
+  // Its icons are, so an install offered while the server is unreachable has them.
   '/images/tulip-blue.svg',
   '/images/pwa-icon-192.png',
   '/images/pwa-icon-512.png',
+  // The local deployment on pillow wears the green tulip, so it is told apart from the deployed
+  // one on the phone. Both sets are precached so either manifest has its icons offline.
+  '/images/tulip-green.svg',
+  '/images/pwa-icon-green-192.png',
+  '/images/pwa-icon-green-512.png',
   // memo-editor.ts, the toolbar and the edit toolbar
   '/images/vpn_key-white-48dp.svg',
   '/images/ic_lock_open_48px.svg',

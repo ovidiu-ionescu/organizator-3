@@ -362,6 +362,35 @@ export class OdateForm extends HTMLElement {
     this.draw();
   }
 
+  /**
+   * Open the form for a new entry and put a shared event's fields in it — the screen another app
+   * gets when it asks the calendar to add one. Times are left empty when the share did not carry
+   * them, so the required fields ask for what is missing rather than making a date up.
+   */
+  fill_for_new(entry: {
+    start_time?: number;
+    end_time?: number;
+    description?: string;
+    memo_text?: string;
+    location_id?: number;
+  }): void {
+    this.open();
+    (this.$["start"] as HTMLInputElement).value =
+      entry.start_time === undefined ? "" : to_local_input(entry.start_time);
+    (this.$["end"] as HTMLInputElement).value =
+      entry.end_time === undefined ? "" : to_local_input(entry.end_time);
+    (this.$["what"] as HTMLInputElement).value = entry.description ?? "";
+    (this.$["notes"] as HTMLTextAreaElement).value = entry.memo_text ?? "";
+    this.previewing = false;
+    this.draw_selects();
+    (this.$["where"] as HTMLSelectElement).value =
+      entry.location_id === undefined ? "" : `${entry.location_id}`;
+    // The type was the last entry's choice; a shared event says nothing about it.
+    (this.$["type"] as HTMLSelectElement).value = "";
+    this.draw();
+    this.focus_first_field();
+  }
+
   set is_saving(saving: boolean) {
     this.saving = saving;
     this.draw();
