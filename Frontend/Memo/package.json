@@ -2,6 +2,7 @@
   "name": "organizator_memo",
   "version": "1.0.0",
   "description": "Web interface for memos in Organizator",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "build:dom": "tsc --build src",

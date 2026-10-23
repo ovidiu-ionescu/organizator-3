@@ -33,7 +33,7 @@ already happened.
 Then run them:
 
 ```bash
-for f in verify_memo_write verify_rls_shared_write verify_owner_only_columns; do
+for f in verify_memo_write verify_rls_shared_write verify_owner_only_columns verify_memo_history verify_odate_delete verify_odate_search; do
   echo "== $f"; psql -h localhost -U postgres -d testdb -q -f SQL/tests/$f.sql
 done
 ```
@@ -45,6 +45,9 @@ done
 | `verify_memo_write.sql` | superuser | the write reply's access level on every path: owner creates, owner edits, a granted member writes the body, the "nothing changed" early return, a read-only member refused, and the read path agreeing with the write reply |
 | `verify_rls_shared_write.sql` | `organizator_prod` | the same writes with the policies in force: a granted member's write lands, a read-only member is refused, and the stored row and the history say what actually happened |
 | `verify_owner_only_columns.sql` | `organizator_prod` | the column rule: a non-owner refused on title, group and ownership whether the write comes through `memo_write` or hits the table directly, while the body stays theirs to write |
+| `verify_memo_history.sql` | `organizator_prod` | the history endpoint's query: the owner reads every archived version, oldest first, while a shared writer and a shared reader — both of whom can read the memo itself, which the script checks — get none. `memo_history` has no RLS, so this is the query's own predicate being held still |
+| `verify_odate_delete.sql` | `organizator_prod` | the calendar delete's own predicate: the owner removes their entry, while somebody else's id answers `no_entry` and leaves the row in place. `odate` has no RLS, so this is the statement being held still |
+| `verify_odate_search.sql` | `organizator_prod` | the calendar text search: diacritics are ignored on both sides, a null description or notes does not drop the entry, a word in the notes is found, and several words have to be in the same entry |
 
 The second and third use `SET LOCAL ROLE organizator_prod` on purpose. The dump is loaded by
 `postgres`, and a superuser bypasses row level security whatever `FORCE` says, so a run as

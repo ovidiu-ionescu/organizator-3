@@ -61,6 +61,16 @@ describe("the pages that are the app", () => {
     expect(login_html).to.contain("&long_term=on");
   });
 
+  it("should react while a login is being submitted", () => {
+    // The press is immediate; the busy state says the request is out, and the line under the
+    // button carries the answer.
+    expect(login_html).to.contain("#submit:active");
+    expect(login_html).to.contain("#submit.busy");
+    expect(login_html).to.contain("submit-spin");
+    expect(login_html).to.contain('aria-busy');
+    expect(login_html).to.contain('id="loginStatus"');
+  });
+
   it("should offer the calendar as a destination for a shared event", () => {
     // The share sheet is the one door a web app has into another app's "add to calendar": the
     // system's calendar-insert intent belongs to native calendar apps. The action is the page

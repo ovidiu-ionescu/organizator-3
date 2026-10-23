@@ -142,6 +142,48 @@
             background: #EEEFF7;
             font-weight: bold;
             margin-top: 2em;
+            cursor: pointer;
+            transition: background-color 0.15s, box-shadow 0.05s, transform 0.05s;
+        }
+
+        /* The press itself: immediate, before the request has had time to answer. */
+        #submit:active:not(:disabled) {
+            background: #dfe2ee;
+            box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.14), 0 1px 2px 0 rgba(0, 0, 0, 0.12);
+            transform: translateY(1px);
+        }
+
+        #submit:disabled {
+            cursor: progress;
+            opacity: 0.8;
+        }
+
+        /* While the request is in flight: the label says so and a small ring turns beside it. */
+        #submit.busy::after {
+            content: "";
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            margin-left: 8px;
+            vertical-align: -2px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: submit-spin 0.7s linear infinite;
+        }
+
+        @keyframes submit-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Always in the page, and always a line tall, so an answer does not move the button. */
+        #loginStatus {
+            min-height: 1.25em;
+            margin: 0.9em 0 0 0;
+            font-size: 14px;
+            line-height: 1.3;
+            text-align: center;
+            color: #b00020;
         }
 
         /* The one field that is a choice rather than a value: its label sits beside it instead
@@ -226,6 +268,11 @@
         }
 
         async function login() {
+            const submit = document.getElementById('submit');
+            // A second click while the first request is out would be a second login attempt.
+            if (submit.disabled) return;
+
+            const status = document.getElementById('loginStatus');
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             // The one thing that decides whether this browser is signed in for a session or for
@@ -236,35 +283,58 @@
             const offsetJanuary = d.getTimezoneOffset();
             d.setMonth(6);
             const offsetJuly = d.getTimezoneOffset();
- 
-            const response = await fetch("/organizator/login", {
-                "credentials": "include",
-                "headers": {
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "ro,en-US;q=0.7,en;q=0.3",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Upgrade-Insecure-Requests": "1",
-                    "Pragma": "no-cache",
-                    "Cache-Control": "no-cache",
-                    "x-organizator-client-version": "3"
-                },
-                "referrer": "https://organizator.ro/login.html",
-                "body": `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&offsetJanuary=${encodeURIComponent(offsetJanuary)}&offsetJuly=${encodeURIComponent(offsetJuly)}${longTerm ? "&long_term=on" : ""}`,
-                "method": "POST",
-                "mode": "cors"
-            });
-            console.log(response);
-            if(response.status === 204) {
-                let prev_location = "";
-                if(document.referrer) {
-                    prev_location = document.referrer;
-                } else if (window.location.search.substring(3)) {
-                    prev_location = decodeURIComponent(window.location.search.substring(3));
+
+            const label = submit.textContent;
+            status.textContent = "";
+            submit.disabled = true;
+            submit.classList.add('busy');
+            submit.setAttribute('aria-busy', 'true');
+            submit.textContent = 'Logging in…';
+
+            try {
+                const response = await fetch("/organizator/login", {
+                    "credentials": "include",
+                    "headers": {
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "ro,en-US;q=0.7,en;q=0.3",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Upgrade-Insecure-Requests": "1",
+                        "Pragma": "no-cache",
+                        "Cache-Control": "no-cache",
+                        "x-organizator-client-version": "3"
+                    },
+                    "referrer": "https://organizator.ro/login.html",
+                    "body": `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&offsetJanuary=${encodeURIComponent(offsetJanuary)}&offsetJuly=${encodeURIComponent(offsetJuly)}${longTerm ? "&long_term=on" : ""}`,
+                    "method": "POST",
+                    "mode": "cors"
+                });
+                if(response.status === 204) {
+                    let prev_location = "";
+                    if(document.referrer) {
+                        prev_location = document.referrer;
+                    } else if (window.location.search.substring(3)) {
+                        prev_location = decodeURIComponent(window.location.search.substring(3));
+                    }
+                    if(prev_location) {
+                        console.log("Going to ", prev_location);
+                        return window.location.replace(prev_location);
+                    }
+                    status.textContent = "Logged in.";
+                    return;
                 }
-                if(prev_location) {
-                    console.log("Going to ", prev_location);
-                    return window.location.replace(prev_location);
-                }
+
+                // The server explains a refusal in its body (wrong password, too many attempts);
+                // fall back to the status when it says nothing this page can show.
+                const said = (await response.text()).trim();
+                status.textContent = said || `Login failed (${response.status}).`;
+            } catch (e) {
+                console.error("Login request failed", e);
+                status.textContent = "Could not reach the server. Try again.";
+            } finally {
+                submit.disabled = false;
+                submit.classList.remove('busy');
+                submit.removeAttribute('aria-busy');
+                submit.textContent = label;
             }
         }
 
@@ -321,6 +391,7 @@
         <label for="long_term" data-i18n="Termen lung|Lange termijn">Long term</label>
     </div>
     <button id="submit" onclick="login()">Login</button>
+    <p id="loginStatus" role="status" aria-live="polite"></p>
 
   </div>
 

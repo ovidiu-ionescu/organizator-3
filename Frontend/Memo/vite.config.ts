@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -7,7 +8,11 @@ import {
     PWA_EXTRA_PRECACHE,
     PWA_IGNORED_SEARCH_PARAMS,
     PWA_NAVIGATION_DENYLIST,
-} from './src/main/dom/pwa_routes';
+} from './src/main/dom/pwa_routes.ts';
+
+// This file is ESM (package.json says "type": "module", so the native config loader reads it
+// as such), and ESM has no __dirname of its own.
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 /// The pages Vite emits. It writes them under build/main because that is where its inputs are,
 /// and the deployed site is flat (see deb-links/): modifyURLPrefix below is the mapping between
