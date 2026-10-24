@@ -254,7 +254,13 @@ export class CalendarPage extends HTMLElement {
         icon: "/images/ic_insert_comment_48px.svg",
         run: (_progress, close) => (close(), window.location.assign("/memo/")),
       },
-      {label: "Admin", run: (_progress, close) => (close(), window.location.assign("/memo/$$$admin"))},
+      // The other entry with a picture, so the two destinations outside this app sit together.
+      {
+        label: "User administration",
+        icon: "/images/ic_people_48px.svg",
+        run: (_progress, close) => (close(), window.location.assign("/user-admin/")),
+      },
+      {label: "Memo Maintenance", run: (_progress, close) => (close(), window.location.assign("/memo/$$$admin"))},
       {label: "Journal", run: (_progress, close) => (close(), window.location.assign("/journal"))},
       {label: "Log out", run: (_progress, close) => (close(), void log_out())},
     ]);

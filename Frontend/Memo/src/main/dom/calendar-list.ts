@@ -93,6 +93,19 @@ const template = `
       padding: 0 0.3rem;
       font-size: 0.85rem;
     }
+    /* Two entries at the same time: the date line gets the conflict band — a red and its own
+       foreground, so it reads as a conflict in every theme. */
+    .when.conflict {
+      background-color: var(--memo-conflict-bg, #b3261e);
+      color: var(--memo-conflict-fg, white);
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+    }
+    /* The "Happening now" badge is red on red inside that line; invert it. */
+    .when.conflict .badge {
+      background-color: var(--memo-conflict-fg, white);
+      color: var(--memo-conflict-bg, #b3261e);
+    }
     .until { opacity: 0.8; }
     .what { font-weight: bold; }
     .notes { margin: 0.2rem 0; overflow-wrap: anywhere; }
@@ -298,7 +311,10 @@ export class CalendarList extends HTMLElement {
     const list = shadow.querySelector<HTMLUListElement>("#entries")!;
 
     heading.textContent = this.heading_text;
-    list.replaceChildren(...this.entries.map(entry => this.draw_entry(entry)));
+    const overlapping = this.overlapping_ids(this.entries);
+    list.replaceChildren(
+      ...this.entries.map(entry => this.draw_entry(entry, overlapping.has(entry.id)))
+    );
 
     // A failed read must not be dressed as an empty list: "nothing coming up" under "could not read
     // your calendar" says the calendar is empty when the request merely failed.
@@ -307,7 +323,26 @@ export class CalendarList extends HTMLElement {
     state.hidden = message === "";
   }
 
-  private draw_entry(entry: Odate): HTMLLIElement {
+  /**
+   * The entries whose time crosses another's. Two entries conflict when each begins before the
+   * other ends; one that merely ends as the next begins is back to back, not overlapping.
+   */
+  private overlapping_ids(entries: Odate[]): Set<number> {
+    const ids = new Set<number>();
+    for (let i = 0; i < entries.length; i++) {
+      const first = entries[i];
+      for (let j = i + 1; j < entries.length; j++) {
+        const second = entries[j];
+        if (first.start_time < second.end_time && second.start_time < first.end_time) {
+          ids.add(first.id);
+          ids.add(second.id);
+        }
+      }
+    }
+    return ids;
+  }
+
+  private draw_entry(entry: Odate, conflicts: boolean): HTMLLIElement {
     const row = document.createElement("li");
     const soon = this.how_soon(entry);
     if (soon !== null) row.classList.add(soon);
@@ -320,7 +355,9 @@ export class CalendarList extends HTMLElement {
     }
 
     const when = document.createElement("div");
-    when.className = "when";
+    // The date line is where a clash is seen first: two things at the same time are easy to
+    // miss in a list read quickly.
+    when.className = conflicts ? "when conflict" : "when";
     if (entry.ongoing) {
       const badge = document.createElement("span");
       badge.className = "badge";

@@ -80,14 +80,15 @@ describe("The app menu", () => {
     expect(document.querySelector("dialog")?.open).to.be.true;
     expect(entries()).to.deep.equal([
       "Calendar",
+      "User administration",
       "Cache all memos on this device",
-      "Admin",
+      "Memo Maintenance",
       "Journal",
       "Log out",
     ]);
   });
 
-  it("should wear the calendar icon on the calendar entry, and nowhere else", () => {
+  it("should wear the icons its two destinations are known by", () => {
     open_app_menu();
 
     const with_icon = Array.from(document.querySelectorAll(".menu-entry")).map(entry => ({
@@ -96,6 +97,7 @@ describe("The app menu", () => {
     }));
     expect(with_icon.filter(entry => entry.icon !== null)).to.deep.equal([
       {label: "Calendar", icon: "/images/ic_today_48px.svg"},
+      {label: "User administration", icon: "/images/ic_people_48px.svg"},
     ]);
   });
 
@@ -114,13 +116,13 @@ describe("The app menu", () => {
     set_app_entries(memo_menu_entries);
   });
 
-  it("should go to the admin page and the journal from the menu", async () => {
+  it("should go to the memo maintenance page and the journal from the menu", async () => {
     const went: string[] = [];
     const listener = (event: CustomEvent<string>) => went.push(event.detail);
     raspandac.on("navigate", listener as (event: CustomEvent<string>) => void);
 
     open_app_menu();
-    click_entry("Admin");
+    click_entry("Memo Maintenance");
     open_app_menu();
     click_entry("Journal");
 

@@ -1,3 +1,9 @@
+organizator (0.1.46) UNRELEASED; urgency=medium
+
+  * show conflicts in calendar
+  * added link to user-admin
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net> Sat, 24 Oct 2026 13:58:10 +0200
 organizator (0.1.45) UNRELEASED; urgency=medium
 
   * fix for cookie max-age

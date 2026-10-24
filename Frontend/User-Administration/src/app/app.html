@@ -1,8 +1,13 @@
 <header class="app-header">
   <h1>Organizator</h1>
-  <button type="button" class="btn" (click)="theme.toggle()">
-    {{ theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme' }}
-  </button>
+  <!-- Together at the end of the heading, in the order a reader reaches for them: the theme they
+       can see, then the menu that leads back to the other apps. -->
+  <div class="header-actions">
+    <button type="button" class="btn" (click)="theme.toggle()">
+      {{ theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme' }}
+    </button>
+    <app-menu />
+  </div>
 </header>
 
 <!-- ariaCurrentWhenActive is what marks the link the visitor is on for a screen reader; the

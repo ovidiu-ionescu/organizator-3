@@ -225,6 +225,41 @@ describe("the calendar page", () => {
     }
   });
 
+  it("should mark the date line when entries overlap in time", async () => {
+    const ten = at(1, 10);
+    const half = 30 * 60_000;
+    server({
+      odates: [
+        // A and B cross each other.
+        entry({id: 1, start_time: ten, end_time: ten + 3_600_000, description: "A"}),
+        entry({id: 2, start_time: ten + half, end_time: ten + 1.5 * 3_600_000, description: "B"}),
+        // C is on its own.
+        entry({id: 3, start_time: at(1, 14), end_time: at(1, 15), description: "C"}),
+        // D starts exactly when B ends: back to back, not overlapping.
+        entry({
+          id: 4,
+          start_time: ten + 1.5 * 3_600_000,
+          end_time: ten + 2.5 * 3_600_000,
+          description: "D",
+        }),
+      ],
+    });
+    mount();
+    await loaded();
+
+    // Sorted by start: A, B, D, C.
+    const whens = rows().map(row => row.querySelector(".when") as HTMLElement);
+    expect(whens.map(when => when.classList.contains("conflict"))).to.deep.equal([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    // The mark is a colour, not only a class.
+    expect(getComputedStyle(whens[0]).backgroundColor).not.to.equal("rgba(0, 0, 0, 0)");
+    expect(getComputedStyle(whens[2]).backgroundColor).to.equal("rgba(0, 0, 0, 0)");
+  });
+
   it("should show an entry that was earlier today as today, fading into the past", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {

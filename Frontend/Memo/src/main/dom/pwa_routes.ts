@@ -75,6 +75,8 @@ export const PWA_EXTRA_PRECACHE: string[] = [
   '/images/menu_book-white-48dp.svg',
   '/images/ic_today_48px.svg',
   '/images/ic_insert_comment_48px.svg',
+  // The menu entry to the user administration app.
+  '/images/ic_people_48px.svg',
   '/images/check_box-white-48dp.svg',
   '/images/ic_link_48px.svg',
   '/images/border_all-white-48dp.svg',

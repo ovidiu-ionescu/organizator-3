@@ -60,7 +60,12 @@ const go_to = (where: string) => {
 const default_entries = (): MenuEntry[] => [
   {label: "Memos", run: (_progress, close) => (close(), go_to("/memo/"))},
   {label: "Calendar", run: (_progress, close) => (close(), go_to("/calendar"))},
-  {label: "Admin", run: (_progress, close) => (close(), go_to("/memo/$$$admin"))},
+  {label: "Memo Maintenance", run: (_progress, close) => (close(), go_to("/memo/$$$admin"))},
+  {
+    label: "User administration",
+    icon: "/images/ic_people_48px.svg",
+    run: (_progress, close) => (close(), go_to("/user-admin/")),
+  },
   {label: "Journal", run: (_progress, close) => (close(), go_to("/journal"))},
   {label: "Log out", run: (_progress, close) => (close(), void log_out())},
 ];

@@ -20,12 +20,20 @@ import type {MenuEntry} from "./app-menu.js";
 /// The memo app's entries, as a value rather than only as a registration: a test puts them back
 /// after trying entries of its own.
 export const memo_menu_entries = (): MenuEntry[] => [
-  // First, and the only one with a picture: what this app holds is memos, and the calendar is the
-  // other place the reader goes — the same icon the editor's own date button wears.
+  // First of the two with a picture: what this app holds is memos, and the calendar is the other
+  // place the reader goes — the same icon the editor's own date button wears.
   {
     label: "Calendar",
     icon: "/images/ic_today_48px.svg",
     run: (_progress, close) => (close(), window.location.assign("/calendar")),
+  },
+  // Second, beside the calendar, and the other entry with a picture: the other admin app, on the
+  // same host — users, roles and groups. A page of its own rather than a screen of this one, so
+  // this leaves the document instead of going through the router.
+  {
+    label: "User administration",
+    icon: "/images/ic_people_48px.svg",
+    run: (_progress, close) => (close(), window.location.assign("/user-admin/")),
   },
   {
     label: "Cache all memos on this device",
@@ -54,7 +62,7 @@ export const memo_menu_entries = (): MenuEntry[] => [
   },
   // What used to be the two links in the corner of the list, which were hard to reach on a phone
   // and made the list page carry chrome the other pages did not have.
-  {label: "Admin", run: (_progress, close) => (close(), events.navigate("/memo/$$$admin"))},
+  {label: "Memo Maintenance", run: (_progress, close) => (close(), events.navigate("/memo/$$$admin"))},
   {label: "Journal", run: (_progress, close) => (close(), events.navigate("/journal"))},
   {label: "Log out", run: (_progress, close) => (close(), void log_out())},
 ];

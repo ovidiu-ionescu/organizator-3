@@ -41,6 +41,12 @@
      calendar both are on the same screen, and a Delete the colour of "happening now" is one colour
      saying two things. */
   --memo-danger: #ff8a80;
+  /* The date line of an entry whose time crosses another's. It is a band, not a word, so it carries
+     its own foreground: --memo-danger is a colour for text, and in the dark theme it is light
+     enough to read there — as a background it would be a pink. The pair below is the same in every
+     theme, and is a red with white on it in all of them. */
+  --memo-conflict-bg: #b3261e;
+  --memo-conflict-fg: #ffffff;
   /* A surface that is not the page: what a field is filled with, so that a box you can type into
      reads as a box before the cursor is in it, and the band an entry's place and type sit on.
      Barely different from --memo-bg on purpose: it is there to be seen without being looked at. */

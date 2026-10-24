@@ -98,12 +98,14 @@ describe('App', () => {
     return link;
   }
 
-  it('shows the heading, the theme toggle and every menu entry', async () => {
+  it('shows the heading, the theme toggle, the app menu and every section entry', async () => {
     await go('/');
 
     expect(fixture.nativeElement.querySelector('h1')?.textContent).toContain(
       'Organizator'
     );
+    // The way back to the other apps sits beside the theme toggle.
+    expect(fixture.nativeElement.querySelector('.app-header app-menu')).toBeTruthy();
     // The order is the point of this one: the screen the app opens on leads the menu.
     expect(navLinks().map(link => link.textContent?.trim())).toEqual(['Users & roles', 'Groups']);
     expect(navLinks().map(link => link.getAttribute('href'))).toEqual(['/users', '/groups']);
