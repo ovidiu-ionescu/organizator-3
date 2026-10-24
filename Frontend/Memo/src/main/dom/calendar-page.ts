@@ -9,6 +9,7 @@
  * one changes only the list it was in.
  */
 import konsole from "./console_log.js";
+import {ask_confirmation} from "./confirm.js";
 import {UnauthenticatedError, go_to_login} from "./http.js";
 import * as api from "./odate_api.js";
 import type {NewOdate, Odate, OdateLocation, OdateType} from "./odate_api.js";
@@ -183,6 +184,8 @@ export class CalendarPage extends HTMLElement {
   /// at the same thing the reader was looking at.
   private search_text = "";
   private saving = false;
+  /// An entry is being checked against the calendar before it is written.
+  private checking_for_conflicts = false;
   private loading_odates = false;
   private loading_locations = false;
   private loading_types = false;
@@ -448,6 +451,8 @@ export class CalendarPage extends HTMLElement {
   // ---- writing an entry --------------------------------------------------------------------
 
   private async create_entry(entry: NewOdate): Promise<void> {
+    if (!(await this.check_conflicts(entry, null, "add"))) return;
+
     await this.write_entry(() => api.create_odate(entry), created => {
       this.form.clear_after_create();
       // The form stays open after a new entry, so another can follow straight away.
@@ -456,11 +461,187 @@ export class CalendarPage extends HTMLElement {
   }
 
   private async update_entry(id: number, entry: NewOdate): Promise<void> {
+    if (!(await this.check_conflicts(entry, id, "save"))) return;
+
     await this.write_entry(() => api.update_odate(id, entry), updated => {
       // ...and the row it was goes back to being the entry, with the change in it.
       this.editing = null;
       void this.load_odates(`Saved “${updated.description ?? "entry"}”.`);
     }, "save");
+  }
+
+  /**
+   * Ask before writing an entry that overlaps another one, and say whether to go on.
+   *
+   * An overlap is allowed — a call during a meeting is a real pair, and the calendar marks the
+   * clash in red — so this is a question rather than a refusal. It is asked because a wrong day
+   * or hour is the likelier explanation, and it should be caught before the entry is written.
+   *
+   * `id` is the entry being changed, which is not an overlap with itself; null when adding.
+   * A check that failed, a form that was closed while it was in flight, and a reader who said no
+   * all answer no.
+   */
+  private async check_conflicts(
+    entry: NewOdate,
+    id: number | null,
+    doing: "add" | "save"
+  ): Promise<boolean> {
+    // A second submit while the first is being checked would ask twice and write twice.
+    if (this.checking_for_conflicts) return false;
+    this.checking_for_conflicts = true;
+    try {
+      const conflicts = await this.conflicts_for(entry, id);
+      if (conflicts === null) return false;
+
+      // The form the submission came from may have been closed while the check was in flight.
+      // An add comes from the form at the top; an edit from the form the list put in the row of
+      // the entry being changed, which the page knows by that entry.
+      const still_open = id === null ? this.form.expanded : this.editing?.id === id;
+      if (!still_open) return false;
+
+      if (conflicts.length === 0) return true;
+      return this.confirm_overlap(entry, conflicts, doing);
+    } finally {
+      this.checking_for_conflicts = false;
+    }
+  }
+
+  /**
+   * The entries the proposed one would overlap, read over exactly its own interval.
+   *
+   * The list on screen is not enough to answer with: it may be narrowed by a search or a date
+   * range, and an entry outside what is showing still clashes. The read is the same one the
+   * duplicate run makes over the stretch it fills, and it is the server's half-open range — an
+   * entry ending where this one begins is not in it. The entry being changed is not a conflict
+   * with itself. Null means the check itself failed and the caller must not go on; the form has
+   * already been told why.
+   */
+  private async conflicts_for(entry: NewOdate, id: number | null): Promise<Odate[] | null> {
+    try {
+      const around = await api.read_odates({from: entry.start_time, until: entry.end_time});
+      // The server already answers with the overlapping ones; the comparison is repeated here so
+      // that the question is asked on the same rule the list marks conflicts by.
+      return around.filter(
+        other =>
+          other.id !== id &&
+          other.start_time < entry.end_time &&
+          entry.start_time < other.end_time
+      );
+    } catch (e) {
+      if (e instanceof UnauthenticatedError) {
+        go_to_login();
+        return null;
+      }
+      konsole.error("Failed to check the entry for conflicts", e);
+      // Under the buttons of the form that asked — the add form at the top, or the row form the
+      // list is showing — with the page's own line for a form closed meanwhile.
+      const message = "Could not check whether the entry overlaps another one. It was not saved.";
+      if (id === null) this.form.show_status(message, true);
+      else if (!this.list.show_editing_status(message, true)) this.set_status(message, true);
+      return null;
+    }
+  }
+
+  /**
+   * The proposed interval and the ones it would sit on, drawn on one time axis.
+   *
+   * Each bar begins and ends where its entry does, measured from the earliest start among them,
+   * so the part they share horizontally is the overlap the question is about — including when one
+   * contains another. The proposed entry is the first row; the ones it overlaps follow. Each bar
+   * wears the colour its own line in the detail wears. The bars are supplementary, the detail
+   * names the same entries and times, so the picture is hidden from a screen reader.
+   */
+  private overlap_diagram(entry: NewOdate, conflicts: Odate[]): SVGSVGElement {
+    const intervals: {start: number; end: number; tone: "primary" | "conflict"}[] = [
+      {start: entry.start_time, end: entry.end_time, tone: "primary"},
+      ...conflicts.slice(0, 5).map(other => ({
+        start: other.start_time,
+        end: other.end_time,
+        tone: "conflict" as const,
+      })),
+    ];
+    const first = Math.min(...intervals.map(one => one.start));
+    const last = Math.max(...intervals.map(one => one.end));
+    const span = Math.max(1, last - first);
+
+    const width = 300;
+    const bar = 14;
+    const gap = 6;
+    const pad = 2;
+    const usable = width - 2 * pad;
+    const height = pad * 2 + intervals.length * bar + (intervals.length - 1) * gap;
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("class", "confirm-visual");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+
+    intervals.forEach((one, index) => {
+      const from = (one.start - first) / span;
+      const length = Math.max((one.end - one.start) / span, 1 / usable);
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", `${pad + from * usable}`);
+      rect.setAttribute("y", `${pad + index * (bar + gap)}`);
+      rect.setAttribute("width", `${Math.max(length * usable, 1)}`);
+      rect.setAttribute("height", `${bar}`);
+      rect.setAttribute("rx", "3");
+      rect.setAttribute("class", `confirm-bar confirm-bar-${one.tone}`);
+      svg.append(rect);
+    });
+
+    return svg;
+  }
+
+  /**
+   * The question itself, with the proposed interval and what it would sit on.
+   *
+   * The form holding the interval is behind the dialog, so the dialog says it again: the point of
+   * the question is to check a time that may have been mistyped, and the time has to be visible
+   * while the question is asked.
+   */
+  private async confirm_overlap(
+    entry: NewOdate,
+    conflicts: Odate[],
+    doing: "add" | "save"
+  ): Promise<boolean> {
+    const interval = (start: number, end: number) =>
+      `${format_when(start)} → ${format_when(end)}`;
+    const subject = entry.description === undefined ? "this entry" : `“${entry.description}”`;
+    const what = entry.description ?? "No description";
+
+    // The title and the interval are two lines: side by side they wrap on a phone, and a wrapped
+    // interval is harder to check than one that starts on a line of its own.
+    const lines = conflicts.slice(0, 5).map(other => {
+      const other_what = other.description ?? "No description";
+      return `${other_what}\n${interval(other.start_time, other.end_time)}`;
+    });
+    if (conflicts.length > lines.length) lines.push(`…and ${conflicts.length - lines.length} more`);
+
+    const verb = doing === "add" ? "Add" : "Save";
+    return ask_confirmation({
+      question: conflicts.length === 1
+        ? `${verb} ${subject} even though it overlaps an existing entry?`
+        : `${verb} ${subject} even though it overlaps ${conflicts.length} existing entries?`,
+      detail: [
+        {text: `The entry you are ${doing === "add" ? "adding" : "saving"}:\n\n`},
+        // Each line wears the colour of its bar in the picture below, so the two are read as one.
+        {
+          text: `${what}\n${interval(entry.start_time, entry.end_time)}`,
+          data: true,
+          tone: "primary",
+        },
+        // The picture sits after the word that introduces the clash, before the entries it names.
+        {text: "\n\nOverlaps:", visual: this.overlap_diagram(entry, conflicts)},
+        {text: lines.join("\n\n"), data: true, tone: "conflict"},
+        {
+          text:
+            `\n\nAn overlap is allowed, and the calendar marks it in red. ` +
+            `${verb} it only if the times are right.`,
+        },
+      ],
+      confirm_label: `${verb} it anyway`,
+    });
   }
 
   /**

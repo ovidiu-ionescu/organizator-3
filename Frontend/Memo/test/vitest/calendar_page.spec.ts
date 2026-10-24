@@ -59,12 +59,15 @@ const server = (answers: Answer) => {
     if (method === "GET" && path === "/odates") {
       const params = new URL(String(url), "http://x").searchParams;
       const from = params.get("from");
+      const until = params.get("until");
       const q = params.get("q");
       // The server's rule: with no from, a text search covers the whole calendar and the plain
-      // list covers what is coming up.
+      // list covers what is coming up. The range is half open at both ends, so an entry that
+      // merely ends where the range begins, or begins where it ends, is not in it.
       const start = from === null ? (q === null ? Date.now() : 0) : Number(from);
+      const end = until === null ? Infinity : Number(until);
       const rooms = answers.odates ?? [];
-      const in_range = rooms.filter(o => o.end_time > start);
+      const in_range = rooms.filter(o => o.end_time > start && o.start_time < end);
       // The real one is full-text; matching whole words is enough for the shape of the answer.
       const matched = q === null
         ? in_range
@@ -329,6 +332,192 @@ describe("the calendar page", () => {
     });
     // The form stays open for the next one.
     expect(shadow.querySelector("odate-form")!.shadowRoot!.querySelector("#entry_form")!.classList.contains("hidden")).to.equal(false);
+  });
+
+  it("should ask before adding an entry that overlaps an existing one, and leave it out if told no", async () => {
+    const existing = entry({id: 1, start_time: at(1, 10), end_time: at(1, 11), description: "Meeting"});
+    const seen = server({odates: [existing]});
+    mount();
+    await loaded();
+
+    const form = shadow.querySelector("odate-form")!.shadowRoot!;
+    form.querySelector<HTMLButtonElement>("#trigger")!.click();
+    const start = at(1, 10) + 30 * 60_000;
+    const end = at(1, 11) + 30 * 60_000;
+    form.querySelector<HTMLInputElement>("#start")!.value = local_input(start);
+    form.querySelector<HTMLInputElement>("#end")!.value = local_input(end);
+    form.querySelector<HTMLInputElement>("#what")!.value = "Dentist";
+    form.querySelector("form")!.dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('dialog button[value="cancel"]')).not.to.be.null
+    );
+    // The question names what the new entry would sit on, rather than asking about a number.
+    expect(document.getElementById("confirm_question")?.textContent).to.contain(
+      "Add “Dentist” even though it overlaps an existing entry?"
+    );
+    const when = new Intl.DateTimeFormat(undefined, {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    });
+    const detail = document.getElementById("confirm_detail")?.innerText ?? "";
+    // The interval being added is behind the dialog, so the dialog says it again, on the line
+    // below its title.
+    expect(detail).to.contain("Dentist");
+    expect(detail).to.contain(`${when.format(start)} → ${when.format(end)}`);
+    expect(detail).to.contain("Meeting");
+    // The label is the one word, and the picture follows it.
+    expect(detail).to.contain("Overlaps:");
+    expect(detail).not.to.contain("It overlaps");
+
+    // The reader's own data is marked, and each line wears its bar's colour.
+    const marked = Array.from(
+      document.querySelectorAll<HTMLElement>("#confirm_detail .confirm-data")
+    );
+    expect(marked.map(span => span.textContent ?? "")).to.deep.equal([
+      `Dentist\n${when.format(start)} → ${when.format(end)}`,
+      `Meeting\n${when.format(at(1, 10))} → ${when.format(at(1, 11))}`,
+    ]);
+    expect(marked[0].classList.contains("confirm-data-primary")).to.equal(true);
+    expect(marked[1].classList.contains("confirm-data-conflict")).to.equal(true);
+    expect(getComputedStyle(marked[0]).color).not.to.equal(getComputedStyle(marked[1]).color);
+    expect(getComputedStyle(marked[0]).color).not.to.equal(
+      getComputedStyle(document.getElementById("confirm_detail")!).color
+    );
+
+    // Two bars on one axis, stacked: each begins and ends where its entry does. The new entry
+    // starts half an hour into the one it overlaps, and both last an hour.
+    const bars = Array.from(document.querySelectorAll("dialog svg rect"));
+    const attribute = (bar: Element, name: string) => Number(bar.getAttribute(name));
+    expect(bars).to.have.length(2);
+    expect(attribute(bars[0], "y")).to.be.lessThan(attribute(bars[1], "y"));
+    expect(attribute(bars[0], "x")).to.be.greaterThan(attribute(bars[1], "x"));
+    expect(
+      (attribute(bars[0], "x") - attribute(bars[1], "x")) / attribute(bars[1], "width")
+    ).to.be.closeTo(0.5, 0.05);
+    expect(attribute(bars[0], "width")).to.be.closeTo(attribute(bars[1], "width"), 0.5);
+
+    // Each bar wears the colour of its own line in the detail.
+    expect(bars[0].classList.contains("confirm-bar-primary")).to.equal(true);
+    expect(bars[1].classList.contains("confirm-bar-conflict")).to.equal(true);
+    expect(getComputedStyle(bars[0]).fill).to.equal(getComputedStyle(marked[0]).color);
+    expect(getComputedStyle(bars[1]).fill).to.equal(getComputedStyle(marked[1]).color);
+
+    // The picture is after the word that introduces it and before the entries it draws.
+    const visual = document.querySelector<SVGSVGElement>("#confirm_detail svg")!;
+    const children = Array.from(document.getElementById("confirm_detail")!.childNodes);
+    const picture_at = children.indexOf(visual);
+    expect(picture_at).to.be.greaterThan(0);
+    expect(children[picture_at - 1].textContent).to.contain("Overlaps:");
+    expect(children[picture_at - 1].textContent).not.to.contain("It overlaps");
+    expect(children[picture_at + 1]).to.equal(marked[1]);
+
+    document.querySelector<HTMLButtonElement>('dialog button[value="cancel"]')!.click();
+
+    await vi.waitFor(() => expect(document.querySelector("dialog")).to.be.null);
+    expect(seen.filter(call => call.method === "POST")).to.have.length(0);
+    // The fields are still as they were typed, so the time can be corrected without retyping.
+    expect(form.querySelector<HTMLInputElement>("#what")!.value).to.equal("Dentist");
+    expect(form.querySelector<HTMLInputElement>("#start")!.value).to.equal(local_input(start));
+  });
+
+  it("should add the overlapping entry when the reader says the clash is intended", async () => {
+    const existing = entry({id: 1, start_time: at(1, 10), end_time: at(1, 11), description: "Meeting"});
+    const seen = server({odates: [existing]});
+    mount();
+    await loaded();
+
+    const form = shadow.querySelector("odate-form")!.shadowRoot!;
+    form.querySelector<HTMLButtonElement>("#trigger")!.click();
+    const start = at(1, 10) + 30 * 60_000;
+    const end = at(1, 11) + 30 * 60_000;
+    form.querySelector<HTMLInputElement>("#start")!.value = local_input(start);
+    form.querySelector<HTMLInputElement>("#end")!.value = local_input(end);
+    form.querySelector<HTMLInputElement>("#what")!.value = "Dentist";
+    form.querySelector("form")!.dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('dialog button[value="go"]')).not.to.be.null
+    );
+
+    // The check reads exactly the new entry's interval from the server, not just the list on
+    // screen: the entry it clashes with may be hidden by a search or a date range.
+    const asked = seen
+      .map(call => new URL(call.url, "http://x").searchParams)
+      .find(params => params.get("until") !== null);
+    expect(asked?.get("from")).to.equal(`${start}`);
+    expect(asked?.get("until")).to.equal(`${end}`);
+
+    document.querySelector<HTMLButtonElement>('dialog button[value="go"]')!.click();
+
+    await vi.waitFor(() => expect(status()).to.contain("Added “Dentist”."));
+    const posts = seen.filter(call => call.method === "POST");
+    expect(posts).to.have.length(1);
+    expect(JSON.parse(posts[0].body!)).to.deep.equal({
+      start_time: start,
+      end_time: end,
+      description: "Dentist",
+    });
+  });
+
+  it("should ask before saving an edit into an overlap, naming the interval it would save", async () => {
+    const edited = entry({id: 1, start_time: at(1, 9), end_time: at(1, 10), description: "Dentist"});
+    const other = entry({id: 2, start_time: at(1, 10), end_time: at(1, 11), description: "Lunch"});
+    const seen = server({odates: [edited, other]});
+    mount();
+    await loaded();
+
+    rows()[0].querySelector<HTMLButtonElement>("button.edit:not(.delete)")!.click();
+    await vi.waitFor(() => expect(list().querySelector("li odate-form")).to.exist);
+    const form = list().querySelector("li odate-form")!.shadowRoot!;
+    const start = at(1, 10) + 30 * 60_000;
+    const end = at(1, 11) + 30 * 60_000;
+    form.querySelector<HTMLInputElement>("#start")!.value = local_input(start);
+    form.querySelector<HTMLInputElement>("#end")!.value = local_input(end);
+    form.querySelector("form")!.dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('dialog button[value="go"]')).not.to.be.null
+    );
+    expect(document.getElementById("confirm_question")?.textContent).to.contain(
+      "Save “Dentist” even though it overlaps an existing entry?"
+    );
+    const when = new Intl.DateTimeFormat(undefined, {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    });
+    const detail = document.getElementById("confirm_detail")?.innerText ?? "";
+    expect(detail).to.contain("The entry you are saving:");
+    expect(detail).to.contain("Dentist");
+    expect(detail).to.contain(`${when.format(start)} → ${when.format(end)}`);
+    expect(detail).to.contain("Lunch");
+    // The question comes before the write.
+    expect(seen.filter(call => call.method === "PUT")).to.have.length(0);
+
+    document.querySelector<HTMLButtonElement>('dialog button[value="go"]')!.click();
+
+    await vi.waitFor(() => expect(seen.filter(call => call.method === "PUT")).to.have.length(1));
+    expect(JSON.parse(seen.filter(call => call.method === "PUT")[0].body!)).to.deep.equal({
+      start_time: start,
+      end_time: end,
+      description: "Dentist",
+    });
+  });
+
+  it("should not ask when an entry merely ends where the new one begins", async () => {
+    const before = entry({id: 1, start_time: at(1, 9), end_time: at(1, 10), description: "Breakfast"});
+    server({odates: [before]});
+    mount();
+    await loaded();
+
+    const form = shadow.querySelector("odate-form")!.shadowRoot!;
+    form.querySelector<HTMLButtonElement>("#trigger")!.click();
+    form.querySelector<HTMLInputElement>("#start")!.value = local_input(at(1, 10));
+    form.querySelector<HTMLInputElement>("#end")!.value = local_input(at(1, 11));
+    form.querySelector<HTMLInputElement>("#what")!.value = "Dentist";
+    form.querySelector("form")!.dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+
+    // Back to back is the ordinary way to fill a day, not a clash.
+    await vi.waitFor(() => expect(status()).to.contain("Added “Dentist”."));
+    expect(document.querySelector("dialog")).to.be.null;
   });
 
   it("should ask for the range that was given, and call the list by it", async () => {
