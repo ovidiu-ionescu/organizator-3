@@ -17,6 +17,11 @@
 SELECT
      h.id,
      h.memo_id,
+     h.group_id,
+     -- The group a version was in. It is left-joined: a version may have had no group, and the
+     -- group it named may since have been deleted. COALESCE keeps the column a string for the
+     -- model, which reads it only when group_id is present.
+     COALESCE(memo_group.name, '') AS group_name,
      h.title,
      h.memotext,
      h.savetime,
@@ -26,6 +31,7 @@ SELECT
      saver.username AS saveusername
      FROM memo_history h
      JOIN memo ON memo.id = h.memo_id
+     LEFT JOIN memo_group ON memo_group.id = h.group_id
      JOIN users owner ON owner.id = h.user_id
      LEFT JOIN users saver ON saver.id = h.saveuser_id
      WHERE h.memo_id = $1

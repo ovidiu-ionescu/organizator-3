@@ -294,6 +294,7 @@ const template = `
         <img-inline-svg id="encrypt_button" src="/images/ic_lock_48px.svg" title="encrypt"></img-inline-svg>
         <img-inline-svg id="edit_button" src="/images/ic_create_48px.svg" title="toggle edit/view"></img-inline-svg>
         <img-inline-svg id="share_button" src="/images/share-white-48dp.svg" title="show sharing status"></img-inline-svg>
+        <img-inline-svg id="history_button" src="/images/ic_history_48px.svg" title="show history"></img-inline-svg>
       </nav>
       <!-- Above the memo rather than below it: what a save did is read before the text is, not
            after scrolling to the end of it. -->
@@ -397,6 +398,9 @@ export class MemoEditor extends HTMLElement {
       this.$[e.id] = e;
     });
 
+    // There is no memo yet, so there is no history to show.
+    this._show_history_button();
+
     // show the password dialog
     this.$.password_button.addEventListener("click", async () => {
       const pwd = await promptPassword(this._password);
@@ -449,6 +453,13 @@ export class MemoEditor extends HTMLElement {
 
     this.$.share_button.addEventListener("click", () => {
       this._show_sharing();
+    });
+
+    this.$.history_button.addEventListener("click", () => {
+      if (this._memoId === undefined || this._memoId < 0 || this._owned === false) return;
+      // Through the app's own navigation, so the editor writes what it holds to this device and
+      // the page changes without a reload — the same road the menu's internal entries take.
+      events.navigate(`/memo/${this._memoId}/history`);
     });
 
     this.$.crypto_button.addEventListener("click", async () => {
@@ -657,6 +668,7 @@ export class MemoEditor extends HTMLElement {
       );
       if (event.detail.old_id === this._memoId) {
         this._memoId = event.detail.new_id;
+        this._show_history_button();
         window.history.replaceState(null, "", `/memo/${event.detail.new_id}`);
       }
     });
@@ -734,6 +746,7 @@ export class MemoEditor extends HTMLElement {
 
   set memoId(memoId: number) {
     this._memoId = memoId;
+    this._show_history_button();
   }
 
   set memogroup(memogroup: Undef<IdName>) {
@@ -1036,6 +1049,23 @@ export class MemoEditor extends HTMLElement {
     if (list) {
       list.readonly = owned === false;
     }
+    // Ownership is also what decides whether there is a history to show.
+    this._show_history_button();
+  }
+
+  /**
+   * Show the history button only when there is a history to open: a memo that is on the server
+   * and is the reader's own. An unsaved memo has no versions yet, and a memo shared with the
+   * reader is theirs to read but not to see the history of — the endpoint answers 404 for it.
+   */
+  _show_history_button() {
+    const button = this.$.history_button;
+    if (!button) return;
+    const available =
+      this._memoId !== undefined && this._memoId > 0 && this._owned !== false;
+    // Not `hidden`: the element's own shadow styles set a display on the host, which would win
+    // over the user-agent's rule for the attribute.
+    button.style.display = available ? "" : "none";
   }
 
   async _show_sharing() {

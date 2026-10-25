@@ -159,6 +159,8 @@ pub struct MemoHistory {
     pub memotext: Option<String>,
     /// When this version was saved, in the same epoch milliseconds as the memo's own.
     pub savetime: Option<i64>,
+    /// The memo's group at that version. Null when it had none, or when the group has since gone.
+    pub memogroup: Option<MemoGroup>,
     /// The memo's owner at that version.
     pub user: MemoUser,
     /// Who saved it. Nullable because the column is, and a row from before a saver was recorded
@@ -173,6 +175,12 @@ impl From<Row> for MemoHistory {
             id,
             name: row.get("saveusername"),
         });
+        let group_id: Option<i32> = row.get("group_id");
+        let memogroup = group_id.map(|id| MemoGroup {
+            id,
+            // The query coalesces this to an empty string when the group row is gone.
+            name: row.get("group_name"),
+        });
 
         Self {
             id: row.get("id"),
@@ -180,6 +188,7 @@ impl From<Row> for MemoHistory {
             title: row.get("title"),
             memotext: row.get("memotext"),
             savetime: row.get("savetime"),
+            memogroup,
             user: MemoUser {
                 id: row.get("user_id"),
                 name: row.get("username"),

@@ -51,6 +51,7 @@ DECLARE
   v_level  integer;
   v_count  bigint;
   v_texts  text;
+  v_groups text;
   v_memo   bigint;
 BEGIN
   -- Two versions archived: alice's change archives "first body", bob's archives "second body".
@@ -76,16 +77,21 @@ BEGIN
   -- that followed it. The query is the one the endpoint runs, with $1 written as v_id.
   BEGIN
     PERFORM set_current_user('history_alice');
-    SELECT count(*), string_agg(h.memotext, ' | ' ORDER BY h.id) INTO v_count, v_texts
+    SELECT count(*),
+           string_agg(h.memotext, ' | ' ORDER BY h.id),
+           string_agg(COALESCE(memo_group.name, ''), ' | ' ORDER BY h.id)
+      INTO v_count, v_texts, v_groups
       FROM memo_history h
       JOIN memo ON memo.id = h.memo_id
+      LEFT JOIN memo_group ON memo_group.id = h.group_id
       JOIN users owner ON owner.id = h.user_id
       LEFT JOIN users saver ON saver.id = h.saveuser_id
      WHERE h.memo_id = v_id
        AND memo.user_id = (current_setting('organizator.current_user'))::INTEGER;
 
     INSERT INTO history_results VALUES ('3. the owner reads the history',
-      format('rows=%s texts=%s (expect 2, "first body | second body")', v_count, coalesce(v_texts, 'none')));
+      format('rows=%s texts=%s groups=%s (expect 2, "first body | second body", and the fixture group twice)',
+             v_count, coalesce(v_texts, 'none'), coalesce(v_groups, 'none')));
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO history_results VALUES ('3. the owner reads the history', 'ERROR ' || SQLSTATE || ': ' || SQLERRM);
   END;

@@ -72,6 +72,8 @@ export const PWA_EXTRA_PRECACHE: string[] = [
   '/images/ic_lock_48px.svg',
   '/images/ic_create_48px.svg',
   '/images/share-white-48dp.svg',
+  // The toolbar entry that opens the memo's history.
+  '/images/ic_history_48px.svg',
   '/images/menu_book-white-48dp.svg',
   '/images/ic_today_48px.svg',
   '/images/ic_insert_comment_48px.svg',

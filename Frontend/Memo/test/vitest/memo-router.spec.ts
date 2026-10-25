@@ -4,9 +4,11 @@ import * as events from "@dom/events.js";
 // Registered by the import, as it is in the page: the router only ever names the editor as a type,
 // so nothing else here would define the element or the date helper the router logs with.
 import "@dom/memo-editor.js";
+import "@dom/memo-history.js";
 import {load_route, searchMemos} from "@dom/memo-router.js";
 import type {CacheMemo} from "@dom/memo_interfaces.js";
 import type {MemoEditor} from "@dom/memo-editor.js";
+import type {MemoHistory} from "@dom/memo-history.js";
 
 // The list is drawn from the server's titles, and the server cannot know which memos have been
 // edited here since they were fetched — only this device can. So the markers are overlaid with
@@ -433,5 +435,64 @@ describe("The title list", () => {
 
     expect(document.querySelector("dialog")).to.be.null;
     expect(await db.read_memo(5)).to.be.null;
+  });
+});
+
+describe("The memo history route", () => {
+  const requester = { id: 1, name: "alice" };
+  const history_reply = {
+    memo: {
+      id: 7,
+      title: "# a memo",
+      memotext: "\ncurrent",
+      savetime: 3000,
+      user: requester,
+      access_level: 3,
+    },
+    history: [
+      {
+        id: 11,
+        memo_id: 7,
+        title: "# a memo",
+        memotext: "\nold",
+        savetime: 1000,
+        user: requester,
+        saveuser: requester,
+      },
+    ],
+    requester,
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <section id="memoTitles" page></section>
+      <section id="memoHistory" page><memo-history id="history"></memo-history></section>`;
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.unstubAllGlobals();
+    history.replaceState(null, "", "/");
+  });
+
+  it("should open the history page for the history path, not the memo it names", async () => {
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/organizator/memo/7/history")) {
+        return new Response(JSON.stringify(history_reply), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return real_fetch(url, init);
+    });
+
+    history.pushState(null, "", "/memo/7/history");
+    load_route();
+
+    const page = document.getElementById("history") as MemoHistory;
+    await vi.waitFor(() =>
+      expect(page.shadowRoot?.querySelectorAll(".version").length).to.equal(2)
+    );
+    expect(document.getElementById("memoHistory")?.style.display).to.equal("");
+    expect(document.getElementById("memoTitles")?.style.display).to.equal("none");
   });
 });

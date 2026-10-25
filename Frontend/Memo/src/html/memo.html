@@ -33,6 +33,7 @@
     </script>
     <script type="module">
       import "./dom/memo-editor.js";
+      import "./dom/memo-history.js";
       import "./dom/journal.js";
       import "./dom/pwa.js";
       import "./dom/app-menu.js";
@@ -62,8 +63,12 @@
         flex-flow: column;
         padding: 0;
       }
-      memo-editor {
+      memo-editor, memo-history {
         flex: 1;
+        min-height: 0;
+      }
+      memo-history {
+        overflow-y: auto;
       }
 
       section {
@@ -178,6 +183,7 @@
         <a href="#" id="pwa_bar_dismiss" hidden>dismiss</a>
       </div>
       <section id="singleMemo" page><memo-editor id="editor"></memo-editor></section>
+      <section id="memoHistory" page><memo-history id="history"></memo-history></section>
       <section id="memoTitles" page>
         <nav>
             <input type="search" id="searchCriteria" autocorrect="off" autocapitalize="none" 

@@ -11,6 +11,7 @@ import {
   IdName,
   Memo,
   MemoGroups,
+  MemoHistoryReply,
   MemoStats,
   MemoTitleListDTO,
   PermissionDetailLine,
@@ -23,7 +24,7 @@ import * as events from "./events.js";
 import * as memo_processing from "./memo_processing.js";
 import {MemoEditor} from "./memo-editor.js";
 import {wasm_ready} from "./wasm.js";
-import {HttpError, UnauthenticatedError, describe_failure} from "./http.js";
+import {HttpError, UnauthenticatedError, describe_failure, server_reason} from "./http.js";
 
 /// Re-exported, never declared here: the classes live in http.ts so that the calendar can use the
 /// same ones, and callers that reach for `server_comm.HttpError` keep getting that same class —
@@ -275,6 +276,56 @@ export const read_memo = async (id: number): Promise<ServerMemoReply> => {
     }
     throw new HttpError(server_response.status, `Failed to fetch memo ${id}`);
   }
+};
+
+/**
+ * Every version the server kept of one memo, oldest first, and the memo as it is now.
+ *
+ * Only the memo's owner may read this; a memo shared with the reader answers 404 here, the same
+ * answer as a memo that does not exist.
+ */
+export const read_memo_history = async (id: number): Promise<MemoHistoryReply> => {
+  konsole.log(`Fetching the history from server, memo`, id);
+  const server_response = await fetch(
+    `/organizator/memo/${id}/history?request.preventCache=${+new Date()}`,
+    get_options
+  );
+  if (server_response.status === 200) {
+    return await server_response.json();
+  }
+  konsole.error("Failed to fetch the memo history, status", id, server_response.status);
+  if (server_response.status === 401) {
+    throw new UnauthenticatedError(`No session while reading the history of memo ${id}`);
+  }
+  throw new HttpError(server_response.status, `Failed to fetch the history of memo ${id}`);
+};
+
+/**
+ * Delete a duplicate version from a memo's history.
+ *
+ * The server decides whether the version is still a duplicate: another save may have changed the
+ * version before it, or the current memo may no longer have its text. A 409 says so.
+ */
+export const delete_memo_history = async (history_id: number): Promise<void> => {
+  konsole.log(`Deleting history version ${history_id} from server`);
+  const server_response = await fetch(
+    `/organizador/memo/history/${history_id}`,
+    {...get_options, method: "DELETE"}
+  );
+  if (server_response.status === 204) return;
+  konsole.error(
+    "Failed to delete the memo history version, status",
+    history_id,
+    server_response.status
+  );
+  if (server_response.status === 401) {
+    throw new UnauthenticatedError(`No session while deleting history version ${history_id}`);
+  }
+  const reason = await server_reason(server_response);
+  throw new HttpError(
+    server_response.status,
+    reason ?? `Failed to delete history version ${history_id}`
+  );
 };
 
 /**

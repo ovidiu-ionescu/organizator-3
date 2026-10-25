@@ -53,6 +53,30 @@ export interface MemoTitle {
   status:    Undef<MemoStatus>
 }
 
+/**
+ * One version as `GET /memo/{id}/history` gives it: the state the memo held before a change,
+ * stored as the same title and body columns the memo itself is read from.
+ */
+export interface ServerMemoHistory {
+  id:           number;
+  memo_id:      number;
+  title:        string | null;
+  memotext:     string | null;
+  savetime:     number | null;
+  /// The group the memo was in at that version; null when it had none, or when the group has
+  /// since been deleted.
+  memogroup:    IdName | null;
+  user:         IdName;
+  saveuser:     IdName | null;
+}
+
+/// The history answer: the memo as it is now, every version before it, and who asked.
+export interface MemoHistoryReply {
+  memo:         ServerMemo;
+  history:      ServerMemoHistory[];
+  requester:    Requester;
+}
+
 /// comes from server
 export interface MemoTitleDTO {
   id:           number;

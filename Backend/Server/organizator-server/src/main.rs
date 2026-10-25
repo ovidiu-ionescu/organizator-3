@@ -94,6 +94,7 @@ async fn main() {
     let (protected_router, protected_api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(get_memo))
         .routes(routes!(get_memo_history))
+        .routes(routes!(delete_memo_history))
         .routes(routes!(write_memo))
         .routes(routes!(get_memogroups_for_user))
         .routes(routes!(get_memo_titles))
@@ -247,6 +248,66 @@ async fn get_memo_history(
         "requester": requester,
     }))
     .into_response())
+}
+
+/// What `delete_memo_history.sql` reports about the version it tried to remove.
+#[derive(serde::Deserialize, Debug)]
+struct HistoryDeleteOutcome {
+    outcome: String,
+}
+
+/// Delete a duplicate version from a memo's history.
+///
+/// The history id is unique, so it identifies the row without the memo id in the path. Only the
+/// memo's owner may do this, and only when the version says exactly what the one before it says,
+/// or when it is the latest version and says exactly what the memo itself says now. The memo is
+/// not changed: this removes an archived copy, not a state the memo is in. A version that is not a
+/// duplicate answers 409; a version the caller cannot see answers the same 404 as one that does
+/// not exist.
+#[utoipa::path(
+    delete,
+    path = "/memo/history/{history_id}",
+    responses(
+        (status = 204, description = "The duplicate version was deleted"),
+        (status = 404, description = "No such version, or not the caller's", body = Object),
+        (status = 409, description = "The version is not a duplicate any more", body = Object),
+        CommonError
+    ),
+    params(
+        ("history_id" = i32, Path, description = "memo_history.id")
+    ),
+    security(("bearer_auth" = []))
+)]
+async fn delete_memo_history(
+    State(_state): State<Arc<AppState>>,
+    Extension(requester): Extension<User>,
+    DbConn(db_client): DbConn,
+    Path(history_id): Path<i32>,
+) -> HandlerResponse {
+    debug!("Deleting duplicate history version {history_id}");
+
+    let (outcome_json, _) = db::get_json(
+        &db_client,
+        &requester,
+        SQLstr(include_str!("sql/delete_memo_history.sql")),
+        &[&history_id],
+    )
+    .await?;
+
+    let outcome: HistoryDeleteOutcome = serde_json::from_str(&outcome_json)?;
+
+    match outcome.outcome.as_str() {
+        "removed" => Ok(StatusCode::NO_CONTENT.into_response()),
+        "not_duplicate" => Ok(refused(
+            StatusCode::CONFLICT,
+            "That version is not a duplicate of the one before it or of the current memo"
+                .to_string(),
+        )),
+        _ => Ok(refused(
+            StatusCode::NOT_FOUND,
+            "No such history version".to_string(),
+        )),
+    }
 }
 
 #[derive(serde::Deserialize, Debug, Clone, ToSchema)]

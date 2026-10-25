@@ -119,6 +119,34 @@ describe("The memo editor", () => {
     expect(style.flexGrow).to.be.equal("1");
   });
 
+  it("should offer the history of a memo that is on the server", () => {
+    stub_the_server();
+
+    const editor = make_editor();
+    const button = editor.shadowRoot?.querySelector<HTMLElement>("#history_button");
+    expect(button).not.to.be.null;
+    // A page that is not a saved memo has no history to show.
+    expect(button?.style.display).to.equal("none");
+
+    editor.memoId = 42;
+    expect(button?.style.display).to.equal("");
+
+    let went: string | undefined;
+    const listener = (event: CustomEvent<string>) => {
+      went = event.detail;
+    };
+    raspandac.on("navigate", listener);
+    button?.click();
+    raspandac.removeEventListener("navigate", listener);
+
+    // Through the app's own navigation, as the menu's internal entries go: not a full page load.
+    expect(went).to.equal("/memo/42/history");
+
+    // A memo written here has no server history until it is saved.
+    editor.memoId = -1;
+    expect(button?.style.display).to.equal("none");
+  });
+
   it("should open a memo neutral, and turn orange once an edit is written", async () => {
     stub_the_server();
     await cache_a_memo(4);

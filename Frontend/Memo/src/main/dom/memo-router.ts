@@ -6,6 +6,7 @@
 
 import {CacheMemo, Memo, MemoStatus, MemoTitle, MemoTitleListDTO,} from "./memo_interfaces.js";
 import {MemoEditor} from "./memo-editor.js";
+import type {MemoHistory} from "./memo-history.js";
 import * as db from "./memo_db.js";
 import * as memo_processing from "./memo_processing.js";
 import {memo_title_dto_to_memo_title} from "./memo_processing.js";
@@ -77,6 +78,16 @@ export const load_route = () => {
     }
   }
 
+  // Before the memo route below, which its path also matches: /memo/12/history is the history of
+  // memo 12, not memo 12 with a trailing word.
+  const history_match = window.location.pathname.match(/^\/memo\/(-?\d+)\/history\/?$/);
+  if (history_match) {
+    activatePage("memoHistory");
+    const history = document.getElementById("history") as MemoHistory | null;
+    if (history) void history.show(Number(history_match[1]));
+    else konsole.error("The history page is missing from the document");
+    return;
+  }
   if (window.location.pathname.match(/\/memo\/(-?\d+)/)) {
     activatePage("singleMemo");
     loadMemo();
