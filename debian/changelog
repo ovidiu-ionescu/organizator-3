@@ -1,3 +1,20 @@
+organizator (0.1.49) UNRELEASED; urgency=medium
+
+  * no cache for user-admin
+  * dummy service worker to kill the previvious Angular one
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net> Sun, 25 Oct 2026 08:39:00 +0100
+organizator (0.1.48) UNRELEASED; urgency=medium
+
+  * added deletion for duplicate history items
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net> Sat, 24 Oct 2026 21:55:42 +0200
+organizator (0.1.47) UNRELEASED; urgency=medium
+
+  * added confirmation for overlapping events (odate)
+  * added view memo history
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net> Sat, 24 Oct 2026 18:31:55 +0200
 organizator (0.1.46) UNRELEASED; urgency=medium
 
   * show conflicts in calendar

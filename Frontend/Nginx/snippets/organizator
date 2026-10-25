@@ -95,14 +95,20 @@
     proxy_read_timeout 300s;
   }
 
+  # The user-admin app has no service worker of its own. Its shell has no version in the URL:
+  # index.html and every SPA path that falls back to it must be revalidated, or a browser can keep
+  # loading an old index (and the old hashed bundles it names) after a release. The hashed assets
+  # revalidate too, which costs a 304; that is cheaper than a release nobody sees.
   location /user/admin/ {
     alias $base_path/user-admin/;
     index index.html;
     try_files $uri $uri/ /user-admin/index.html;
+    add_header Cache-Control "no-cache" always;
   }
 
   location /user-admin/ {
     alias $base_path/user-admin/;
     index index.html;
     try_files $uri $uri/ /user-admin/index.html;
+    add_header Cache-Control "no-cache" always;
   }
