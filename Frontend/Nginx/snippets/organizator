@@ -20,6 +20,35 @@
       try_files /calendar.html =404;
   }
 
+  # The videocall app and its signaling socket. The socket has to be same-origin so the identity
+  # cookie rides the WebSocket handshake; nginx strips /videocall and the service sees /ws/<room>.
+  # The 3600s read timeout is the length of a call; the service's own pings keep it alive.
+  location /videocall/ws/ {
+      proxy_pass http://127.0.0.1:8083/ws/;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $http_host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_read_timeout 3600s;
+      proxy_send_timeout 3600s;
+      proxy_buffering off;
+  }
+
+  location = /videocall {
+      return 301 /videocall/;
+  }
+
+  # The app is a single page whose file names change with every release, so the shell must be
+  # revalidated. The hashed bundles are small enough that no-cache costs a 304, not a download.
+  location /videocall/ {
+      alias $base_path/videocall/;
+      index index.html;
+      try_files $uri $uri/ /videocall/index.html;
+      add_header Cache-Control "no-cache" always;
+  }
+
   location /files/ {
       alias /var/www/organizator.ro/files/;
 	  #root /var/www/organizator.ro;

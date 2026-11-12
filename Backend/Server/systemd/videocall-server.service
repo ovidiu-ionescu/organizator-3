@@ -1,0 +1,19 @@
+[Unit]
+Description=Organizator Videocall Signaling Service
+After=network.target identity-organizator.service
+BindsTo=identity-organizator.service
+
+[Service]
+Type=simple
+User=ovidiu
+Group=ovidiu
+ExecStart=/usr/bin/videocall-server
+Restart=always
+# The service has no database and writes nothing; it only reads its settings and the identity
+# service's public key.
+PrivateMounts=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target identity-organizator.service

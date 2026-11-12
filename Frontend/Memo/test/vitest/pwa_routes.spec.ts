@@ -35,6 +35,15 @@ describe("The service worker's navigation denylist", () => {
     expect(denied("/user/admin/")).to.be.true;
   });
 
+  it("should keep out of the videocall app on this origin", () => {
+    // The worker's navigation fallback is the memo shell, so without this an installed memo app
+    // answers /videocall/ with memo.html — curl sees the nginx page, the browser sees the memo.
+    expect(denied("/videocall")).to.be.true;
+    expect(denied("/videocall/")).to.be.true;
+    expect(denied("/videocall/?room=123e4567-e89b-42d3-a456-426614174000")).to.be.true;
+    expect(denied("/videocall/index.html")).to.be.true;
+  });
+
   it("should keep out of the API and of the files it hands out", () => {
     expect(denied("/organizator/memo/1")).to.be.true;
     expect(denied("/organizator/memogroups")).to.be.true;

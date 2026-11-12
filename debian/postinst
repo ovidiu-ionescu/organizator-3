@@ -7,9 +7,11 @@ systemctl daemon-reload
 # Enable the services so they start at boot
 systemctl enable identity-organizator.service
 systemctl enable organizator-server.service
+systemctl enable videocall-server.service
 
 # Start them now
 systemctl start identity-organizator.service
 systemctl start organizator-server.service
+systemctl start videocall-server.service
 
 exit 0

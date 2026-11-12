@@ -1,0 +1,21 @@
+{
+  "name": "organizator_videocall",
+  "version": "1.0.0",
+  "description": "Video calls for Organizator",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "Ovidiu Ionescu",
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "typescript": "^6.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^4.1.2"
+  }
+}

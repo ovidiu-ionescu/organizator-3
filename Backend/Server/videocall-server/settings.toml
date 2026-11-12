@@ -1,0 +1,22 @@
+api_ip = "127.0.0.1:8083"
+max_participants = 12
+chat_max_chars = 2000
+
+# The browser sends the origin it loaded the page from. Empty means "do not check"; the deployed
+# service names its own origins. The Vite entry is for local development through its proxy.
+allowed_origins = [
+  "https://organizator.ro",
+  "https://pillow.organizator.ro",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]
+
+[security]
+# The identity service signs the same cookie the memo app uses.
+public_key_url = "http://localhost:8080/public"
+# The identity service's lifetimes. This server only validates tokens; it does not mint or
+# refresh them, so these are here for the shared type and for a deployment that later refreshes.
+long_session_expiry = 604800
+long_session_expiry_grace_period = 345600
+session_expiry = 3600
+session_expiry_grace_period = 1200

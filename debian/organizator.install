@@ -1,9 +1,12 @@
 Backend/Server/target/release/identity-organizator /usr/bin
 Backend/Server/target/release/organizator-server /usr/bin
+Backend/Server/target/release/videocall-server /usr/bin
 Frontend/Memo/deb/* /var/www/organizator.ro/
 Backend/Server/identity-organizator/settings.toml /etc/identity-organizator
 Backend/Server/organizator-server/settings.toml /etc/organizator-server
+Backend/Server/videocall-server/settings.toml /etc/videocall-server
 Backend/Server/systemd/* /usr/lib/systemd/system
 Frontend/Nginx/snippets/organizator /etc/nginx/snippets
 Frontend/User-Administration/dist/user-administration/browser/* /var/www/organizator.ro/user-admin/
+Frontend/videocall/dist/* /var/www/organizator.ro/videocall/
 

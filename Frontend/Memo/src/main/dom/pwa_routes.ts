@@ -18,6 +18,10 @@
 export const PWA_NAVIGATION_DENYLIST: RegExp[] = [
   // The administration app, on the same origin: its own pages, not this app's.
   /^\/user[/-]admin\//,
+  // The videocall app, on the same origin too. Its pages and its signaling socket belong to the
+  // videocall service; without this a browser with the memo worker installed opens /videocall/
+  // and is handed memo.html instead of the call screen.
+  /^\/videocall(?:\/|$)/,
   // The API. Never a page; the app falls back to IndexedDB on its own.
   /^\/organizator\//,
   // Attachments. A memo can link to one, and following the link is a navigation — it must reach

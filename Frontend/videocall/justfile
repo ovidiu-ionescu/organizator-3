@@ -1,0 +1,17 @@
+www := "/var/www/organizator.ro"
+
+# The app the debian package installs. Run npm install first on a fresh checkout.
+build:
+  npm run build
+
+dev:
+  npm run dev
+
+test:
+  npm run test
+
+# The same files the package puts in /var/www/organizator.ro/videocall, for a machine that has
+# the frontend source. The signaling service still has to be running (see Backend/Server).
+deploy-local: build
+  mkdir -p {{www}}/videocall
+  cp -r dist/. {{www}}/videocall/
