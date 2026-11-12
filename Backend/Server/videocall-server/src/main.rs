@@ -20,9 +20,12 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use mimalloc::MiMalloc;
+use ring::hmac;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -35,7 +38,7 @@ use lib_axum_organizator::security::jot::{ExpiredToken, Jot, User};
 
 mod settings;
 
-use settings::Settings;
+use settings::{Settings, TurnSettings};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -54,6 +57,8 @@ const PUBLIC_KEY_RETRY_MAX: Duration = Duration::from_secs(30);
 struct AppState {
     settings: Settings,
     jot: Jot,
+    /// The coturn REST secret, read from the environment. `None` means TURN is not offered.
+    turn_secret: Option<String>,
     rooms: Mutex<HashMap<String, Room>>,
 }
 
@@ -73,6 +78,17 @@ struct ParticipantInfo {
     name: String,
     audio: bool,
     video: bool,
+    /// Whether the video being sent is a shared screen rather than the camera.
+    screen: bool,
+}
+
+/// One relay the browser may use. The shape is `RTCIceServer`, with the credential issued by
+/// coturn's REST scheme rather than a static password.
+#[derive(Clone, Debug, Serialize)]
+struct IceServer {
+    urls: Vec<String>,
+    username: String,
+    credential: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -90,11 +106,28 @@ struct IceCandidate {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum ClientMessage {
-    Offer { to: Uuid, sdp: String },
-    Answer { to: Uuid, sdp: String },
-    IceCandidate { to: Uuid, candidate: IceCandidate },
-    Chat { text: String },
-    State { audio: bool, video: bool },
+    Offer {
+        to: Uuid,
+        sdp: String,
+    },
+    Answer {
+        to: Uuid,
+        sdp: String,
+    },
+    IceCandidate {
+        to: Uuid,
+        candidate: IceCandidate,
+    },
+    Chat {
+        text: String,
+    },
+    State {
+        audio: bool,
+        video: bool,
+        /// Absent from clients built before screen sharing; those clients still validate.
+        #[serde(default)]
+        screen: bool,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -104,6 +137,8 @@ enum ServerMessage {
         self_id: Uuid,
         room_id: String,
         participants: Vec<ParticipantInfo>,
+        /// Relays for this participant; empty means the browser's own STUN is all there is.
+        ice_servers: Vec<IceServer>,
     },
     PeerJoined {
         participant: ParticipantInfo,
@@ -133,6 +168,7 @@ enum ServerMessage {
         id: Uuid,
         audio: bool,
         video: bool,
+        screen: bool,
     },
     Error {
         message: String,
@@ -149,10 +185,28 @@ async fn main() {
 
     let settings = Settings::new();
     info!("Starting videocall service on {}", settings.api_ip());
+
+    let turn_secret = std::env::var("TURN_SHARED_SECRET")
+        .ok()
+        .filter(|secret| !secret.is_empty());
+    if settings.turn.urls.is_empty() {
+        info!("No TURN server configured; calls use STUN only");
+    } else if turn_secret.is_none() {
+        warn!(
+            "TURN urls are configured but TURN_SHARED_SECRET is not set; TURN will not be offered"
+        );
+    } else {
+        info!(
+            "Offering TURN credentials for {}",
+            settings.turn.urls.join(", ")
+        );
+    }
+
     let jot = load_jot(&settings).await;
     let state = Arc::new(AppState {
         settings,
         jot,
+        turn_secret,
         rooms: Mutex::new(HashMap::new()),
     });
 
@@ -266,6 +320,7 @@ async fn handle_socket(
         name: user_name,
         audio: true,
         video: true,
+        screen: false,
     };
     let (tx, mut rx) = mpsc::unbounded_channel();
 
@@ -373,10 +428,16 @@ fn join_room(
             let _ = participant.tx.send(joined.clone());
         }
     }
+    let ice_servers = turn_ice_servers(
+        &state.settings.turn,
+        state.turn_secret.as_deref(),
+        &info.name,
+    );
     let _ = tx.send(ServerMessage::Welcome {
         self_id: info.id,
         room_id: room_id.to_string(),
         participants: everyone,
+        ice_servers,
     });
     info!("Participant {} joined room {room_id}", info.id);
     Ok(())
@@ -438,9 +499,11 @@ fn handle_text(
             self_tx,
         ),
         ClientMessage::Chat { text } => handle_chat(state, room_id, from, &text, self_tx),
-        ClientMessage::State { audio, video } => {
-            handle_state(state, room_id, from, audio, video, self_tx)
-        }
+        ClientMessage::State {
+            audio,
+            video,
+            screen,
+        } => handle_state(state, room_id, from, audio, video, screen, self_tx),
     }
 }
 
@@ -504,6 +567,7 @@ fn handle_state(
     from: Uuid,
     audio: bool,
     video: bool,
+    screen: bool,
     self_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
     let mut rooms = state.rooms.lock().expect("rooms lock poisoned");
@@ -516,10 +580,12 @@ fn handle_state(
     };
     sender.info.audio = audio;
     sender.info.video = video;
+    sender.info.screen = screen;
     let message = ServerMessage::ParticipantState {
         id: from,
         audio,
         video,
+        screen,
     };
     for participant in room.participants.values() {
         let _ = participant.tx.send(message.clone());
@@ -539,6 +605,36 @@ fn millis_now() -> u64 {
         .unwrap_or(0)
 }
 
+/// The coturn REST credential: `username` is the expiry followed by the participant, and the
+/// credential is base64(HMAC-SHA1(secret, username)). Coturn checks both, so the browser gets a
+/// password that is useless after the expiry and this service never hands out the real secret.
+fn turn_ice_servers(turn: &TurnSettings, secret: Option<&str>, user: &str) -> Vec<IceServer> {
+    let Some(secret) = secret else {
+        return Vec::new();
+    };
+    if turn.urls.is_empty() || secret.is_empty() {
+        return Vec::new();
+    }
+
+    let ttl = if turn.ttl_seconds == 0 {
+        86400
+    } else {
+        turn.ttl_seconds
+    };
+    let username = format!("{}:{user}", millis_now() / 1000 + ttl);
+    let credential = turn_credential(secret, &username);
+    vec![IceServer {
+        urls: turn.urls.clone(),
+        username,
+        credential,
+    }]
+}
+
+fn turn_credential(secret: &str, username: &str) -> String {
+    let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, secret.as_bytes());
+    BASE64.encode(hmac::sign(&key, username.as_bytes()).as_ref())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,6 +645,7 @@ mod tests {
         AppState {
             settings: Settings::default(),
             jot: Jot::autogenerate(&SecurityConfig::default()).unwrap(),
+            turn_secret: None,
             rooms: Mutex::new(HashMap::new()),
         }
     }
@@ -598,7 +695,9 @@ mod tests {
                 name: "alice".to_string(),
                 audio: true,
                 video: false,
+                screen: false,
             }],
+            ice_servers: Vec::new(),
         };
         let json = serde_json::to_value(&welcome).unwrap();
         assert_eq!(json["type"], "welcome");
@@ -606,6 +705,8 @@ mod tests {
         assert_eq!(json["room_id"], "room");
         assert_eq!(json["participants"][0]["name"], "alice");
         assert_eq!(json["participants"][0]["video"], false);
+        assert_eq!(json["participants"][0]["screen"], false);
+        assert_eq!(json["ice_servers"], serde_json::json!([]));
 
         let chat = ServerMessage::Chat {
             from: Uuid::nil(),
@@ -621,11 +722,11 @@ mod tests {
             id: Uuid::nil(),
             audio: false,
             video: true,
+            screen: true,
         };
-        assert_eq!(
-            serde_json::to_value(&state).unwrap()["type"],
-            "participant-state"
-        );
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(json["type"], "participant-state");
+        assert_eq!(json["screen"], true);
 
         let candidate = ServerMessage::IceCandidate {
             from: Uuid::nil(),
@@ -664,6 +765,78 @@ mod tests {
             }
             _ => panic!("the candidate was parsed as another message"),
         }
+
+        // A client built before screen sharing sends no `screen`; it still means "not sharing".
+        let state: ClientMessage =
+            serde_json::from_str(r#"{"type":"state","audio":true,"video":true}"#).unwrap();
+        match state {
+            ClientMessage::State { screen, .. } => assert!(!screen),
+            _ => panic!("the state was parsed as another message"),
+        }
+
+        let sharing: ClientMessage =
+            serde_json::from_str(r#"{"type":"state","audio":true,"video":true,"screen":true}"#)
+                .unwrap();
+        match sharing {
+            ClientMessage::State { screen, .. } => assert!(screen),
+            _ => panic!("the state was parsed as another message"),
+        }
+    }
+
+    #[test]
+    fn turn_credentials_use_the_coturn_rest_scheme() {
+        // The vector is coturn's own scheme: base64(HMAC-SHA1("secret", "1234567890:alice")).
+        assert_eq!(
+            turn_credential("secret", "1234567890:alice"),
+            "yV/uOCROwSMIHIR10ELJMfC1ch0="
+        );
+
+        let settings = TurnSettings {
+            urls: vec!["turns:turn.example.test:5349?transport=tcp".to_string()],
+            ttl_seconds: 60,
+        };
+        let servers = turn_ice_servers(&settings, Some("secret"), "alice");
+        assert_eq!(servers.len(), 1);
+        assert!(servers[0].username.ends_with(":alice"));
+        assert_eq!(servers[0].credential.len(), 28);
+        assert_eq!(servers[0].urls, settings.urls);
+        let json = serde_json::to_value(&servers[0]).unwrap();
+        assert_eq!(json["urls"], serde_json::json!(settings.urls));
+        assert!(json["username"].is_string());
+        assert_eq!(json["credential"], servers[0].credential);
+
+        assert!(turn_ice_servers(&settings, None, "alice").is_empty());
+        assert!(turn_ice_servers(&TurnSettings::default(), Some("secret"), "alice").is_empty());
+    }
+
+    #[test]
+    fn a_joining_participant_gets_turn_credentials_in_the_welcome() {
+        let mut state = test_state();
+        state.settings.turn = TurnSettings {
+            urls: vec!["turn:turn.example.test:3478?transport=udp".to_string()],
+            ttl_seconds: 60,
+        };
+        state.turn_secret = Some("secret".to_string());
+
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let info = ParticipantInfo {
+            id: Uuid::new_v4(),
+            name: "alice".to_string(),
+            audio: true,
+            video: true,
+            screen: false,
+        };
+        join_room(&state, "room", info, tx).unwrap();
+
+        match rx.try_recv().unwrap() {
+            ServerMessage::Welcome { ice_servers, .. } => {
+                assert_eq!(ice_servers.len(), 1);
+                assert!(ice_servers[0].username.ends_with(":alice"));
+                assert!(!ice_servers[0].credential.is_empty());
+                assert_eq!(ice_servers[0].urls, state.settings.turn.urls);
+            }
+            _ => panic!("the first message was not a welcome"),
+        }
     }
 
     #[test]
@@ -675,6 +848,7 @@ mod tests {
             name: "alice".to_string(),
             audio: true,
             video: true,
+            screen: false,
         };
         join_room(&state, "room", alice.clone(), alice_tx).unwrap();
         assert!(matches!(
@@ -688,6 +862,7 @@ mod tests {
             name: "bob".to_string(),
             audio: true,
             video: true,
+            screen: false,
         };
         join_room(&state, "room", bob.clone(), bob_tx).unwrap();
         assert!(matches!(

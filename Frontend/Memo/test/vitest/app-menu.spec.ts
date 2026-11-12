@@ -80,6 +80,7 @@ describe("The app menu", () => {
     expect(document.querySelector("dialog")?.open).to.be.true;
     expect(entries()).to.deep.equal([
       "Calendar",
+      "Videocall",
       "User administration",
       "Cache all memos on this device",
       "Memo Maintenance",
@@ -88,7 +89,7 @@ describe("The app menu", () => {
     ]);
   });
 
-  it("should wear the icons its two destinations are known by", () => {
+  it("should wear the icons its destinations are known by", () => {
     open_app_menu();
 
     const with_icon = Array.from(document.querySelectorAll(".menu-entry")).map(entry => ({
@@ -97,6 +98,7 @@ describe("The app menu", () => {
     }));
     expect(with_icon.filter(entry => entry.icon !== null)).to.deep.equal([
       {label: "Calendar", icon: "/images/ic_today_48px.svg"},
+      {label: "Videocall", icon: "/images/ic_videocam_48px.svg"},
       {label: "User administration", icon: "/images/ic_people_48px.svg"},
     ]);
   });

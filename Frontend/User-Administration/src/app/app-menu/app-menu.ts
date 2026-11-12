@@ -8,12 +8,14 @@ interface MenuEntry {
   run: () => void;
 }
 
-// The same pictures the memo app's menu shows for these two destinations, with the fill left to
-// the theme: there they sit on a dark bar, here on the page's own surface.
+// The same pictures the memo app's menu shows for these destinations, with the fill left to the
+// theme: there they sit on a dark bar, here on the page's own surface.
 const MEMOS_ICON =
   'M40 4H8C5.79 4 4 5.79 4 8v24c0 2.21 1.79 4 4 4h28l8 8V8c0-2.21-1.79-4-4-4zm-4 24H12v-4h24v4zm0-6H12v-4h24v4zm0-6H12v-4h24v4z';
 const CALENDAR_ICON =
   'M38 6h-2V2h-4v4H16V2h-4v4h-2c-2.21 0-3.98 1.79-3.98 4L6 38c0 2.21 1.79 4 4 4h28c2.21 0 4-1.79 4-4V10c0-2.21-1.79-4-4-4zm0 32H10V16h28v22zM14 20h10v10H14z';
+const VIDEOCALL_ICON =
+  'M34 12H6c-2.21 0-4 1.79-4 4v16c0 2.21 1.79 4 4 4h28c2.21 0 4-1.79 4-4v-6l8 8V10l-8 8v-6c0-2.21-1.79-4-4-4z';
 /**
  * The menu behind the three dots: the way back to the other screens on this host.
  *
@@ -157,6 +159,7 @@ export class AppMenu {
   protected readonly entries: readonly MenuEntry[] = [
     { label: 'Memos', icon: MEMOS_ICON, run: () => this.links.go('/memo/') },
     { label: 'Calendar', icon: CALENDAR_ICON, run: () => this.links.go('/calendar') },
+    { label: 'Videocall', icon: VIDEOCALL_ICON, run: () => this.links.go('/videocall/') },
     { label: 'Memo Maintenance', run: () => this.links.go('/memo/$$$admin') },
     { label: 'Journal', run: () => this.links.go('/journal') },
     { label: 'Log out', run: () => this.links.logOut() },

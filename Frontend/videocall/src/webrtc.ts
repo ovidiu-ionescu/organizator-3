@@ -1,4 +1,4 @@
-import type { ClientIceCandidate, ClientMessage } from "./protocol";
+import type { ClientIceCandidate, ClientMessage, IceServerConfig } from "./protocol";
 import { classify_quality } from "./quality";
 import type { Quality } from "./quality";
 
@@ -16,7 +16,7 @@ import type { Quality } from "./quality";
  * that has just joined. That removes the glare two simultaneous offers would cause.
  */
 
-const ICE_SERVERS: RTCIceServer[] = [
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
 ];
@@ -43,12 +43,44 @@ export class PeerMesh {
   private readonly pending_candidates = new Map<string, RTCIceCandidateInit[]>();
   private readonly quality_timer: number;
   private self_id: string | null = null;
+  /** The video track every peer sends: the camera, or a screen while one is shared. */
+  private outgoing_video: MediaStreamTrack | null;
+  private ice_servers: RTCIceServer[] = DEFAULT_ICE_SERVERS;
 
   constructor(
     private readonly local_stream: MediaStream | null,
     private readonly handlers: PeerMeshHandlers,
   ) {
+    this.outgoing_video = local_stream?.getVideoTracks()[0] ?? null;
     this.quality_timer = window.setInterval(() => void this.poll_quality(), QUALITY_POLL_MS);
+  }
+
+  /**
+   * The relays and STUN servers from the welcome. The service sends fresh, short-lived TURN
+   * credentials on every join; they are merged with the defaults already in the page.
+   */
+  set_ice_servers(servers: readonly IceServerConfig[]): void {
+    this.ice_servers = [...DEFAULT_ICE_SERVERS, ...servers];
+  }
+
+  /**
+   * Send this video track to every peer from now on. Replacing it on the existing senders is
+   * what makes a screen share appear without renegotiating; a peer joining while it is shared
+   * gets the same track when its connection is built.
+   */
+  async use_video_track(track: MediaStreamTrack | null): Promise<void> {
+    this.outgoing_video = track;
+    for (const peer of this.peers.values()) {
+      const transceiver = peer.pc
+        .getTransceivers()
+        .find((candidate) => candidate.receiver.track.kind === "video");
+      if (transceiver === undefined) continue;
+      try {
+        await transceiver.sender.replaceTrack(track);
+      } catch (error) {
+        this.handlers.on_error(`Could not switch the shared video: ${describe(error)}`);
+      }
+    }
   }
 
   set_self(self_id: string): void {
@@ -128,13 +160,14 @@ export class PeerMesh {
     window.clearInterval(this.quality_timer);
     this.reset();
     this.self_id = null;
+    this.outgoing_video = null;
   }
 
   private ensure_peer(peer_id: string): Peer {
     const existing = this.peers.get(peer_id);
     if (existing !== undefined) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: this.ice_servers });
     const stream = new MediaStream();
     const peer: Peer = { pc, stream, quality: "unknown", media_attached: false };
     this.peers.set(peer_id, peer);
@@ -179,15 +212,34 @@ export class PeerMesh {
     peer.media_attached = true;
 
     for (const track of this.local_stream?.getTracks() ?? []) {
-      peer.pc.addTrack(track, this.local_stream ?? peer.stream);
+      if (track.kind !== "video") {
+        peer.pc.addTrack(track, this.local_stream ?? peer.stream);
+      }
     }
 
-    // Every offer carries both kinds, so a participant without a camera can still receive one.
-    const kinds = new Set(
-      peer.pc.getTransceivers().map((transceiver) => transceiver.receiver.track.kind),
-    );
-    if (!kinds.has("audio")) peer.pc.addTransceiver("audio", { direction: "recvonly" });
-    if (!kinds.has("video")) peer.pc.addTransceiver("video", { direction: "recvonly" });
+    // A video m-line is always present and is sendrecv even when there is nothing to send yet,
+    // so starting a screen share later is a track replacement rather than a renegotiation.
+    let video = peer.pc
+      .getTransceivers()
+      .find((transceiver) => transceiver.receiver.track.kind === "video");
+    if (video === undefined) {
+      if (this.outgoing_video === null) {
+        peer.pc.addTransceiver("video", { direction: "sendrecv" });
+      } else {
+        peer.pc.addTrack(this.outgoing_video, this.local_stream ?? peer.stream);
+      }
+    } else if (video.sender.track === null) {
+      if (this.outgoing_video === null) {
+        video.direction = "sendrecv";
+      } else {
+        peer.pc.addTrack(this.outgoing_video, this.local_stream ?? peer.stream);
+      }
+    }
+
+    const audio = peer.pc
+      .getTransceivers()
+      .find((transceiver) => transceiver.receiver.track.kind === "audio");
+    if (audio === undefined) peer.pc.addTransceiver("audio", { direction: "recvonly" });
   }
 
   private send_description(kind: "offer" | "answer", peer_id: string, sdp: string | undefined): void {

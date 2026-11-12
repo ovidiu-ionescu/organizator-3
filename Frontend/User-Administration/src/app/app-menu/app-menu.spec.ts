@@ -76,7 +76,14 @@ describe('AppMenu', () => {
     expect(trigger().getAttribute('aria-expanded')).toBe('true');
     // The same destinations, and in the same order, as the menu in the memo app: what the reader
     // learned there is what this one says.
-    expect(labels()).toEqual(['Memos', 'Calendar', 'Memo Maintenance', 'Journal', 'Log out']);
+    expect(labels()).toEqual([
+      'Memos',
+      'Calendar',
+      'Videocall',
+      'Memo Maintenance',
+      'Journal',
+      'Log out',
+    ]);
     // The first entry is where the keyboard starts, which is where a modal dialog belongs.
     expect(document.activeElement).toBe(entries()[0]);
   });
@@ -92,7 +99,7 @@ describe('AppMenu', () => {
     expect(document.activeElement).toBe(trigger());
   });
 
-  it('reaches the calendar, the maintenance page and the journal', () => {
+  it('reaches the calendar, the videocall app, the maintenance page and the journal', () => {
     open();
     entries()[1].click();
     fixture.detectChanges();
@@ -105,12 +112,22 @@ describe('AppMenu', () => {
     entries()[3].click();
     fixture.detectChanges();
 
-    expect(went).toEqual(['/calendar', '/memo/$$$admin', '/journal']);
+    open();
+    entries()[4].click();
+    fixture.detectChanges();
+
+    expect(went).toEqual(['/calendar', '/videocall/', '/memo/$$$admin', '/journal']);
+  });
+
+  it('gives the videocall entry its camera picture', () => {
+    open();
+
+    expect(entries()[2].querySelector('svg path')?.getAttribute('d')).toBeTruthy();
   });
 
   it('signs out from the menu', () => {
     open();
-    entries()[4].click();
+    entries()[5].click();
     fixture.detectChanges();
 
     expect(went).toEqual(['log out']);

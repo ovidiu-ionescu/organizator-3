@@ -11,6 +11,18 @@ allowed_origins = [
   "http://127.0.0.1:5173",
 ]
 
+# A TURN relay is what makes two mobile networks work: their carrier NATs are often symmetric,
+# so STUN cannot punch a direct path. The relay itself is coturn (see turnserver.conf.example);
+# this service only issues short-lived credentials for it, using TURN_SHARED_SECRET from the
+# service environment. Empty urls means STUN only.
+[turn]
+urls = []
+# urls = [
+#   "turn:turn.example.org:3478?transport=udp",
+#   "turns:turn.example.org:5349?transport=tcp",
+# ]
+ttl_seconds = 86400
+
 [security]
 # The identity service signs the same cookie the memo app uses.
 public_key_url = "http://localhost:8080/public"

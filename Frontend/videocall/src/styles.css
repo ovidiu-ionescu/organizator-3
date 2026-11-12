@@ -492,6 +492,18 @@ vc-video-tile {
   font-size: 0.72rem;
 }
 
+.video-tile-screen {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgb(110 168 254 / 84%);
+  color: #07111f;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
 .quality-dot {
   flex: 0 0 auto;
   width: 8px;
@@ -718,6 +730,12 @@ vc-chat-panel {
 .control.off {
   border-color: rgb(242 105 92 / 45%);
   background: rgb(242 105 92 / 14%);
+}
+
+.control.active {
+  border-color: rgb(110 168 254 / 60%);
+  background: rgb(110 168 254 / 18%);
+  color: #cfe0ff;
 }
 
 .control.danger {

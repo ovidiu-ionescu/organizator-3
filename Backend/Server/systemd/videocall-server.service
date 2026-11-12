@@ -8,6 +8,8 @@ Type=simple
 User=ovidiu
 Group=ovidiu
 ExecStart=/usr/bin/videocall-server
+# TURN_SHARED_SECRET=… in this optional file must match coturn's static-auth-secret.
+EnvironmentFile=-/etc/videocall-server/turn.env
 Restart=always
 # The service has no database and writes nothing; it only reads its settings and the identity
 # service's public key.

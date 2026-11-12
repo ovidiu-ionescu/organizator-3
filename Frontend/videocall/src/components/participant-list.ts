@@ -8,6 +8,7 @@ export type ParticipantView = {
   self: boolean;
   audio: boolean;
   video: boolean;
+  screen: boolean;
   quality: Quality;
 };
 
@@ -35,6 +36,7 @@ export class ParticipantList extends HTMLElement {
       if (person.self) name.append(el("span", "participant-you", " (you)"));
       const status = el("span", "participant-status");
       const flags: string[] = [];
+      if (person.screen) flags.push("Sharing screen");
       if (!person.audio) flags.push("Muted");
       if (!person.video) flags.push("Camera off");
 

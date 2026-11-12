@@ -1,0 +1,49 @@
+# coturn configuration for the organizator videocall service.
+#
+# This file is a starting point, not a working deployment: replace the secret, the certificate
+# paths and, if the relay is behind NAT, external-ip. See the coturn documentation for the rest.
+#
+# The host running coturn needs a public address and these ports open:
+#   3478/udp and 3478/tcp   STUN/TURN
+#   5349/tcp                TURN over TLS
+#   49152-65535/udp         relay allocations (or the range you choose below)
+#
+# A browser uses the URL written in /etc/videocall-server/settings.toml, e.g.
+#   turn:turn.example.org:3478?transport=udp
+#   turns:turn.example.org:5349?transport=tcp
+# TURN over TCP/TLS on 443 survives networks that block UDP, but port 443 may already be nginx;
+# use a separate address for it, or the 5349 default above.
+
+listening-port=3478
+tls-listening-port=5349
+
+# REST credentials: the videocall service computes username/credential from this same secret.
+# Generate it once with: openssl rand -hex 32
+# Put the same value in /etc/videocall-server/turn.env as TURN_SHARED_SECRET=…
+use-auth-secret
+static-auth-secret=REPLACE_WITH_A_LONG_RANDOM_SECRET
+realm=organizator.ro
+lt-cred-mech
+fingerprint
+
+# The relay sends media to peers; do not let it reach private networks.
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+min-port=49152
+max-port=65535
+
+# If the relay host is behind NAT, name its public address (and forward the ports above):
+# external-ip=203.0.113.10
+
+# TLS for turns: URLs. Use a certificate the browser trusts.
+# cert=/etc/letsencrypt/live/turn.example.org/fullchain.pem
+# pkey=/etc/letsencrypt/live/turn.example.org/privkey.pem
+
+no-cli

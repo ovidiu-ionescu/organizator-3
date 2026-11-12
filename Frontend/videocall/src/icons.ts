@@ -29,6 +29,15 @@ export const icons = {
       `<path d="M9.5 5H14a2 2 0 0 1 2 2v3.5l7-4.5v10l-4.5-3"/>` +
       `<path d="M2 2l20 20"/>`,
   ),
+  switch_camera: svg(
+    `<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>` +
+      `<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>` +
+      `<path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`,
+  ),
+  screen: svg(
+    `<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>` +
+      `<path d="M8 21h8"/><path d="M12 17v4"/>`,
+  ),
   leave: svg(
     `<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 ` +
       `12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 ` +

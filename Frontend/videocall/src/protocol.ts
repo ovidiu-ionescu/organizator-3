@@ -16,6 +16,15 @@ export type ParticipantInfo = {
   name: string;
   audio: boolean;
   video: boolean;
+  /** The video being sent is a shared screen rather than the camera. */
+  screen: boolean;
+};
+
+/** A relay the service offers, in the shape `RTCIceServer` understands. */
+export type IceServerConfig = {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
 };
 
 /** An ICE candidate in the shape `RTCIceCandidate.toJSON()` produces. */
@@ -34,7 +43,7 @@ export type ClientMessage =
   | { type: "answer"; to: string; sdp: string }
   | { type: "ice-candidate"; to: string; candidate: ClientIceCandidate }
   | { type: "chat"; text: string }
-  | { type: "state"; audio: boolean; video: boolean };
+  | { type: "state"; audio: boolean; video: boolean; screen: boolean };
 
 export type ServerMessage =
   | {
@@ -42,6 +51,7 @@ export type ServerMessage =
       self_id: string;
       room_id: string;
       participants: ParticipantInfo[];
+      ice_servers: IceServerConfig[];
     }
   | { type: "peer-joined"; participant: ParticipantInfo }
   | { type: "peer-left"; id: string }
@@ -49,7 +59,13 @@ export type ServerMessage =
   | { type: "answer"; from: string; sdp: string }
   | { type: "ice-candidate"; from: string; candidate: ServerIceCandidate }
   | { type: "chat"; from: string; name: string; text: string; at: number }
-  | { type: "participant-state"; id: string; audio: boolean; video: boolean }
+  | {
+      type: "participant-state";
+      id: string;
+      audio: boolean;
+      video: boolean;
+      screen: boolean;
+    }
   | { type: "error"; message: string };
 
 const is_object = (value: unknown): value is Record<string, unknown> =>
@@ -69,7 +85,34 @@ function parse_participant(value: unknown): ParticipantInfo | null {
     name: value.name,
     audio: value.audio,
     video: value.video,
+    // Older servers did not send this; absent means the camera, not a screen.
+    screen: value.screen === true,
   };
+}
+
+const is_url_list = (value: unknown): value is string | string[] =>
+  is_string(value) || (Array.isArray(value) && value.every(is_string));
+
+/**
+ * The relay list is optional and best-effort: a malformed entry is dropped rather than making
+ * the whole welcome unreadable. Older servers do not send the field at all.
+ */
+function parse_ice_servers(value: unknown): IceServerConfig[] {
+  if (!Array.isArray(value)) return [];
+  const servers: IceServerConfig[] = [];
+  for (const entry of value) {
+    if (!is_object(entry) || !is_url_list(entry.urls)) continue;
+    const username = entry.username;
+    const credential = entry.credential;
+    if (username !== undefined && username !== null && !is_string(username)) continue;
+    if (credential !== undefined && credential !== null && !is_string(credential)) continue;
+    servers.push({
+      urls: entry.urls,
+      ...(is_string(username) ? { username } : {}),
+      ...(is_string(credential) ? { credential } : {}),
+    });
+  }
+  return servers;
 }
 
 function parse_candidate(value: unknown): ServerIceCandidate | null {
@@ -115,6 +158,7 @@ export function parse_server_message(text: string): ServerMessage | null {
         self_id: value.self_id,
         room_id: value.room_id,
         participants,
+        ice_servers: parse_ice_servers(value.ice_servers),
       };
     }
     case "peer-joined": {
@@ -155,6 +199,7 @@ export function parse_server_message(text: string): ServerMessage | null {
         id: value.id,
         audio: value.audio,
         video: value.video,
+        screen: value.screen === true,
       };
     }
     case "error":

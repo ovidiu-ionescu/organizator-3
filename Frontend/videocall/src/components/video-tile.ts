@@ -17,6 +17,7 @@ export class VideoTile extends HTMLElement {
   private readonly name_label: HTMLSpanElement;
   private readonly quality_dot: HTMLSpanElement;
   private readonly muted_badge: HTMLSpanElement;
+  private readonly screen_badge: HTMLSpanElement;
 
   constructor() {
     super();
@@ -39,7 +40,10 @@ export class VideoTile extends HTMLElement {
     this.muted_badge = el("span", "video-tile-muted", "Muted");
     this.muted_badge.hidden = true;
 
-    this.append(this.video, this.avatar, bar, this.muted_badge);
+    this.screen_badge = el("span", "video-tile-screen", "Screen");
+    this.screen_badge.hidden = true;
+
+    this.append(this.video, this.avatar, bar, this.muted_badge, this.screen_badge);
   }
 
   set stream(value: MediaStream | null) {
@@ -65,6 +69,11 @@ export class VideoTile extends HTMLElement {
 
   set video_on(value: boolean) {
     this.classList.toggle("video-off", !value);
+  }
+
+  /** The picture is a shared screen rather than a camera. */
+  set screen(value: boolean) {
+    this.screen_badge.hidden = !value;
   }
 
   set quality(value: Quality) {

@@ -24,7 +24,35 @@ pub struct Settings {
     /// Browser origins allowed to open the WebSocket. An empty list disables the check, which is
     /// what local tests use; the deployed file names the origins.
     pub allowed_origins: Vec<String>,
+    /// The relay browsers may fall back to. Empty means STUN only.
+    pub turn: TurnSettings,
     pub security: SecurityConfig,
+}
+
+/// The TURN server the signaling service tells browsers about.
+///
+/// The service does not run the relay; it only issues short-lived credentials for a coturn
+/// server using coturn's REST authentication. The shared secret is read from the environment
+/// (`TURN_SHARED_SECRET`) rather than from this file, so a checked-in settings file never holds
+/// it.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default)]
+pub struct TurnSettings {
+    /// The coturn URLs, exactly as the browser should use them, e.g.
+    /// `turn:turn.example.org:3478?transport=udp` and `turns:turn.example.org:5349?transport=tcp`.
+    pub urls: Vec<String>,
+    /// How long an issued credential lives. A call's ICE allocations are what use it; a day is
+    /// long enough that a long call does not lose its relay, and short enough to be disposable.
+    pub ttl_seconds: u64,
+}
+
+impl Default for TurnSettings {
+    fn default() -> Self {
+        Self {
+            urls: Vec::new(),
+            ttl_seconds: 86400,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -34,6 +62,7 @@ impl Default for Settings {
             max_participants: 12,
             chat_max_chars: 2000,
             allowed_origins: Vec::new(),
+            turn: TurnSettings::default(),
             security: SecurityConfig::default(),
         }
     }
@@ -84,6 +113,10 @@ mod tests {
             chat_max_chars = 50
             allowed_origins = ["https://example.test"]
 
+            [turn]
+            urls = ["turns:turn.example.test:5349?transport=tcp"]
+            ttl_seconds = 7200
+
             [security]
             public_key_url = "http://localhost:8080/public"
             "#,
@@ -93,6 +126,11 @@ mod tests {
         assert_eq!(settings.max_participants, 4);
         assert_eq!(settings.chat_max_chars, 50);
         assert_eq!(settings.allowed_origins, vec!["https://example.test"]);
+        assert_eq!(
+            settings.turn.urls,
+            vec!["turns:turn.example.test:5349?transport=tcp"]
+        );
+        assert_eq!(settings.turn.ttl_seconds, 7200);
         assert_eq!(
             settings.security.public_key_url.as_deref(),
             Some("http://localhost:8080/public")

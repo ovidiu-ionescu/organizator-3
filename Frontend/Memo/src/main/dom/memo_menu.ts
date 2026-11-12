@@ -27,9 +27,15 @@ export const memo_menu_entries = (): MenuEntry[] => [
     icon: "/images/ic_today_48px.svg",
     run: (_progress, close) => (close(), window.location.assign("/calendar")),
   },
-  // Second, beside the calendar, and the other entry with a picture: the other admin app, on the
-  // same host — users, roles and groups. A page of its own rather than a screen of this one, so
-  // this leaves the document instead of going through the router.
+  // The call screen, beside the calendar and wearing the camera it opens. Like the calendar it is
+  // a page of its own, so this leaves the document.
+  {
+    label: "Videocall",
+    icon: "/images/ic_videocam_48px.svg",
+    run: (_progress, close) => (close(), window.location.assign("/videocall/")),
+  },
+  // The other admin app, on the same host — users, roles and groups. A page of its own rather
+  // than a screen of this one, so this leaves the document instead of going through the router.
   {
     label: "User administration",
     icon: "/images/ic_people_48px.svg",

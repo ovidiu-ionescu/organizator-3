@@ -6,7 +6,7 @@
  *
  * Which entries it holds is the page's to say, because what is beside a page depends on the page:
  * the memo app moves between its own screens without leaving the document, and the calendar is a
- * document of its own. A page registers its list with set_app_entries; the default is the two
+ * document of its own. A page registers its list with set_app_entries; the default is the
  * screens besides it and signing out.
  *
  * A dialog rather than a drop-down, which is what the app already uses to ask something
@@ -60,6 +60,11 @@ const go_to = (where: string) => {
 const default_entries = (): MenuEntry[] => [
   {label: "Memos", run: (_progress, close) => (close(), go_to("/memo/"))},
   {label: "Calendar", run: (_progress, close) => (close(), go_to("/calendar"))},
+  {
+    label: "Videocall",
+    icon: "/images/ic_videocam_48px.svg",
+    run: (_progress, close) => (close(), go_to("/videocall/")),
+  },
   {label: "Memo Maintenance", run: (_progress, close) => (close(), go_to("/memo/$$$admin"))},
   {
     label: "User administration",

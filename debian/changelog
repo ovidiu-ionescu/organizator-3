@@ -1,3 +1,28 @@
+organizator (0.1.55) UNRELEASED; urgency=medium
+
+  * patch for switch camera in videocall
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 12 Nov 2026 20:55:13 +0100
+organizator (0.1.55) UNRELEASED; urgency=medium
+
+  * added switch camera to videocall
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 12 Nov 2026 20:21:20 +0100
+organizator (0.1.54) UNRELEASED; urgency=medium
+
+  * added turn support to videocall
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 12 Nov 2026 18:39:35 +0100
+organizator (0.1.53) UNRELEASED; urgency=medium
+
+  * added share screen to videocall
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 12 Nov 2026 14:57:25 +0100
+organizator (0.1.52) UNRELEASED; urgency=medium
+
+  * added menu entry for videocall
+
+ -- Ovidiu Ionescu <ovidiu@ionescu.net>  Thu, 12 Nov 2026 14:19:31 +0100
 organizator (0.1.51) UNRELEASED; urgency=medium
 
   * added public key fetch retry to videocall

@@ -7,6 +7,8 @@ import { icons } from "./icons";
 export type CallViewHandlers = {
   on_audio_toggle: () => void;
   on_video_toggle: () => void;
+  on_camera_switch: () => void;
+  on_screen_toggle: () => void;
   on_leave: () => void;
 };
 
@@ -24,6 +26,12 @@ export type CallView = {
   video_button: HTMLButtonElement;
   video_icon: HTMLSpanElement;
   video_text: HTMLSpanElement;
+  switch_button: HTMLButtonElement;
+  switch_icon: HTMLSpanElement;
+  switch_text: HTMLSpanElement;
+  screen_button: HTMLButtonElement;
+  screen_icon: HTMLSpanElement;
+  screen_text: HTMLSpanElement;
   leave_button: HTMLButtonElement;
   share_input: HTMLInputElement;
 };
@@ -117,13 +125,28 @@ export function create_call_view(
   const controls = el("footer", "controls");
   const audio = control_button(icons.mic, "Mute", "control-audio");
   const video = control_button(icons.camera, "Camera off", "control-video");
+  const switch_camera = control_button(
+    icons.switch_camera,
+    "Switch camera",
+    "control-switch-camera",
+  );
+  const screen = control_button(icons.screen, "Share screen", "control-screen");
   const leave = control_button(icons.leave, "Leave", "control-leave");
+  switch_camera.button.hidden = true;
   leave.button.classList.add("danger");
 
   audio.button.addEventListener("click", handlers.on_audio_toggle);
   video.button.addEventListener("click", handlers.on_video_toggle);
+  switch_camera.button.addEventListener("click", handlers.on_camera_switch);
+  screen.button.addEventListener("click", handlers.on_screen_toggle);
   leave.button.addEventListener("click", handlers.on_leave);
-  controls.append(audio.button, video.button, leave.button);
+  controls.append(
+    audio.button,
+    video.button,
+    switch_camera.button,
+    screen.button,
+    leave.button,
+  );
   controls.setAttribute("aria-label", "Call controls");
 
   element.append(header, banner, stage, controls);
@@ -142,6 +165,12 @@ export function create_call_view(
     video_button: video.button,
     video_icon: video.icon,
     video_text: video.text,
+    switch_button: switch_camera.button,
+    switch_icon: switch_camera.icon,
+    switch_text: switch_camera.text,
+    screen_button: screen.button,
+    screen_icon: screen.icon,
+    screen_text: screen.text,
     leave_button: leave.button,
     share_input,
   };
@@ -194,6 +223,10 @@ export type ControlState = {
   video_on: boolean;
   has_audio: boolean;
   has_video: boolean;
+  sharing: boolean;
+  can_share: boolean;
+  can_switch_camera: boolean;
+  switching_camera: boolean;
 };
 
 export function set_controls(view: CallView, state: ControlState): void {
@@ -207,6 +240,7 @@ export function set_controls(view: CallView, state: ControlState): void {
       : "No microphone is available",
     disabled: !state.connected || !state.has_audio,
     off: !state.audio_on,
+    pressed: !state.audio_on,
   });
   update_control(view.video_button, view.video_icon, view.video_text, {
     icon: state.video_on ? icons.camera : icons.camera_off,
@@ -218,7 +252,34 @@ export function set_controls(view: CallView, state: ControlState): void {
       : "No camera is available",
     disabled: !state.connected || !state.has_video,
     off: !state.video_on,
+    pressed: !state.video_on,
   });
+  update_control(view.switch_button, view.switch_icon, view.switch_text, {
+    icon: icons.switch_camera,
+    label: state.switching_camera ? "Switching…" : "Switch camera",
+    aria: "Switch to another camera",
+    disabled: !state.connected || !state.can_switch_camera || state.switching_camera,
+    off: false,
+    pressed: false,
+  });
+  view.switch_button.hidden = !state.can_switch_camera;
+  update_control(view.screen_button, view.screen_icon, view.screen_text, {
+    icon: icons.screen,
+    label: state.can_share
+      ? state.sharing
+        ? "Stop sharing"
+        : "Share screen"
+      : "No screen share",
+    aria: state.can_share
+      ? state.sharing
+        ? "Stop sharing the screen"
+        : "Share a window or the screen"
+      : "Screen sharing is not available in this browser",
+    disabled: !state.connected || !state.can_share,
+    off: false,
+    pressed: state.sharing,
+  });
+  view.screen_button.classList.toggle("active", state.sharing);
 }
 
 function update_control(
@@ -231,12 +292,13 @@ function update_control(
     aria: string;
     disabled: boolean;
     off: boolean;
+    pressed: boolean;
   },
 ): void {
   icon.innerHTML = state.icon;
   text.textContent = state.label;
   button.setAttribute("aria-label", state.aria);
-  button.setAttribute("aria-pressed", String(state.off));
+  button.setAttribute("aria-pressed", String(state.pressed));
   button.disabled = state.disabled;
   button.classList.toggle("off", state.off);
 }

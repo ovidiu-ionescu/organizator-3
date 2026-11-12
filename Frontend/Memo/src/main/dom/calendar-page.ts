@@ -257,7 +257,12 @@ export class CalendarPage extends HTMLElement {
         icon: "/images/ic_insert_comment_48px.svg",
         run: (_progress, close) => (close(), window.location.assign("/memo/")),
       },
-      // The other entry with a picture, so the two destinations outside this app sit together.
+      {
+        label: "Videocall",
+        icon: "/images/ic_videocam_48px.svg",
+        run: (_progress, close) => (close(), window.location.assign("/videocall/")),
+      },
+      // The other destinations outside this app, each with the picture it is known by.
       {
         label: "User administration",
         icon: "/images/ic_people_48px.svg",
